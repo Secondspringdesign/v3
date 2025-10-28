@@ -1,0 +1,17 @@
+{
+  "headers": [
+    {
+      "source": "/chat",
+      "headers": [
+        { "key": "X-Frame-Options", "value": "ALLOWALL" },
+        { "key": "Content-Security-Policy", "value": "frame-ancestors *; script-src 'self' 'unsafe-eval' https://cdn.platform.openai.com https://sentinel.openai.com; connect-src 'self' https://api.openai.com https://cdn.platform.openai.com;" }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" }
+      ]
+    }
+  ]
+}
