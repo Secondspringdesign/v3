@@ -190,18 +190,16 @@ function getCookieValue(
   return null;
 }
 
+// FIXED: SameSite=None; Secure for iframe
 function serializeSessionCookie(value: string): string {
   const attributes = [
     `${SESSION_COOKIE_NAME}=${encodeURIComponent(value)}`,
     "Path=/",
     `Max-Age=${SESSION_COOKIE_MAX_AGE}`,
     "HttpOnly",
-    "SameSite=Lax",
+    "SameSite=None",
+    "Secure",
   ];
-
-  if (process.env.NODE_ENV === "production") {
-    attributes.push("Secure");
-  }
   return attributes.join("; ");
 }
 
