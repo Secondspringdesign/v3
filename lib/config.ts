@@ -1,8 +1,26 @@
+// lib/config.ts
 import { ColorScheme, StartScreenPrompt, ThemeOption } from "@openai/chatkit";
 
-export const WORKFLOW_ID =
-  process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_ID?.trim() ?? "";
+/* ------------------------------------------------------------------ */
+/* 1. WORKFLOW IDs – read from Vercel public env vars                 */
+/* ------------------------------------------------------------------ */
+const WORKFLOWS = {
+  strategy:   process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_STRATEGY?.trim()   ?? "",
+  operations: process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_OPERATIONS?.trim() ?? "",
+  marketing:  process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_MARKETING?.trim()  ?? "",
+  product:    process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_PRODUCT?.trim()    ?? "",
+};
 
+/* Keep the original default (Strategy) – used when no ?agent= is passed */
+export const WORKFLOW_ID =
+  process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_ID?.trim() ?? WORKFLOWS.strategy;
+
+/* Export the map so the API route can pick the right ID */
+export { WORKFLOWS };
+
+/* ------------------------------------------------------------------ */
+/* 2. Everything else – unchanged                                      */
+/* ------------------------------------------------------------------ */
 export const CREATE_SESSION_ENDPOINT = "/api/create-session";
 
 export const STARTER_PROMPTS: StartScreenPrompt[] = [
@@ -30,6 +48,4 @@ export const getThemeConfig = (theme: ColorScheme): ThemeOption => ({
     },
   },
   radius: "round",
-  // Add other theme options here
-  // chatkit.studio/playground to explore config options
 });
