@@ -11,34 +11,53 @@ export default function ChatPage() {
   const handleWidgetAction = useCallback(async () => {}, []);
   const handleResponseEnd = useCallback(() => {}, []);
 
-  // FORCE FULL WIDTH AFTER LOAD
+  // FORCE FULL WIDTH IMMEDIATELY
   useEffect(() => {
     const iframe = document.querySelector("iframe");
     if (!iframe) return;
 
-    const check = setInterval(() => {
-      const doc = iframe.contentDocument;
+    const forceFullWidth = () => {
+      const doc = iframe.contentDocument || iframe.contentWindow?.document;
       if (!doc) return;
 
-      const chat = doc.querySelector('[data-testid="chatkit-conversation"]') ||
-                    doc.querySelector('.chatkit-conversation') ||
-                    doc.body;
+      // Apply to all possible containers
+      const selectors = [
+        '[data-testid="chatkit-conversation"]',
+        '.chatkit-conversation',
+        '.chatkit-messages',
+        'main',
+        'body'
+      ];
 
-      if (chat instanceof HTMLElement) {
-        chat.style.maxWidth = 'none';
-        chat.style.width = '100%';
-        chat.style.margin = '0 auto';
-
-        // Force input
-        const input = doc.querySelector('[data-testid="chatkit-input"]');
-        if (input instanceof HTMLElement) {
-          input.style.width = '100%';
-          input.style.maxWidth = 'none';
+      selectors.forEach(sel => {
+        const el = doc.querySelector(sel);
+        if (el instanceof HTMLElement) {
+          el.style.maxWidth = 'none';
+          el.style.width = '100%';
+          el.style.margin = '0 auto';
         }
+      });
 
+      // Input
+      const input = doc.querySelector('[data-testid="chatkit-input"]');
+      if (input instanceof HTMLElement) {
+        input.style.width = '100%';
+        input.style.maxWidth = 'none';
+      }
+    };
+
+    // Run on load
+    iframe.onload = forceFullWidth;
+
+    // Poll until loaded
+    const check = setInterval(() => {
+      if (iframe.contentDocument?.readyState === 'complete') {
+        forceFullWidth();
         clearInterval(check);
       }
-    }, 100);
+    }, 50);
+
+    setTimeout(() => clearInterval(check), 5000);
 
     return () => clearInterval(check);
   }, []);
