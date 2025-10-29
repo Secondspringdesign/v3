@@ -33,4 +33,26 @@ export default function ChatPage() {
         const input = doc.querySelector('[data-testid="chatkit-input"]');
         if (input instanceof HTMLElement) {
           input.style.width = '100%';
-          input.style.maxWidth =
+          input.style.maxWidth = 'none';
+        }
+
+        clearInterval(check);
+      }
+    }, 100);
+
+    return () => clearInterval(check);
+  }, []);
+
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-end bg-slate-100 dark:bg-slate-950">
+      <div className="w-full p-4">
+        <ChatKitPanel
+          theme={scheme}
+          onWidgetAction={handleWidgetAction}
+          onResponseEnd={handleResponseEnd}
+          onThemeRequest={setScheme}
+        />
+      </div>
+    </main>
+  );
+}
