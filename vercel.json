@@ -5,7 +5,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.platform.openai.com https://sentinel.openai.com 'sha256-7Ne3mvvwxp9HWnb+s3j7tFoakHpseU16jQDJLko6DcE=' 'sha256-KhPFbeaWl+j9Y3VzA9tdSoMDXoImOsk5YpaEK2FMXls=' 'sha256-I1mwuI0ELmDPb178UJNt4nUJmX889XGvCT40ALKvU6M=' 'sha256-oY/645YNniIz2j02YqDv54lUER2HbHWJaYCXOjS1SOk='; connect-src 'self' https://api.openai.com https://cdn.platform.openai.com; frame-ancestors *;"
+          "value": "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.platform.openai.com https://sentinel.openai.com 'sha256-oY/645YNniIz2j02YqDv54lUER2HbHWJaYCXOjS1SOk='; frame-ancestors *; connect-src 'self' https://api.openai.com https://cdn.platform.openai.com wss://cdn.platform.openai.com;"
         },
         {
           "key": "X-Frame-Options",
@@ -19,14 +19,6 @@
         {
           "key": "Access-Control-Allow-Origin",
           "value": "*"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "POST, OPTIONS"
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type"
         }
       ]
     }
