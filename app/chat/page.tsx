@@ -8,13 +8,13 @@ import { useCallback } from "react";
 export default function ChatPage() {
   const { scheme, setScheme } = useColorScheme();
 
-  // No-op handlers – you can expand later
   const handleWidgetAction = useCallback(async () => {}, []);
   const handleResponseEnd = useCallback(() => {}, []);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-end bg-slate-100 dark:bg-slate-950">
-      <div className="mx-auto w-full max-w-5xl p-4">
+      <div className="mx-auto w-full p-4">
+        {/* REMOVED max-w-5xl */}
         <ChatKitPanel
           theme={scheme}
           onWidgetAction={handleWidgetAction}
@@ -22,6 +22,24 @@ export default function ChatPage() {
           onThemeRequest={setScheme}
         />
       </div>
+
+      {/* FULL WIDTH OVERRIDE */}
+      <style jsx global>{`
+        openai-chatkit,
+        [data-chatkit-conversation],
+        .chatkit-conversation,
+        .chatkit-messages,
+        .chatkit-message-list {
+          max-width: none !important;
+          width: 100% !important;
+          margin: 0 auto !important;
+        }
+        /* Force input to full width */
+        [data-testid="chatkit-input"] {
+          width: 100% !important;
+          max-width: none !important;
+        }
+      `}</style>
     </main>
   );
 }
