@@ -5,7 +5,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.platform.openai.com https://sentinel.openai.com 'sha256-oY/645YNniIz2j02YqDv54lUER2HbHWJaYCXOjS1SOk='; frame-ancestors *; connect-src 'self' https://api.openai.com https://cdn.platform.openai.com wss://cdn.platform.openai.com;"
+          "value": "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.platform.openai.com https://sentinel.openai.com; frame-ancestors *; connect-src 'self' https://api.openai.com https://cdn.platform.openai.com wss://cdn.platform.openai.com;"
         },
         {
           "key": "X-Frame-Options",
@@ -14,11 +14,15 @@
       ]
     },
     {
-      "source": "/api/(.*)",
+      "source": "/chat/(.*)",
       "headers": [
         {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
+          "key": "Content-Security-Policy",
+          "value": "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.platform.openai.com https://sentinel.openai.com; frame-ancestors *; connect-src 'self' https://api.openai.com https://cdn.platform.openai.com wss://cdn.platform.openai.com;"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "ALLOWALL"
         }
       ]
     }
