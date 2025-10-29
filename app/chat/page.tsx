@@ -3,7 +3,7 @@
 
 import { ChatKitPanel } from "@/components/ChatKitPanel";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 
 export default function ChatPage() {
   const { scheme, setScheme } = useColorScheme();
@@ -11,10 +11,41 @@ export default function ChatPage() {
   const handleWidgetAction = useCallback(async () => {}, []);
   const handleResponseEnd = useCallback(() => {}, []);
 
+  // FORCE FULL WIDTH AFTER LOAD
+  useEffect(() => {
+    const iframe = document.querySelector("iframe");
+    if (!iframe) return;
+
+    const check = setInterval(() => {
+      const doc = iframe.contentDocument;
+      if (!doc) return;
+
+      const chat = doc.querySelector('[data-testid="chatkit-conversation"]') ||
+                    doc.querySelector('.chatkit-conversation') ||
+                    doc.body;
+
+      if (chat) {
+        chat.style.maxWidth = 'none';
+        chat.style.width = '100%';
+        chat.style.margin = '0 auto';
+
+        // Force input
+        const input = doc.querySelector('[data-testid="chatkit-input"]');
+        if (input) {
+          input.style.width = '100%';
+          input.style.maxWidth = 'none';
+        }
+
+        clearInterval(check);
+      }
+    }, 100);
+
+    return () => clearInterval(check);
+  }, []);
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-end bg-slate-100 dark:bg-slate-950">
-      <div className="mx-auto w-full p-4">
-        {/* REMOVED max-w-5xl */}
+      <div className="w-full p-4">
         <ChatKitPanel
           theme={scheme}
           onWidgetAction={handleWidgetAction}
@@ -22,24 +53,6 @@ export default function ChatPage() {
           onThemeRequest={setScheme}
         />
       </div>
-
-      {/* FULL WIDTH OVERRIDE */}
-      <style jsx global>{`
-        openai-chatkit,
-        [data-chatkit-conversation],
-        .chatkit-conversation,
-        .chatkit-messages,
-        .chatkit-message-list {
-          max-width: none !important;
-          width: 100% !important;
-          margin: 0 auto !important;
-        }
-        /* Force input to full width */
-        [data-testid="chatkit-input"] {
-          width: 100% !important;
-          max-width: none !important;
-        }
-      `}</style>
     </main>
   );
 }
