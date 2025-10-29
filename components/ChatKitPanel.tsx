@@ -186,7 +186,12 @@ export function ChatKitPanel({
       }
 
       try {
-        const response = await fetch(CREATE_SESSION_ENDPOINT, {
+        // === ONLY CHANGE: READ ?agent= FROM URL ===
+        const urlParams = new URLSearchParams(window.location.search);
+        const agent = urlParams.get("agent") || "strategy";
+        const endpointWithAgent = `${CREATE_SESSION_ENDPOINT}?agent=${agent}`;
+
+        const response = await fetch(endpointWithAgent, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -209,6 +214,8 @@ export function ChatKitPanel({
             status: response.status,
             ok: response.ok,
             bodyPreview: raw.slice(0, 1600),
+            agent,
+            endpoint: endpointWithAgent,
           });
         }
 
@@ -342,7 +349,6 @@ export function ChatKitPanel({
   }
 
   return (
-    // FIXED: Keep h-[90vh] + flex-1
     <div className="relative pb-8 flex h-[90vh] flex-col rounded-2xl overflow-hidden bg-white shadow-sm transition-colors dark:bg-slate-900">
       <ChatKit
         key={widgetInstanceKey}
