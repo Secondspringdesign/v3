@@ -1,26 +1,15 @@
-// lib/config.ts
 import { ColorScheme, StartScreenPrompt, ThemeOption } from "@openai/chatkit";
 
-/* ------------------------------------------------------------------ */
-/* 1. WORKFLOW IDs – read from Vercel public env vars                 */
-/* ------------------------------------------------------------------ */
-const WORKFLOWS = {
-  strategy:   process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_STRATEGY?.trim()   ?? "",
-  operations: process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_OPERATIONS?.trim() ?? "",
-  marketing:  process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_MARKETING?.trim()  ?? "",
-  product:    process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_PRODUCT?.trim()    ?? "",
+export const WORKFLOWS = {
+  strategy: process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_STRATEGY?.trim() || '',
+  operations: process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_OPERATIONS?.trim() || '',
+  marketing: process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_MARKETING?.trim() || '',
+  product: process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_PRODUCT?.trim() || '',
 };
 
-/* Keep the original default (Strategy) – used when no ?agent= is passed */
-export const WORKFLOW_ID =
-  process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_ID?.trim() ?? WORKFLOWS.strategy;
+// Default to strategy if no agent is passed
+export const WORKFLOW_ID = WORKFLOWS.strategy;
 
-/* Export the map so the API route can pick the right ID */
-export { WORKFLOWS };
-
-/* ------------------------------------------------------------------ */
-/* 2. Everything else – unchanged                                      */
-/* ------------------------------------------------------------------ */
 export const CREATE_SESSION_ENDPOINT = "/api/create-session";
 
 export const STARTER_PROMPTS: StartScreenPrompt[] = [
