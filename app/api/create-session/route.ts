@@ -18,9 +18,9 @@ const DEFAULT_CHATKIT_BASE = "https://api.openai.com";
 const SESSION_COOKIE_NAME = "chatkit_session_id";
 const SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
-// === ALL 4 WORKFLOW IDs (CORRECT & VERIFIED) ===
+// === ALL 4 WORKFLOW IDs ===
 const WORKFLOWS: Record<string, string> = {
-  strategy: "wf_68fee66360548190a298201183a30c3803a17f3de232e2c9", // ORIGINAL STRATEGY
+  strategy: "wf_68fee66360548190a298201183a30c3803a17f3de232e2c9",
   operations: "wf_69026cf6ac808190be84ebde84951f970afd6254612434c0",
   marketing: "wf_69026bf3dd9881908d0321f4dcbcf2d600b6acefcbe3958d",
   product: "wf_69026b8145c48190985fa5cdd1d43adf0cbd88dcb5a45b06",
@@ -50,9 +50,9 @@ export async function POST(request: Request): Promise<Response> {
       await resolveUserId(request);
     sessionCookie = resolvedSessionCookie;
 
-    // === ONLY CHANGE: ?agent= FROM URL ===
-    const url = new URL(request.url);
-    const agent = url.searchParams.get("agent");
+    // === FIXED: RENAME URL TO requestUrl ===
+    const requestUrl = new URL(request.url);
+    const agent = requestUrl.searchParams.get("agent");
     const resolvedWorkflowId =
       agent && WORKFLOWS[agent]
         ? WORKFLOWS[agent]
@@ -76,8 +76,8 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const apiBase = process.env.CHATKIT_API_BASE ?? DEFAULT_CHATKIT_BASE;
-    const url = `${apiBase}/v1/chatkit/sessions`;
-    const upstreamResponse = await fetch(url, {
+    const apiUrl = `${apiBase}/v1/chatkit/sessions`; // ← RENAMED
+    const upstreamResponse = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
