@@ -342,15 +342,15 @@ export function ChatKitPanel({
   }
 
   return (
-    // ONLY CHANGE #1: Removed w-full h-[90vh]
-    <div className="relative pb-8 flex flex-col rounded-2xl overflow-hidden bg-white shadow-sm transition-colors dark:bg-slate-900">
+    // FIXED: Keep h-[90vh] + flex-1
+    <div className="relative pb-8 flex h-[90vh] flex-col rounded-2xl overflow-hidden bg-white shadow-sm transition-colors dark:bg-slate-900">
       <ChatKit
         key={widgetInstanceKey}
         control={chatkit.control}
         className={
           blockingError || isInitializingSession
             ? "pointer-events-none opacity-0"
-            : "block flex-1 w-full h-full"  // ONLY CHANGE #2: Added flex-1
+            : "block flex-1 w-full h-full"
         }
       />
       <ErrorOverlay
