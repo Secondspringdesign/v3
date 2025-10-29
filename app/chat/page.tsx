@@ -11,60 +11,61 @@ export default function ChatPage() {
   const handleWidgetAction = useCallback(async () => {}, []);
   const handleResponseEnd = useCallback(() => {}, []);
 
-  // FORCE FULL WIDTH IMMEDIATELY
+  // FORCE MIN 600PX + FULL WIDTH
   useEffect(() => {
     const iframe = document.querySelector("iframe");
     if (!iframe) return;
 
-    const forceFullWidth = () => {
-      const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    const forceResponsive = () => {
+      const doc = iframe.contentDocument;
       if (!doc) return;
 
-      // Apply to all possible containers
-      const selectors = [
-        '[data-testid="chatkit-conversation"]',
-        '.chatkit-conversation',
-        '.chatkit-messages',
-        'main',
-        'body'
-      ];
+      const chat = doc.querySelector('[data-testid="chatkit-conversation"]') ||
+                    doc.querySelector('.chatkit-conversation') ||
+                    doc.body;
 
-      selectors.forEach(sel => {
-        const el = doc.querySelector(sel);
-        if (el instanceof HTMLElement) {
-          el.style.maxWidth = 'none';
-          el.style.width = '100%';
-          el.style.margin = '0 auto';
+      if (chat instanceof HTMLElement) {
+        // MIN 600px + FULL WIDTH
+        chat.style.minWidth = '600px';
+        chat.style.width = '100%';
+        chat.style.maxWidth = 'none';
+        chat.style.margin = '0 auto';
+        chat.style.padding = '0 20px';
+
+        // Input
+        const input = doc.querySelector('[data-testid="chatkit-input"]');
+        if (input instanceof HTMLElement) {
+          input.style.width = '100%';
+          input.style.maxWidth = 'none';
         }
-      });
 
-      // Input
-      const input = doc.querySelector('[data-testid="chatkit-input"]');
-      if (input instanceof HTMLElement) {
-        input.style.width = '100%';
-        input.style.maxWidth = 'none';
+        // Force reflow
+        void chat.offsetHeight;
       }
     };
 
-    // Run on load
-    iframe.onload = forceFullWidth;
+    // Run on load + resize
+    iframe.onload = forceResponsive;
+    const observer = new ResizeObserver(forceResponsive);
+    observer.observe(iframe);
 
-    // Poll until loaded
-    const check = setInterval(() => {
+    const poll = setInterval(() => {
       if (iframe.contentDocument?.readyState === 'complete') {
-        forceFullWidth();
-        clearInterval(check);
+        forceResponsive();
       }
-    }, 50);
+    }, 100);
 
-    setTimeout(() => clearInterval(check), 5000);
+    setTimeout(() => clearInterval(poll), 5000);
 
-    return () => clearInterval(check);
+    return () => {
+      observer.disconnect();
+      clearInterval(poll);
+    };
   }, []);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-end bg-slate-100 dark:bg-slate-950">
-      <div className="w-full p-4">
+      <div className="w-full min-w-[600px] p-4">
         <ChatKitPanel
           theme={scheme}
           onWidgetAction={handleWidgetAction}
