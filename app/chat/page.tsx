@@ -11,47 +11,49 @@ export default function ChatPage() {
   const handleWidgetAction = useCallback(async () => {}, []);
   const handleResponseEnd = useCallback(() => {}, []);
 
-  // FORCE MIN 600PX + FULL WIDTH
+  // SAME-TAB LINKS + RESPONSIVE
   useEffect(() => {
     const iframe = document.querySelector("iframe");
     if (!iframe) return;
 
-    const forceResponsive = () => {
+    const makeLinksSameTab = () => {
       const doc = iframe.contentDocument;
       if (!doc) return;
 
+      // 1. FORCE SAME TAB
+      doc.querySelectorAll('a[href]').forEach(a => {
+        a.setAttribute('target', '_self');
+      });
+
+      // 2. RESPONSIVE (your original code)
       const chat = doc.querySelector('[data-testid="chatkit-conversation"]') ||
                     doc.querySelector('.chatkit-conversation') ||
                     doc.body;
 
       if (chat instanceof HTMLElement) {
-        // MIN 600px + FULL WIDTH
         chat.style.minWidth = '600px';
         chat.style.width = '100%';
         chat.style.maxWidth = 'none';
         chat.style.margin = '0 auto';
         chat.style.padding = '0 20px';
 
-        // Input
         const input = doc.querySelector('[data-testid="chatkit-input"]');
         if (input instanceof HTMLElement) {
           input.style.width = '100%';
           input.style.maxWidth = 'none';
         }
 
-        // Force reflow
         void chat.offsetHeight;
       }
     };
 
-    // Run on load + resize
-    iframe.onload = forceResponsive;
-    const observer = new ResizeObserver(forceResponsive);
+    iframe.onload = makeLinksSameTab;
+    const observer = new ResizeObserver(makeLinksSameTab);
     observer.observe(iframe);
 
     const poll = setInterval(() => {
       if (iframe.contentDocument?.readyState === 'complete') {
-        forceResponsive();
+        makeLinksSameTab();
       }
     }, 100);
 
