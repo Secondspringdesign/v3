@@ -20,10 +20,13 @@ export default function ChatPage() {
       const doc = iframe.contentDocument;
       if (!doc) return;
 
-      // 1. KILL NEW TABS (ChatKit hard-codes _blank)
+      // 1. KILL NEW TABS — ChatKit hard-codes target="_blank"
       const style = doc.createElement("style");
       style.textContent = `
-        a { target: _self !important; }
+        a, a * { 
+          target: _self !important; 
+          cursor: pointer !important;
+        }
         a[ target="_blank" ] { target: _self !important; }
       `;
       doc.head.appendChild(style);
@@ -45,6 +48,7 @@ export default function ChatPage() {
           input.style.width = '100%';
           input.style.maxWidth = 'none';
         }
+
         void chat.offsetHeight;
       }
     };
@@ -56,6 +60,7 @@ export default function ChatPage() {
     const poll = setInterval(() => {
       if (iframe.contentDocument?.readyState === 'complete') forceSameTab();
     }, 100);
+
     setTimeout(() => clearInterval(poll), 5000);
 
     return () => {
