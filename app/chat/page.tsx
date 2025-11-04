@@ -11,7 +11,7 @@ export default function ChatPage() {
   const handleWidgetAction = useCallback(async () => {}, []);
   const handleResponseEnd = useCallback(() => {}, []);
 
-  // SAME-TAB + RESPONSIVE
+  // SAME-TAB + RESPONSIVE + STRATEGY WELCOME
   useEffect(() => {
     const iframe = document.querySelector("iframe");
     if (!iframe) return;
@@ -20,7 +20,7 @@ export default function ChatPage() {
       const doc = iframe.contentDocument;
       if (!doc) return;
 
-      // 1. KILL NEW TABS — ChatKit hard-codes target="_blank"
+      // 1. KILL NEW TABS
       const style = doc.createElement("style");
       style.textContent = `
         a, a * { 
@@ -31,7 +31,7 @@ export default function ChatPage() {
       `;
       doc.head.appendChild(style);
 
-      // 2. RESPONSIVE (your original code)
+      // 2. RESPONSIVE
       const chat = doc.querySelector('[data-testid="chatkit-conversation"]') ||
                     doc.querySelector('.chatkit-conversation') ||
                     doc.body;
@@ -50,6 +50,24 @@ export default function ChatPage() {
         }
 
         void chat.offsetHeight;
+      }
+
+      // 3. STRATEGY WELCOME — ONLY IF ?agent=strategy
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("agent") === "strategy" && chat instanceof HTMLElement) {
+        const welcomeMsg = `
+          <div class="chatkit-message bot">
+            <div class="chatkit-bubble">
+              I’m your Business Builder AI.<br><br>
+              Are we creating a new business (from idea to launch), or solving a problem in your current business?
+            </div>
+          </div>
+        `;
+
+        if (!doc.body.innerHTML.includes("Business Builder AI")) {
+          chat.insertAdjacentHTML("afterbegin", welcomeMsg);
+          chat.scrollTop = 0;
+        }
       }
     };
 
