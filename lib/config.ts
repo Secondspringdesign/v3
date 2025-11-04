@@ -1,6 +1,7 @@
 import { ColorScheme, StartScreenPrompt, ThemeOption } from "@openai/chatkit";
 
-export const WORKFLOW_ID = process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_ID?.trim() ?? "";
+export const WORKFLOW_ID = process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_ID?.trim() || '';
+
 export const CREATE_SESSION_ENDPOINT = "/api/create-session";
 
 export const STARTER_PROMPTS: StartScreenPrompt[] = [
@@ -13,8 +14,13 @@ export const STARTER_PROMPTS: StartScreenPrompt[] = [
 
 export const PLACEHOLDER_INPUT = "Ask anything...";
 
-// Use the strategy greeting as the default greeting
-export const GREETING = "I'm your Business Builder AI.\n\nAre we creating a new business (from idea to launch), or solving a problem in your current business?";
+// Explicit greetings per workflow ID — no fallback
+export const GREETINGS = {
+  strategy: "I'm your Business Builder AI.\n\nAre we creating a new business (from idea to launch), or solving a problem in your current business?",
+  product: "I'm your Product Builder AI.\n\nLet's build your MVP — what features are essential?",
+  marketing: "I'm your Marketing AI.\n\nLet's get your first customers — who is your ideal buyer?",
+  operations: "I'm your Operations AI.\n\nLet's optimize your business — what's your biggest bottleneck?",
+};
 
 export const getThemeConfig = (theme: ColorScheme): ThemeOption => ({
   color: {
