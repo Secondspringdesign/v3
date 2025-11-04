@@ -1,3 +1,4 @@
+ url=https://github.com/Secondspringdesign/v3/blob/main/components/ChatKitPanel.tsx
 // components/ChatKitPanel.tsx
 "use client";
 
@@ -6,7 +7,6 @@ import { ChatKit, useChatKit } from "@openai/chatkit-react";
 import {
   STARTER_PROMPTS,
   PLACEHOLDER_INPUT,
-  GREETING,
   CREATE_SESSION_ENDPOINT,
   getThemeConfig,
   getGreetingForAgent,
