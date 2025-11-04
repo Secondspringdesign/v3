@@ -6,7 +6,7 @@ import { ChatKit, useChatKit } from "@openai/chatkit-react";
 import {
   STARTER_PROMPTS,
   PLACEHOLDER_INPUT,
-  AGENT_GREETINGS,
+  GREETING,
   CREATE_SESSION_ENDPOINT,
   getThemeConfig,
 } from "@/lib/config";
@@ -107,6 +107,18 @@ export function ChatKitPanel({
     };
   }, [scriptStatus, setErrorState]);
 
+  const isWorkflowConfigured = Boolean(WORKFLOW_ID && !WORKFLOW_ID.startsWith("wf_replace"));
+
+  useEffect(() => {
+    if (!isWorkflowConfigured && isMountedRef.current) {
+      setErrorState({
+        session: "Set NEXT_PUBLIC_CHATKIT_WORKFLOW_ID in Vercel dashboard.",
+        retryable: false,
+      });
+      setIsInitializingSession(false);
+    }
+  }, [isWorkflowConfigured, setErrorState]);
+
   const handleResetChat = useCallback(() => {
     processedFacts.current.clear();
     if (isBrowser) setScriptStatus(window.customElements?.get("openai-chatkit") ? "ready" : "pending");
@@ -117,7 +129,16 @@ export function ChatKitPanel({
 
   const getClientSecret = useCallback(
     async (currentSecret: string | null) => {
-      if (isDev) console.info("[ChatKitPanel] getClientSecret invoked");
+      if (isDev) console.info("[ChatKitPanel] getClientSecret invoked", { currentSecretPresent: Boolean(currentSecret), workflowId: WORKFLOW_ID, endpoint: CREATE_SESSION_ENDPOINT });
+
+      if (!isWorkflowConfigured) {
+        const detail = "Set NEXT_PUBLIC_CHATKIT_WORKFLOW_ID in Vercel dashboard.";
+        if (isMountedRef.current) {
+          setErrorState({ session: detail, retryable: false });
+          setIsInitializingSession(false);
+        }
+        throw new Error(detail);
+      }
 
       if (isMountedRef.current) {
         if (!currentSecret) setIsInitializingSession(true);
@@ -138,12 +159,12 @@ export function ChatKitPanel({
         }
 
         const body: SessionBody = {
-          workflow: { id: "wf_placeholder" }, // Will be replaced by route.ts
+          workflow: { id: WORKFLOW_ID },
           chatkit_configuration: { file_upload: { enabled: true } },
           user: "public-user",
         };
 
-        // Use custom greeting from AGENT_GREETINGS
+        // 4 AGENT GREETINGS — NO FALLBACK
         const greeting = AGENT_GREETINGS[agent as keyof typeof AGENT_GREETINGS];
         if (greeting) {
           body.chatkit_configuration.startScreen = {
@@ -152,7 +173,7 @@ export function ChatKitPanel({
           };
         }
 
-        const response = await fetch(CREATE_SESSION_ENDPOINT + `?agent=${agent}`, {
+        const response = await fetch(CREATE_SESSION_ENDPOINT, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -160,7 +181,7 @@ export function ChatKitPanel({
 
         const raw = await response.text();
 
-        if (isDev) console.info("[ChatKitPanel] createSession response", { status: response.status, ok: response.ok, agent });
+        if (isDev) console.info("[ChatKitPanel] createSession response", { status: response.status, ok: response.ok, bodyPreview: raw.slice(0, 1600), agent });
 
         let data: Record<string, unknown> = {};
         if (raw) {
@@ -192,13 +213,13 @@ export function ChatKitPanel({
         if (isMountedRef.current && !currentSecret) setIsInitializingSession(false);
       }
     },
-    [setErrorState]
+    [isWorkflowConfigured, setErrorState]
   );
 
   const chatkit = useChatKit({
     api: { getClientSecret },
     theme: { colorScheme: theme, ...getThemeConfig(theme) },
-    startScreen: { greeting: "Loading...", prompts: [] }, // Placeholder
+    startScreen: { greeting: GREETING, prompts: STARTER_PROMPTS },
     composer: { placeholder: PLACEHOLDER_INPUT, attachments: { enabled: true } },
     threadItemActions: { feedback: false },
     onClientTool: async (invocation: { name: string; params: Record<string, unknown> }) => {
@@ -231,6 +252,16 @@ export function ChatKitPanel({
 
   const activeError = errors.session ?? errors.integration;
   const blockingError = errors.script ?? activeError;
+
+  if (isDev) {
+    console.debug("[ChatKitPanel] render state", {
+      isInitializingSession,
+      hasControl: Boolean(chatkit.control),
+      scriptStatus,
+      hasError: Boolean(blockingError),
+      workflowId: WORKFLOW_ID,
+    });
+  }
 
   return (
     <div className="relative pb-8 flex h-[90vh] flex-col rounded-2xl overflow-hidden bg-white shadow-sm transition-colors dark:bg-slate-900">
