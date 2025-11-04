@@ -9,6 +9,8 @@ import {
   GREETING,
   CREATE_SESSION_ENDPOINT,
   getThemeConfig,
+  getGreetingForAgent,
+  getStarterPromptsForAgent,
 } from "@/lib/config";
 import { ErrorOverlay } from "./ErrorOverlay";
 import type { ColorScheme } from "@/hooks/useColorScheme";
@@ -169,10 +171,17 @@ export function ChatKitPanel({
     [setErrorState]
   );
 
+  // Determine the current agent from the URL (fallback to "strategy")
+  const agentFromUrl = isBrowser ? new URLSearchParams(window.location.search).get("agent") ?? "strategy" : "strategy";
+
   const chatkit = useChatKit({
     api: { getClientSecret },
     theme: { colorScheme: theme, ...getThemeConfig(theme) },
-    startScreen: { greeting: GREETING, prompts: STARTER_PROMPTS },
+    // Use per-agent greeting and prompts:
+    startScreen: {
+      greeting: getGreetingForAgent(agentFromUrl),
+      prompts: getStarterPromptsForAgent(agentFromUrl) ?? STARTER_PROMPTS,
+    },
     composer: { placeholder: PLACEHOLDER_INPUT, attachments: { enabled: true } },
     threadItemActions: { feedback: false },
     onClientTool: async (invocation: { name: string; params: Record<string, unknown> }) => {
@@ -235,13 +244,15 @@ function extractErrorDetail(
   if (!payload) return fallback;
   const error = payload.error;
   if (typeof error === "string") return error;
-  if (error && typeof error === "object" && "message" in error && typeof (error as { message?: unknown }).message === "string") return (error as { message: string }).message;
+  if (error && typeof error === "object" && "message" in error && typeof (error as { message?: unknown }).message === "string")
+    return (error as { message: string }).message;
   const details = payload.details;
   if (typeof details === "string") return details;
   if (details && typeof details === "object" && "error" in details) {
     const nestedError = (details as { error?: unknown }).error;
     if (typeof nestedError === "string") return nestedError;
-    if (nestedError && typeof nestedError === "object" && "message" in nestedError && typeof (nestedError as { message?: unknown }).message === "string") return (nestedError as { message: string }).message;
+    if (nestedError && typeof nestedError === "object" && "message" in nestedError && typeof (nestedError as { message?: unknown }).message === "string")
+      return (nestedError as { message: string }).message;
   }
   if (typeof payload.message === "string") return payload.message;
   return fallback;
