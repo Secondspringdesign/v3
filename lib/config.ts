@@ -1,3 +1,4 @@
+ url=https://github.com/Secondspringdesign/v3/blob/main/lib/config.ts
 // lib/config.ts
 import { ColorScheme, StartScreenPrompt, ThemeOption } from "@openai/chatkit";
 
@@ -18,18 +19,19 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
     {
       label: "New business vs. existing problem",
       prompt: "Are we creating a new business (from idea to launch), or solving a problem in your current business?",
-      icon: "lightning",
+      // use a ChatKit-supported icon (circle-question is used elsewhere in this repo)
+      icon: "circle-question",
     },
     // add more strategy-specific prompts as desired
   ],
   product: [
-    { label: "Product discovery", prompt: "I need help with product discovery and prioritization.", icon: "sparkles" },
+    { label: "Product discovery", prompt: "I need help with product discovery and prioritization.", icon: "circle-question" },
   ],
   marketing: [
-    { label: "Go-to-market", prompt: "Help me define a go-to-market plan and positioning.", icon: "megaphone" },
+    { label: "Go-to-market", prompt: "Help me define a go-to-market plan and positioning.", icon: "circle-question" },
   ],
   operations: [
-    { label: "Ops improvements", prompt: "Optimize my operational workflows and tooling.", icon: "gear" },
+    { label: "Ops improvements", prompt: "Optimize my operational workflows and tooling.", icon: "circle-question" },
   ],
 };
 
