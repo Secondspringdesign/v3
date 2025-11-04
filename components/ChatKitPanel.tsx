@@ -8,7 +8,6 @@ import {
   PLACEHOLDER_INPUT,
   GREETING,
   CREATE_SESSION_ENDPOINT,
-  WORKFLOW_ID,
   getThemeConfig,
 } from "@/lib/config";
 import { ErrorOverlay } from "./ErrorOverlay";
@@ -52,7 +51,7 @@ export function ChatKitPanel({
 }: ChatKitPanelProps) {
   const processedFacts = useRef(new Set<string>());
   const [errors, setErrors] = useState<ErrorState>(() => createInitialErrors());
-  const [ isInitializingSession, setIsInitializingSession ] = useState(true);
+  const [isInitializingSession, setIsInitializingSession] = useState(true);
   const isMountedRef = useRef(true);
   const [scriptStatus, setScriptStatus] = useState<"pending" | "ready" | "error">(
     () => (isBrowser && window.customElements?.get("openai-chatkit") ? "ready" : "pending")
@@ -108,18 +107,6 @@ export function ChatKitPanel({
     };
   }, [scriptStatus, setErrorState]);
 
-  const isWorkflowConfigured = Boolean(WORKFLOW_ID && !WORKFLOW_ID.startsWith("wf_replace"));
-
-  useEffect(() => {
-    if (!isWorkflowConfigured && isMountedRef.current) {
-      setErrorState({
-        session: "Set NEXT_PUBLIC_CHATKIT_WORKFLOW_ID in your .env.local file.",
-        retryable: false,
-      });
-      setIsInitializingSession(false);
-    }
-  }, [isWorkflowConfigured, setErrorState]);
-
   const handleResetChat = useCallback(() => {
     processedFacts.current.clear();
     if (isBrowser) setScriptStatus(window.customElements?.get("openai-chatkit") ? "ready" : "pending");
@@ -132,26 +119,19 @@ export function ChatKitPanel({
     async (currentSecret: string | null) => {
       if (isDev) console.info("[ChatKitPanel] getClientSecret invoked");
 
-      if (!isWorkflowConfigured) {
-        const detail = "Set NEXT_PUBLIC_CHATKIT_WORKFLOW_ID in your .env.local file.";
-        if (isMountedRef.current) {
-          setErrorState({ session: detail, retryable: false });
-          setIsInitializingSession(false);
-        }
-        throw new Error(detail);
-      }
-
       if (isMountedRef.current) {
         if (!currentSecret) setIsInitializingSession(true);
         setErrorState({ session: null, integration: null, retryable: false });
       }
 
       try {
-        const response = await fetch(CREATE_SESSION_ENDPOINT, {
+        const urlParams = new URLSearchParams(window.location.search);
+        const agent = urlParams.get("agent") || "strategy";
+
+        const response = await fetch(`${CREATE_SESSION_ENDPOINT}?agent=${agent}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            workflow: { id: WORKFLOW_ID },
             user: "public-user",
             chatkit_configuration: { file_upload: { enabled: true } },
           }),
@@ -186,7 +166,7 @@ export function ChatKitPanel({
         if (isMountedRef.current && !currentSecret) setIsInitializingSession(false);
       }
     },
-    [isWorkflowConfigured, setErrorState]
+    [setErrorState]
   );
 
   const chatkit = useChatKit({
