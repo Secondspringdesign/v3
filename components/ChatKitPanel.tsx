@@ -6,7 +6,7 @@ import { ChatKit, useChatKit } from "@openai/chatkit-react";
 import {
   STARTER_PROMPTS,
   PLACEHOLDER_INPUT,
-  GREETING,
+  GREETINGS,
   CREATE_SESSION_ENDPOINT,
   WORKFLOW_ID,
   getThemeConfig,
@@ -113,7 +113,7 @@ export function ChatKitPanel({
   useEffect(() => {
     if (!isWorkflowConfigured && isMountedRef.current) {
       setErrorState({
-        session: "Set NEXT_PUBLIC_CHATKIT_WORKFLOW_ID in your .env.local file.",
+        session: "Set NEXT_PUBLIC_CHATKIT_WORKFLOW_ID in Vercel dashboard.",
         retryable: false,
       });
       setIsInitializingSession(false);
@@ -133,7 +133,7 @@ export function ChatKitPanel({
       if (isDev) console.info("[ChatKitPanel] getClientSecret invoked", { currentSecretPresent: Boolean(currentSecret), workflowId: WORKFLOW_ID, endpoint: CREATE_SESSION_ENDPOINT });
 
       if (!isWorkflowConfigured) {
-        const detail = "Set NEXT_PUBLIC_CHATKIT_WORKFLOW_ID in your .env.local file.";
+        const detail = "Set NEXT_PUBLIC_CHATKIT_WORKFLOW_ID in Vercel dashboard.";
         if (isMountedRef.current) {
           setErrorState({ session: detail, retryable: false });
           setIsInitializingSession(false);
@@ -149,7 +149,6 @@ export function ChatKitPanel({
       try {
         const urlParams = new URLSearchParams(window.location.search);
         const agent = urlParams.get("agent") || "strategy";
-        const isStrategy = agent === "strategy";
 
         interface SessionBody {
           workflow: { id: string };
@@ -166,7 +165,7 @@ export function ChatKitPanel({
           user: "public-user",
         };
 
-        if (isStrategy) {
+        if (agent === "strategy") {
           body.chatkit_configuration.startScreen = {
             greeting: GREETING,
             prompts: [], // No buttons
@@ -246,4 +245,67 @@ export function ChatKitPanel({
     },
     onResponseEnd: onResponseEnd,
     onResponseStart: () => setErrorState({ integration: null, retryable: false }),
-    onThreadChange
+    onThreadChange: () => processedFacts.current.clear(),
+    onError: ({ error }) => console.error("ChatKit error", error),
+  });
+
+  const activeError = errors.session ?? errors.integration;
+  const blockingError = errors.script ?? activeError;
+
+  if (isDev) {
+    console.debug("[ChatKitPanel] render state", {
+      isInitializingSession,
+      hasControl: Boolean(chatkit.control),
+      scriptStatus,
+      hasError: Boolean(blockingError),
+      workflowId: WORKFLOW_ID,
+    });
+  }
+
+  return (
+    <div className="relative pb-8 flex h-[90vh] flex-col rounded-2xl overflow-hidden bg-white shadow-sm transition-colors dark:bg-slate-900">
+      <ChatKit
+        key={widgetInstanceKey}
+        control={chatkit.control}
+        className={
+          blockingError || isInitializingSession
+            ? "pointer-events-none opacity-0"
+            : "block flex-1 w-full h-full"
+        }
+      />
+      <ErrorOverlay
+        error={blockingError}
+        fallbackMessage={
+          blockingError || !isInitializingSession ? null : "Loading assistant session..."
+        }
+        onRetry={blockingError && errors.retryable ? handleResetChat : null}
+        retryLabel="Restart chat"
+      />
+    </div>
+  );
+}
+
+function extractErrorDetail(
+  payload: Record<string, unknown> | undefined,
+  fallback: string
+): string {
+  if (!payload) return fallback;
+
+  const error = payload.error;
+  if (typeof error === "string") return error;
+
+  if (error && typeof error === "object" && "message" in error && typeof (error as { message?: unknown }).message === "string") return (error as { message: string }).message;
+
+  const details = payload.details;
+  if (typeof details === "string") return details;
+
+  if (details && typeof details === "object" && "error" in details) {
+    const nestedError = (details as { error?: unknown }).error;
+    if (typeof nestedError === "string") return nestedError;
+    if (nestedError && typeof nestedError === "object" && "message" in nestedError && typeof (nestedError as { message?: unknown }).message === "string") return (nestedError as { message: string }).message;
+  }
+
+  if (typeof payload.message === "string") return payload.message;
+
+  return fallback;
+}
