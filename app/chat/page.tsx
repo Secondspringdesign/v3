@@ -7,7 +7,6 @@ import { useCallback } from "react";
 
 export default function ChatPage() {
   const { scheme, setScheme } = useColorScheme();
-
   const handleWidgetAction = useCallback(async () => {}, []);
   const handleResponseEnd = useCallback(() => {}, []);
 
