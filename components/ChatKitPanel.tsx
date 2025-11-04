@@ -1,13 +1,9 @@
-// components/ChatKitPanel.tsx
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatKit, useChatKit } from "@openai/chatkit-react";
 import {
-  STARTER_PROMPTS,
   PLACEHOLDER_INPUT,
-  GREETING,
-  STRATEGY_GREETING,
   CREATE_SESSION_ENDPOINT,
   WORKFLOW_ID,
   getThemeConfig,
@@ -169,7 +165,7 @@ export function ChatKitPanel({
 
         if (isStrategy) {
           body.chatkit_configuration.startScreen = {
-            greeting: "I'm your Business Builder AI.\n\nAre we creating a new business (from idea to launch), or solving a problem in your current business?",
+            greeting: "I'm your Business Builder AI. Are we creating a new business (from idea to launch), or solving a problem in your current business?",
             prompts: [], // No buttons
           };
         }
@@ -220,7 +216,7 @@ export function ChatKitPanel({
   const chatkit = useChatKit({
     api: { getClientSecret },
     theme: { colorScheme: theme, ...getThemeConfig(theme) },
-    startScreen: { greeting: GREETING, prompts: STARTER_PROMPTS },
+    startScreen: { greeting: "", prompts: [] }, // Set default empty to be handled by getClientSecret
     composer: { placeholder: PLACEHOLDER_INPUT, attachments: { enabled: true } },
     threadItemActions: { feedback: false },
     onClientTool: async (invocation: { name: string; params: Record<string, unknown> }) => {
@@ -240,68 +236,4 @@ export function ChatKitPanel({
         if (!id || processedFacts.current.has(id)) return { success: true };
         processedFacts.current.add(id);
         void onWidgetAction({ type: "save", factId: id, factText: text.replace(/\s+/g, " ").trim() });
-        return { success: true };
-      }
-
-      return { success: false };
-    },
-    onResponseEnd: onResponseEnd,
-    onResponseStart: () => setErrorState({ integration: null, retryable: false }),
-    onThreadChange: () => processedFacts.current.clear(),
-    onError: ({ error }) => console.error("ChatKit error", error),
-  });
-
-  const activeError = errors.session ?? errors.integration;
-  const blockingError = errors.script ?? activeError;
-
-  if (isDev) {
-    console.debug("[ChatKitPanel] render state", {
-      isInitializingSession,
-      hasControl: Boolean(chatkit.control),
-      scriptStatus,
-      hasError: Boolean(blockingError),
-      workflowId: WORKFLOW_ID,
-    });
-  }
-
-  return (
-    <div className="relative pb-8 flex h-[90vh] flex-col rounded-2xl overflow-hidden bg-white shadow-sm transition-colors dark:bg-slate-900">
-      <ChatKit
-        key={widgetInstanceKey}
-        control={chatkit.control}
-        className={
-          blockingError || isInitializingSession
-            ? "pointer-events-none opacity-0"
-            : "block flex-1 w-full h-full"
-        }
-      />
-      <ErrorOverlay
-        error={blockingError}
-        fallbackMessage={
-          blockingError || !isInitializingSession ? null : "Loading assistant session..."
-        }
-        onRetry={blockingError && errors.retryable ? handleResetChat : null}
-        retryLabel="Restart chat"
-      />
-    </div>
-  );
-}
-
-function extractErrorDetail(
-  payload: Record<string, unknown> | undefined,
-  fallback: string
-): string {
-  if (!payload) return fallback;
-  const error = payload.error;
-  if (typeof error === "string") return error;
-  if (error && typeof error === "object" && "message" in error && typeof (error as { message?: unknown }).message === "string") return (error as { message: string }).message;
-  const details = payload.details;
-  if (typeof details === "string") return details;
-  if (details && typeof details === "object" && "error" in details) {
-    const nestedError = (details as { error?: unknown }).error;
-    if (typeof nestedError === "string") return nestedError;
-    if (nestedError && typeof nestedError === "object" && "message" in nestedError && typeof (nestedError as { message?: unknown }).message === "string") return (nestedError as { message: string }).message;
-  }
-  if (typeof payload.message === "string") return payload.message;
-  return fallback;
-}
+       
