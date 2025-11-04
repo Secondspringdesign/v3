@@ -14,8 +14,11 @@ export const STARTER_PROMPTS: StartScreenPrompt[] = [
 
 export const PLACEHOLDER_INPUT = "Ask anything...";
 
-// Explicit greetings per workflow ID — no fallback
-export const GREETINGS = {
+// Default greeting for fallback
+export const GREETING = "How can I help you today?";
+
+// Agent-specific greetings (4 options, no fallback)
+export const AGENT_GREETINGS = {
   strategy: "I'm your Business Builder AI.\n\nAre we creating a new business (from idea to launch), or solving a problem in your current business?",
   product: "I'm your Product Builder AI.\n\nLet's build your MVP — what features are essential?",
   marketing: "I'm your Marketing AI.\n\nLet's get your first customers — who is your ideal buyer?",
