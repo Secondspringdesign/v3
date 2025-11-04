@@ -92,16 +92,11 @@ export function ChatKitPanel({
     window.addEventListener("chatkit-script-loaded", handleLoaded);
     window.addEventListener("chatkit-script-error", handleError as EventListener);
 
-    if (window.customElements?.get("openai-chatkit")) {
-      handleLoaded();
-    } else if (scriptStatus === "pending") {
+    if (window.customElements?.get("openai-chatkit")) handleLoaded();
+    else if (scriptStatus === "pending") {
       timeoutId = window.setTimeout(() => {
         if (!window.customElements?.get("openai-chatkit")) {
-          handleError(
-            new CustomEvent("chatkit-script-error", {
-              detail: "ChatKit web component is unavailable.",
-            })
-          );
+          handleError(new CustomEvent("chatkit-script-error", { detail: "ChatKit unavailable." }));
         }
       }, 5000);
     }
@@ -127,9 +122,7 @@ export function ChatKitPanel({
 
   const handleResetChat = useCallback(() => {
     processedFacts.current.clear();
-    if (isBrowser) {
-      setScriptStatus(window.customElements?.get("openai-chatkit") ? "ready" : "pending");
-    }
+    if (isBrowser) setScriptStatus(window.customElements?.get("openai-chatkit") ? "ready" : "pending");
     setIsInitializingSession(true);
     setErrors(createInitialErrors());
     setWidgetInstanceKey((prev) => prev + 1);
@@ -137,13 +130,7 @@ export function ChatKitPanel({
 
   const getClientSecret = useCallback(
     async (currentSecret: string | null) => {
-      if (isDev) {
-        console.info("[ChatKitPanel] getClientSecret invoked", {
-          currentSecretPresent: Boolean(currentSecret),
-          workflowId: WORKFLOW_ID,
-          endpoint: CREATE_SESSION_ENDPOINT,
-        });
-      }
+      if (isDev) console.info("[ChatKitPanel] getClientSecret invoked", { currentSecretPresent: Boolean(currentSecret), workflowId: WORKFLOW_ID, endpoint: CREATE_SESSION_ENDPOINT });
 
       if (!isWorkflowConfigured) {
         const detail = "Set NEXT_PUBLIC_CHATKIT_WORKFLOW_ID in your .env.local file.";
@@ -179,11 +166,9 @@ export function ChatKitPanel({
           user: "public-user",
         };
 
-        // STRATEGY: CUSTOM WELCOME, NO BUTTONS
         if (isStrategy) {
           body.chatkit_configuration.startScreen = {
-            greeting:
-              "I'm your Business Builder AI.\n\nAre we creating a new business (from idea to launch), or solving a problem in your current business?",
+            greeting: "I'm your Business Builder AI.\n\nAre we creating a new business (from idea to launch), or solving a problem in your current business?",
             prompts: [], // No buttons
           };
         }
@@ -196,14 +181,7 @@ export function ChatKitPanel({
 
         const raw = await response.text();
 
-        if (isDev) {
-          console.info("[ChatKitPanel] createSession response", {
-            status: response.status,
-            ok: response.ok,
-            bodyPreview: raw.slice(0, 1600),
-            agent,
-          });
-        }
+        if (isDev) console.info("[ChatKitPanel] createSession response", { status: response.status, ok: response.ok, bodyPreview: raw.slice(0, 1600), agent });
 
         let data: Record<string, unknown> = {};
         if (raw) {
@@ -313,26 +291,16 @@ function extractErrorDetail(
   fallback: string
 ): string {
   if (!payload) return fallback;
-
   const error = payload.error;
   if (typeof error === "string") return error;
-
-  if (error && typeof error === "object" && "message" in error && typeof (error as { message?: unknown }).message === "string") {
-    return (error as { message: string }).message;
-  }
-
+  if (error && typeof error === "object" && "message" in error && typeof (error as { message?: unknown }).message === "string") return (error as { message: string }).message;
   const details = payload.details;
   if (typeof details === "string") return details;
-
   if (details && typeof details === "object" && "error" in details) {
     const nestedError = (details as { error?: unknown }).error;
     if (typeof nestedError === "string") return nestedError;
-    if (nestedError && typeof nestedError === "object" && "message" in nestedError && typeof (nestedError as { message?: unknown }).message === "string") {
-      return (nestedError as { message: string }).message;
-    }
+    if (nestedError && typeof nestedError === "object" && "message" in nestedError && typeof (nestedError as { message?: unknown }).message === "string") return (nestedError as { message: string }).message;
   }
-
   if (typeof payload.message === "string") return payload.message;
-
   return fallback;
 }
