@@ -6,7 +6,9 @@ import { ChatKit, useChatKit } from "@openai/chatkit-react";
 import {
   STARTER_PROMPTS,
   PLACEHOLDER_INPUT,
+  AGENT_GREETINGS,
   CREATE_SESSION_ENDPOINT,
+  WORKFLOW_ID,
   getThemeConfig,
 } from "@/lib/config";
 import { ErrorOverlay } from "./ErrorOverlay";
@@ -142,11 +144,12 @@ export function ChatKitPanel({
           user: "public-user",
         };
 
-        // Force custom greeting for strategy
-        if (agent === "strategy") {
+        // Use custom greeting from AGENT_GREETINGS
+        const greeting = AGENT_GREETINGS[agent as keyof typeof AGENT_GREETINGS];
+        if (greeting) {
           body.chatkit_configuration.startScreen = {
-            greeting: "I'm your Business Builder AI.\n\nAre we creating a new business (from idea to launch), or solving a problem in your current business?",
-            prompts: [],
+            greeting,
+            prompts: [], // No buttons
           };
         }
 
@@ -196,14 +199,13 @@ export function ChatKitPanel({
   const chatkit = useChatKit({
     api: { getClientSecret },
     theme: { colorScheme: theme, ...getThemeConfig(theme) },
-    startScreen: { greeting: GREETING, prompts: STARTER_PROMPTS },
+    startScreen: { greeting: "Loading...", prompts: [] }, // Placeholder
     composer: { placeholder: PLACEHOLDER_INPUT, attachments: { enabled: true } },
     threadItemActions: { feedback: false },
     onClientTool: async (invocation: { name: string; params: Record<string, unknown> }) => {
       if (invocation.name === "switch_theme") {
         const requested = invocation.params.theme;
         if (requested === "light" || requested === "dark") {
-          if (isDev) console.debug("[ChatKitPanel] switch_theme", requested);
           onThemeRequest(requested);
           return { success: true };
         }
