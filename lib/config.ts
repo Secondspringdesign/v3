@@ -15,7 +15,6 @@ export const STARTER_PROMPTS: StartScreenPrompt[] = [
 
 export const PLACEHOLDER_INPUT = "Ask anything...";
 
-// Default greeting for all agents
 export const GREETING = "How can I help you today?";
 
 // Strategy-specific greeting (overrides for ?agent=strategy)
