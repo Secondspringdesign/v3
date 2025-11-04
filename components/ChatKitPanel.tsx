@@ -6,7 +6,6 @@ import { ChatKit, useChatKit } from "@openai/chatkit-react";
 import {
   STARTER_PROMPTS,
   PLACEHOLDER_INPUT,
-  AGENT_GREETINGS,
   CREATE_SESSION_ENDPOINT,
   getThemeConfig,
 } from "@/lib/config";
@@ -138,20 +137,20 @@ export function ChatKitPanel({
         }
 
         const body: SessionBody = {
-          workflow: { id: "wf_placeholder" }, // route.ts will override
+          workflow: { id: WORKFLOW_ID },
           chatkit_configuration: { file_upload: { enabled: true } },
           user: "public-user",
         };
 
-        const greeting = AGENT_GREETINGS[agent as keyof typeof AGENT_GREETINGS];
-        if (greeting) {
+        // Force custom greeting for strategy
+        if (agent === "strategy") {
           body.chatkit_configuration.startScreen = {
-            greeting,
-            prompts: [], // No buttons
+            greeting: "I'm your Business Builder AI.\n\nAre we creating a new business (from idea to launch), or solving a problem in your current business?",
+            prompts: [],
           };
         }
 
-        const response = await fetch(`${CREATE_SESSION_ENDPOINT}?agent=${agent}`, {
+        const response = await fetch(CREATE_SESSION_ENDPOINT, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -197,13 +196,14 @@ export function ChatKitPanel({
   const chatkit = useChatKit({
     api: { getClientSecret },
     theme: { colorScheme: theme, ...getThemeConfig(theme) },
-    startScreen: { greeting: "Loading...", prompts: [] }, // No default
+    startScreen: { greeting: GREETING, prompts: STARTER_PROMPTS },
     composer: { placeholder: PLACEHOLDER_INPUT, attachments: { enabled: true } },
     threadItemActions: { feedback: false },
     onClientTool: async (invocation: { name: string; params: Record<string, unknown> }) => {
       if (invocation.name === "switch_theme") {
         const requested = invocation.params.theme;
         if (requested === "light" || requested === "dark") {
+          if (isDev) console.debug("[ChatKitPanel] switch_theme", requested);
           onThemeRequest(requested);
           return { success: true };
         }
