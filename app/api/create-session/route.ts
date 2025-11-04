@@ -150,6 +150,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 }
 
+// === ALL ORIGINAL FUNCTIONS BELOW (UNCHANGED) ===
 export async function GET(): Promise<Response> {
   return methodNotAllowedResponse();
 }
