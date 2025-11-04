@@ -50,11 +50,11 @@ export async function POST(request: Request): Promise<Response> {
       await resolveUserId(request);
     sessionCookie = resolvedSessionCookie;
 
-    // === GET AGENT FROM URL: ?agent=operations ===
+    // === GET AGENT FROM URL ===
     const requestUrl = new URL(request.url);
     const agent = requestUrl.searchParams.get("agent") || "strategy";
 
-    // === USE WORKFLOWS FROM lib/config.ts (env vars) ===
+    // === USE WORKFLOWS FROM lib/config.ts ===
     const resolvedWorkflowId = WORKFLOWS[agent as keyof typeof WORKFLOWS];
 
     if (process.env.NODE_ENV !== "production") {
@@ -150,7 +150,6 @@ export async function POST(request: Request): Promise<Response> {
   }
 }
 
-// === ALL ORIGINAL FUNCTIONS BELOW (UNCHANGED) ===
 export async function GET(): Promise<Response> {
   return methodNotAllowedResponse();
 }
