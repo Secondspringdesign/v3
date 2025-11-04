@@ -1,9 +1,12 @@
+// components/ChatKitPanel.tsx
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatKit, useChatKit } from "@openai/chatkit-react";
 import {
+  STARTER_PROMPTS,
   PLACEHOLDER_INPUT,
+  GREETING,
   CREATE_SESSION_ENDPOINT,
   WORKFLOW_ID,
   getThemeConfig,
@@ -165,7 +168,7 @@ export function ChatKitPanel({
 
         if (isStrategy) {
           body.chatkit_configuration.startScreen = {
-            greeting: "I'm your Business Builder AI. Are we creating a new business (from idea to launch), or solving a problem in your current business?",
+            greeting: GREETING,
             prompts: [], // No buttons
           };
         }
@@ -216,7 +219,7 @@ export function ChatKitPanel({
   const chatkit = useChatKit({
     api: { getClientSecret },
     theme: { colorScheme: theme, ...getThemeConfig(theme) },
-    startScreen: { greeting: "", prompts: [] }, // Set default empty to be handled by getClientSecret
+    startScreen: { greeting: GREETING, prompts: STARTER_PROMPTS },
     composer: { placeholder: PLACEHOLDER_INPUT, attachments: { enabled: true } },
     threadItemActions: { feedback: false },
     onClientTool: async (invocation: { name: string; params: Record<string, unknown> }) => {
@@ -236,4 +239,11 @@ export function ChatKitPanel({
         if (!id || processedFacts.current.has(id)) return { success: true };
         processedFacts.current.add(id);
         void onWidgetAction({ type: "save", factId: id, factText: text.replace(/\s+/g, " ").trim() });
-       
+        return { success: true };
+      }
+
+      return { success: false };
+    },
+    onResponseEnd: onResponseEnd,
+    onResponseStart: () => setErrorState({ integration: null, retryable: false }),
+    onThreadChange
