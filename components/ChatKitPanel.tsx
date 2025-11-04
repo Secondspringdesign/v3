@@ -6,10 +6,8 @@ import { ChatKit, useChatKit } from "@openai/chatkit-react";
 import {
   STARTER_PROMPTS,
   PLACEHOLDER_INPUT,
-  GREETING,
-  STRATEGY_GREETING,
+  AGENT_GREETINGS,
   CREATE_SESSION_ENDPOINT,
-  WORKFLOW_ID,
   getThemeConfig,
 } from "@/lib/config";
 import { ErrorOverlay } from "./ErrorOverlay";
@@ -109,18 +107,6 @@ export function ChatKitPanel({
     };
   }, [scriptStatus, setErrorState]);
 
-  const isWorkflowConfigured = Boolean(WORKFLOW_ID && !WORKFLOW_ID.startsWith("wf_replace"));
-
-  useEffect(() => {
-    if (!isWorkflowConfigured && isMountedRef.current) {
-      setErrorState({
-        session: "Set NEXT_PUBLIC_CHATKIT_WORKFLOW_ID in your Vercel dashboard.",
-        retryable: false,
-      });
-      setIsInitializingSession(false);
-    }
-  }, [isWorkflowConfigured, setErrorState]);
-
   const handleResetChat = useCallback(() => {
     processedFacts.current.clear();
     if (isBrowser) setScriptStatus(window.customElements?.get("openai-chatkit") ? "ready" : "pending");
@@ -131,16 +117,7 @@ export function ChatKitPanel({
 
   const getClientSecret = useCallback(
     async (currentSecret: string | null) => {
-      if (isDev) console.info("[ChatKitPanel] getClientSecret invoked", { currentSecretPresent: Boolean(currentSecret), workflowId: WORKFLOW_ID, endpoint: CREATE_SESSION_ENDPOINT });
-
-      if (!isWorkflowConfigured) {
-        const detail = "Set NEXT_PUBLIC_CHATKIT_WORKFLOW_ID in your Vercel dashboard.";
-        if (isMountedRef.current) {
-          setErrorState({ session: detail, retryable: false });
-          setIsInitializingSession(false);
-        }
-        throw new Error(detail);
-      }
+      if (isDev) console.info("[ChatKitPanel] getClientSecret invoked");
 
       if (isMountedRef.current) {
         if (!currentSecret) setIsInitializingSession(true);
@@ -161,35 +138,21 @@ export function ChatKitPanel({
         }
 
         const body: SessionBody = {
-          workflow: { id: WORKFLOW_ID },
+          workflow: { id: "wf_placeholder" }, // Will be replaced by route.ts
           chatkit_configuration: { file_upload: { enabled: true } },
           user: "public-user",
         };
 
-        // Explicit greeting per agent — no fallback
-        if (agent === "strategy") {
+        // Use custom greeting from AGENT_GREETINGS
+        const greeting = AGENT_GREETINGS[agent as keyof typeof AGENT_GREETINGS];
+        if (greeting) {
           body.chatkit_configuration.startScreen = {
-            greeting: GREETING,
+            greeting,
             prompts: [], // No buttons
-          };
-        } else if (agent === "product") {
-          body.chatkit_configuration.startScreen = {
-            greeting: GREETING,
-            prompts: [],
-          };
-        } else if (agent === "marketing") {
-          body.chatkit_configuration.startScreen = {
-            greeting: GREETING,
-            prompts: [],
-          };
-        } else if (agent === "operations") {
-          body.chatkit_configuration.startScreen = {
-            greeting: GREETING,
-            prompts: [],
           };
         }
 
-        const response = await fetch(CREATE_SESSION_ENDPOINT, {
+        const response = await fetch(CREATE_SESSION_ENDPOINT + `?agent=${agent}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -197,7 +160,7 @@ export function ChatKitPanel({
 
         const raw = await response.text();
 
-        if (isDev) console.info("[ChatKitPanel] createSession response", { status: response.status, ok: response.ok, bodyPreview: raw.slice(0, 1600), agent });
+        if (isDev) console.info("[ChatKitPanel] createSession response", { status: response.status, ok: response.ok, agent });
 
         let data: Record<string, unknown> = {};
         if (raw) {
@@ -229,13 +192,13 @@ export function ChatKitPanel({
         if (isMountedRef.current && !currentSecret) setIsInitializingSession(false);
       }
     },
-    [isWorkflowConfigured, setErrorState]
+    [setErrorState]
   );
 
   const chatkit = useChatKit({
     api: { getClientSecret },
     theme: { colorScheme: theme, ...getThemeConfig(theme) },
-    startScreen: { greeting: GREETING, prompts: STARTER_PROMPTS },
+    startScreen: { greeting: "Loading...", prompts: [] }, // Placeholder
     composer: { placeholder: PLACEHOLDER_INPUT, attachments: { enabled: true } },
     threadItemActions: { feedback: false },
     onClientTool: async (invocation: { name: string; params: Record<string, unknown> }) => {
@@ -269,16 +232,6 @@ export function ChatKitPanel({
   const activeError = errors.session ?? errors.integration;
   const blockingError = errors.script ?? activeError;
 
-  if (isDev) {
-    console.debug("[ChatKitPanel] render state", {
-      isInitializingSession,
-      hasControl: Boolean(chatkit.control),
-      scriptStatus,
-      hasError: Boolean(blockingError),
-      workflowId: WORKFLOW_ID,
-    });
-  }
-
   return (
     <div className="relative pb-8 flex h-[90vh] flex-col rounded-2xl overflow-hidden bg-white shadow-sm transition-colors dark:bg-slate-900">
       <ChatKit
@@ -307,22 +260,16 @@ function extractErrorDetail(
   fallback: string
 ): string {
   if (!payload) return fallback;
-
   const error = payload.error;
   if (typeof error === "string") return error;
-
   if (error && typeof error === "object" && "message" in error && typeof (error as { message?: unknown }).message === "string") return (error as { message: string }).message;
-
   const details = payload.details;
   if (typeof details === "string") return details;
-
   if (details && typeof details === "object" && "error" in details) {
     const nestedError = (details as { error?: unknown }).error;
     if (typeof nestedError === "string") return nestedError;
     if (nestedError && typeof nestedError === "object" && "message" in nestedError && typeof (nestedError as { message?: unknown }).message === "string") return (nestedError as { message: string }).message;
   }
-
   if (typeof payload.message === "string") return payload.message;
-
   return fallback;
 }
