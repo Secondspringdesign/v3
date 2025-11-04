@@ -186,14 +186,27 @@ export function ChatKitPanel({
       }
 
       try {
-        // === STRATEGY WELCOME + BUTTONS ===
         const urlParams = new URLSearchParams(window.location.search);
         const agent = urlParams.get("agent") || "strategy";
 
-        // Only override for strategy
         const isStrategy = agent === "strategy";
 
-        const body: any = {
+        interface SessionBody {
+          workflow: { id: string };
+          chatkit_configuration: {
+            file_upload: { enabled: boolean };
+            startScreen?: {
+              greeting: string;
+              prompts: Array<{
+                label: string;
+                prompt: string;
+              }>;
+            };
+          };
+          user: string;
+        }
+
+        const body: SessionBody = {
           workflow: { id: WORKFLOW_ID },
           chatkit_configuration: {
             file_upload: { enabled: true },
