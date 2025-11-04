@@ -9,6 +9,7 @@ import {
   GREETING,
   CREATE_SESSION_ENDPOINT,
   WORKFLOW_ID,
+  AGENT_GREETINGS,
   getThemeConfig,
 } from "@/lib/config";
 import { ErrorOverlay } from "./ErrorOverlay";
@@ -103,7 +104,7 @@ export function ChatKitPanel({
 
     return () => {
       window.removeEventListener("chatkit-script-loaded", handleLoaded);
-      window.removeEventListener("chatkit-script-error", handleError as EventListener);
+      window.removeEventListener("chatkit-script-error", handleError as EventEventListener);
       if (timeoutId) window.clearTimeout(timeoutId);
     };
   }, [scriptStatus, setErrorState]);
@@ -291,16 +292,22 @@ function extractErrorDetail(
   fallback: string
 ): string {
   if (!payload) return fallback;
+
   const error = payload.error;
   if (typeof error === "string") return error;
+
   if (error && typeof error === "object" && "message" in error && typeof (error as { message?: unknown }).message === "string") return (error as { message: string }).message;
+
   const details = payload.details;
   if (typeof details === "string") return details;
+
   if (details && typeof details === "object" && "error" in details) {
     const nestedError = (details as { error?: unknown }).error;
     if (typeof nestedError === "string") return nestedError;
     if (nestedError && typeof nestedError === "object" && "message" in nestedError && typeof (nestedError as { message?: unknown }).message === "string") return (nestedError as { message: string }).message;
   }
+
   if (typeof payload.message === "string") return payload.message;
+
   return fallback;
 }
