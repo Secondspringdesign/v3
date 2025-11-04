@@ -1,4 +1,3 @@
- url=https://github.com/Secondspringdesign/v3/blob/main/components/ChatKitPanel.tsx
 // components/ChatKitPanel.tsx
 "use client";
 
