@@ -15,8 +15,12 @@ export const STARTER_PROMPTS: StartScreenPrompt[] = [
 // Optional: per-agent starter prompts (fallback to STARTER_PROMPTS if not provided)
 export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
   strategy: [
-    { label: "New business vs. existing problem", prompt: "Are we creating a new business (from idea to launch), or solving a problem in your current business?", icon: "lightning" },
-    // add more strategy-specific prompts...
+    {
+      label: "New business vs. existing problem",
+      prompt: "Are we creating a new business (from idea to launch), or solving a problem in your current business?",
+      icon: "lightning",
+    },
+    // add more strategy-specific prompts as desired
   ],
   product: [
     { label: "Product discovery", prompt: "I need help with product discovery and prioritization.", icon: "sparkles" },
@@ -29,7 +33,6 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
   ],
 };
 
-// Global fallback placeholder
 export const PLACEHOLDER_INPUT = "Ask anything...";
 
 // Global fallback greeting (keeps backward compatibility)
