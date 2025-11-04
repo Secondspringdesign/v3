@@ -1,11 +1,16 @@
 // app/api/create-session/route.ts
-import { WORKFLOW_ID } from "@/lib/config";
-
 export const runtime = "edge";
 
 const DEFAULT_CHATKIT_BASE = "https://api.openai.com";
 const SESSION_COOKIE_NAME = "chatkit_session_id";
 const SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
+
+const WORKFLOWS: Record<string, string> = {
+  strategy: "wf_68fee66360548190a298201183a30c3803a17f3de232e2c9",
+  product: "wf_69026b8145c48190985fa5cdd1d43adf0cbd88dcb5a45b06",
+  marketing: "wf_69026bf3dd9881908d0321f4dcbcf2d600b6acefcbe3958d",
+  operations: "wf_69026cf6ac808190be84ebde84951f970afd6254612434c0",
+};
 
 export async function POST(request: Request): Promise<Response> {
   let sessionCookie: string | null = null;
@@ -21,6 +26,19 @@ export async function POST(request: Request): Promise<Response> {
     const { userId, sessionCookie: resolvedSessionCookie } = await resolveUserId(request);
     sessionCookie = resolvedSessionCookie;
 
+    const url = new URL(request.url);
+    const agent = url.searchParams.get("agent") || "strategy";
+    const workflowId = WORKFLOWS[agent];
+
+    if (!workflowId) {
+      return buildJsonResponse(
+        { error: `Invalid agent: ${agent}` },
+        400,
+        { "Content-Type": "application/json" },
+        sessionCookie
+      );
+    }
+
     const apiUrl = `${DEFAULT_CHATKIT_BASE}/v1/chatkit/sessions`;
     const upstreamResponse = await fetch(apiUrl, {
       method: "POST",
@@ -30,7 +48,7 @@ export async function POST(request: Request): Promise<Response> {
         "OpenAI-Beta": "chatkit_beta=v1",
       },
       body: JSON.stringify({
-        workflow: { id: WORKFLOW_ID },
+        workflow: { id: workflowId },
         user: userId,
         chatkit_configuration: { file_upload: { enabled: true } },
       }),
@@ -66,7 +84,6 @@ export async function POST(request: Request): Promise<Response> {
   }
 }
 
-// Helper functions (unchanged)
 async function resolveUserId(request: Request) {
   const existing = getCookieValue(request.headers.get("cookie"), SESSION_COOKIE_NAME);
   if (existing) return { userId: existing, sessionCookie: null };
