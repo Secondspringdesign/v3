@@ -166,6 +166,7 @@ export function ChatKitPanel({
           user: "public-user",
         };
 
+        // STRATEGY: CUSTOM WELCOME, NO BUTTONS
         if (isStrategy) {
           body.chatkit_configuration.startScreen = {
             greeting: "I'm your Business Builder AI.\n\nAre we creating a new business (from idea to launch), or solving a problem in your current business?",
@@ -291,16 +292,26 @@ function extractErrorDetail(
   fallback: string
 ): string {
   if (!payload) return fallback;
+
   const error = payload.error;
   if (typeof error === "string") return error;
-  if (error && typeof error === "object" && "message" in error && typeof (error as { message?: unknown }).message === "string") return (error as { message: string }).message;
+
+  if (error && typeof error === "object" && "message" in error && typeof (error as { message?: unknown }).message === "string") {
+    return (error as { message: string }).message;
+  }
+
   const details = payload.details;
   if (typeof details === "string") return details;
+
   if (details && typeof details === "object" && "error" in details) {
     const nestedError = (details as { error?: unknown }).error;
     if (typeof nestedError === "string") return nestedError;
-    if (nestedError && typeof nestedError === "object" && "message" in nestedError && typeof (nestedError as { message?: unknown }).message === "string") return (nestedError as { message: string }).message;
+    if (nestedError && typeof nestedError === "object" && "message" in nestedError && typeof (nestedError as { message?: unknown }).message === "string") {
+      return (nestedError as { message: string }).message;
+    }
   }
+
   if (typeof payload.message === "string") return payload.message;
+
   return fallback;
 }
