@@ -1,4 +1,3 @@
- url=https://github.com/Secondspringdesign/v3/blob/main/lib/config.ts
 // lib/config.ts
 import { ColorScheme, StartScreenPrompt, ThemeOption } from "@openai/chatkit";
 
