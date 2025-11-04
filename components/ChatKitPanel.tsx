@@ -81,7 +81,7 @@ export function ChatKitPanel({
     };
 
     const handleError = (event: Event) => {
-      console.error("Failed to load chatkit.js for some reason", event);
+      console.error("Failed to load chatkit.js", event);
       if (!isMountedRef.current) return;
       setScriptStatus("error");
       const detail = (event as CustomEvent<unknown>)?.detail ?? "unknown error";
@@ -99,7 +99,7 @@ export function ChatKitPanel({
         if (!window.customElements?.get("openai-chatkit")) {
           handleError(
             new CustomEvent("chatkit-script-error", {
-              detail: "ChatKit web component is unavailable. Verify that the script URL is reachable.",
+              detail: "ChatKit web component is unavailable.",
             })
           );
         }
@@ -179,10 +179,12 @@ export function ChatKitPanel({
           user: "public-user",
         };
 
+        // STRATEGY: CUSTOM WELCOME, NO BUTTONS
         if (isStrategy) {
           body.chatkit_configuration.startScreen = {
-            greeting: "I'm your Business Builder AI.\n\nAre we creating a new business (from idea to launch), or solving a problem in your current business?",
-            prompts: [], // No buttons — just the question
+            greeting:
+              "I'm your Business Builder AI.\n\nAre we creating a new business (from idea to launch), or solving a problem in your current business?",
+            prompts: [], // No buttons
           };
         }
 
@@ -245,7 +247,7 @@ export function ChatKitPanel({
     onClientTool: async (invocation: { name: string; params: Record<string, unknown> }) => {
       if (invocation.name === "switch_theme") {
         const requested = invocation.params.theme;
-        if (requested === "light" or requested === "dark") {
+        if (requested === "light" || requested === "dark") {
           if (isDev) console.debug("[ChatKitPanel] switch_theme", requested);
           onThemeRequest(requested);
           return { success: true };
