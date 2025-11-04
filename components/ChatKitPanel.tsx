@@ -166,7 +166,6 @@ export function ChatKitPanel({
           user: "public-user",
         };
 
-        // STRATEGY: CUSTOM WELCOME, NO BUTTONS
         if (isStrategy) {
           body.chatkit_configuration.startScreen = {
             greeting: "I'm your Business Builder AI.\n\nAre we creating a new business (from idea to launch), or solving a problem in your current business?",
