@@ -6,7 +6,8 @@ import { ChatKit, useChatKit } from "@openai/chatkit-react";
 import {
   STARTER_PROMPTS,
   PLACEHOLDER_INPUT,
-  GREETINGS,
+  GREETING,
+  AGENT_GREETINGS,
   CREATE_SESSION_ENDPOINT,
   WORKFLOW_ID,
   getThemeConfig,
@@ -113,7 +114,7 @@ export function ChatKitPanel({
   useEffect(() => {
     if (!isWorkflowConfigured && isMountedRef.current) {
       setErrorState({
-        session: "Set NEXT_PUBLIC_CHATKIT_WORKFLOW_ID in Vercel dashboard.",
+        session: "Set NEXT_PUBLIC_CHATKIT_WORKFLOW_ID in your .env.local file.",
         retryable: false,
       });
       setIsInitializingSession(false);
@@ -133,7 +134,7 @@ export function ChatKitPanel({
       if (isDev) console.info("[ChatKitPanel] getClientSecret invoked", { currentSecretPresent: Boolean(currentSecret), workflowId: WORKFLOW_ID, endpoint: CREATE_SESSION_ENDPOINT });
 
       if (!isWorkflowConfigured) {
-        const detail = "Set NEXT_PUBLIC_CHATKIT_WORKFLOW_ID in Vercel dashboard.";
+        const detail = "Set NEXT_PUBLIC_CHATKIT_WORKFLOW_ID in your .env.local file.";
         if (isMountedRef.current) {
           setErrorState({ session: detail, retryable: false });
           setIsInitializingSession(false);
@@ -165,6 +166,7 @@ export function ChatKitPanel({
           user: "public-user",
         };
 
+        // Override for strategy
         if (agent === "strategy") {
           body.chatkit_configuration.startScreen = {
             greeting: GREETING,
@@ -290,22 +292,16 @@ function extractErrorDetail(
   fallback: string
 ): string {
   if (!payload) return fallback;
-
   const error = payload.error;
   if (typeof error === "string") return error;
-
   if (error && typeof error === "object" && "message" in error && typeof (error as { message?: unknown }).message === "string") return (error as { message: string }).message;
-
   const details = payload.details;
   if (typeof details === "string") return details;
-
   if (details && typeof details === "object" && "error" in details) {
     const nestedError = (details as { error?: unknown }).error;
     if (typeof nestedError === "string") return nestedError;
     if (nestedError && typeof nestedError === "object" && "message" in nestedError && typeof (nestedError as { message?: unknown }).message === "string") return (nestedError as { message: string }).message;
   }
-
   if (typeof payload.message === "string") return payload.message;
-
   return fallback;
 }
