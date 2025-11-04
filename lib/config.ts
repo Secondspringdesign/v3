@@ -15,9 +15,10 @@ export const STARTER_PROMPTS: StartScreenPrompt[] = [
 
 export const PLACEHOLDER_INPUT = "Ask anything...";
 
+// Default greeting for all agents
 export const GREETING = "How can I help you today?";
 
-// Strategy-specific greeting
+// Strategy-specific greeting (overrides for ?agent=strategy)
 export const STRATEGY_GREETING = "I'm your Business Builder AI.\n\nAre we creating a new business (from idea to launch), or solving a problem in your current business?";
 
 export const getThemeConfig = (theme: ColorScheme): ThemeOption => ({
