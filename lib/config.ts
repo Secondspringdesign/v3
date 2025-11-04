@@ -14,7 +14,7 @@ export const STARTER_PROMPTS: StartScreenPrompt[] = [
 
 export const PLACEHOLDER_INPUT = "Ask anything...";
 
-// 4 specific greetings, no fallback/default
+// 4 CUSTOM GREETINGS — NO DEFAULT
 export const AGENT_GREETINGS = {
   strategy: "I'm your Business Builder AI.\n\nAre we creating a new business (from idea to launch), or solving a problem in your current business?",
   product: "I'm your Product Builder AI.\n\nLet's build your MVP — what features are essential?",
