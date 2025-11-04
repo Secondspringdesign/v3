@@ -1,8 +1,6 @@
-// lib/config.ts
 import { ColorScheme, StartScreenPrompt, ThemeOption } from "@openai/chatkit";
 
 export const WORKFLOW_ID = process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_ID?.trim() ?? "";
-
 export const CREATE_SESSION_ENDPOINT = "/api/create-session";
 
 export const STARTER_PROMPTS: StartScreenPrompt[] = [
@@ -15,10 +13,8 @@ export const STARTER_PROMPTS: StartScreenPrompt[] = [
 
 export const PLACEHOLDER_INPUT = "Ask anything...";
 
-export const GREETING = "How can I help you today?";
-
-// Strategy-specific greeting (overrides for ?agent=strategy)
-export const STRATEGY_GREETING = "I'm your Business Builder AI.\n\nAre we creating a new business (from idea to launch), or solving a problem in your current business?";
+// Use the strategy greeting as the default greeting
+export const GREETING = "I'm your Business Builder AI.\n\nAre we creating a new business (from idea to launch), or solving a problem in your current business?";
 
 export const getThemeConfig = (theme: ColorScheme): ThemeOption => ({
   color: {
