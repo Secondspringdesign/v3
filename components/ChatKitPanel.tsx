@@ -186,25 +186,44 @@ export function ChatKitPanel({
       }
 
       try {
-        // === ONLY CHANGE: READ ?agent= FROM URL ===
+        // === STRATEGY WELCOME + BUTTONS ===
         const urlParams = new URLSearchParams(window.location.search);
         const agent = urlParams.get("agent") || "strategy";
-        const endpointWithAgent = `${CREATE_SESSION_ENDPOINT}?agent=${agent}`;
 
-        const response = await fetch(endpointWithAgent, {
+        // Only override for strategy
+        const isStrategy = agent === "strategy";
+
+        const body: any = {
+          workflow: { id: WORKFLOW_ID },
+          chatkit_configuration: {
+            file_upload: { enabled: true },
+          },
+          user: "public-user",
+        };
+
+        if (isStrategy) {
+          body.chatkit_configuration.startScreen = {
+            greeting:
+              "I’m your Business Builder AI.\n\nAre we creating a new business (from idea to launch), or solving a problem in your current business?",
+            prompts: [
+              {
+                label: "New Business",
+                prompt: "I want to start a new business from scratch",
+              },
+              {
+                label: "Current Business",
+                prompt: "I want to solve a problem in my current business",
+              },
+            ],
+          };
+        }
+
+        const response = await fetch(CREATE_SESSION_ENDPOINT, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            workflow: { id: WORKFLOW_ID },
-            chatkit_configuration: {
-              file_upload: {
-                enabled: true,
-              },
-            },
-            user: "public-user",
-          }),
+          body: JSON.stringify(body),
         });
 
         const raw = await response.text();
@@ -215,7 +234,6 @@ export function ChatKitPanel({
             ok: response.ok,
             bodyPreview: raw.slice(0, 1600),
             agent,
-            endpoint: endpointWithAgent,
           });
         }
 
