@@ -7,7 +7,6 @@ import {
   STARTER_PROMPTS,
   PLACEHOLDER_INPUT,
   GREETING,
-  AGENT_GREETINGS,
   CREATE_SESSION_ENDPOINT,
   WORKFLOW_ID,
   getThemeConfig,
@@ -114,7 +113,7 @@ export function ChatKitPanel({
   useEffect(() => {
     if (!isWorkflowConfigured && isMountedRef.current) {
       setErrorState({
-        session: "Set NEXT_PUBLIC_CHATKIT_WORKFLOW_ID in your .env.local file.",
+        session: "Set NEXT_PUBLIC_CHATKIT_WORKFLOW_ID in Vercel dashboard.",
         retryable: false,
       });
       setIsInitializingSession(false);
@@ -134,7 +133,7 @@ export function ChatKitPanel({
       if (isDev) console.info("[ChatKitPanel] getClientSecret invoked", { currentSecretPresent: Boolean(currentSecret), workflowId: WORKFLOW_ID, endpoint: CREATE_SESSION_ENDPOINT });
 
       if (!isWorkflowConfigured) {
-        const detail = "Set NEXT_PUBLIC_CHATKIT_WORKFLOW_ID in your .env.local file.";
+        const detail = "Set NEXT_PUBLIC_CHATKIT_WORKFLOW_ID in Vercel dashboard.";
         if (isMountedRef.current) {
           setErrorState({ session: detail, retryable: false });
           setIsInitializingSession(false);
@@ -166,11 +165,26 @@ export function ChatKitPanel({
           user: "public-user",
         };
 
-        // Override for strategy
+        // Explicit greeting per agent — no fallback
         if (agent === "strategy") {
           body.chatkit_configuration.startScreen = {
             greeting: GREETING,
             prompts: [], // No buttons
+          };
+        } else if (agent === "product") {
+          body.chatkit_configuration.startScreen = {
+            greeting: GREETING,
+            prompts: [],
+          };
+        } else if (agent === "marketing") {
+          body.chatkit_configuration.startScreen = {
+            greeting: GREETING,
+            prompts: [],
+          };
+        } else if (agent === "operations") {
+          body.chatkit_configuration.startScreen = {
+            greeting: GREETING,
+            prompts: [],
           };
         }
 
