@@ -31,12 +31,9 @@ export async function POST(request: Request): Promise<Response> {
       });
     }
 
-    // Attempt to resolve user id (this will verify token if provided & configured)
-    const { userId, sessionCookie: resolvedSessionCookie } = await resolveUserId(request);
-    sessionCookie = resolvedSessionCookie;
-
+    // Read agent param early so we can namespace user id with it
     const url = new URL(request.url);
-    const agent = url.searchParams.get("agent") || "strategy";
+    const agent = (url.searchParams.get("agent") || "strategy").toLowerCase();
     const workflowId = WORKFLOWS[agent];
 
     if (!workflowId) {
@@ -48,6 +45,13 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
+    // Resolve base user id (Outseta account uid or anon id)
+    const { userId: baseUserId, sessionCookie: resolvedSessionCookie } = await resolveUserId(request);
+    // Namespace user id by agent so histories are kept separate per agent for the same account
+    const namespacedUserId = `${String(baseUserId)}::${agent}`;
+    // Set a session cookie with the namespaced id so repeat requests use same id
+    sessionCookie = serializeSessionCookie(namespacedUserId);
+
     const apiUrl = `${DEFAULT_CHATKIT_BASE}/v1/chatkit/sessions`;
     const upstreamResponse = await fetch(apiUrl, {
       method: "POST",
@@ -58,7 +62,7 @@ export async function POST(request: Request): Promise<Response> {
       },
       body: JSON.stringify({
         workflow: { id: workflowId },
-        user: userId,
+        user: namespacedUserId,
         chatkit_configuration: { file_upload: { enabled: true } },
       }),
     });
@@ -81,7 +85,11 @@ export async function POST(request: Request): Promise<Response> {
       client_secret: (upstreamJson as Record<string, unknown>)?.client_secret,
       expires_after: (upstreamJson as Record<string, unknown>)?.expires_after,
     };
-    if (debug) payload.resolved_user_id = userId;
+    if (debug) {
+      // return both the base account uid and the namespaced id for debugging
+      payload.resolved_user_id = namespacedUserId;
+      payload.resolved_base_user_id = baseUserId;
+    }
 
     return buildJsonResponse(payload, 200, { "Content-Type": "application/json" }, sessionCookie);
   } catch (error) {
@@ -128,7 +136,7 @@ async function resolveUserId(request: Request) {
           undefined;
 
         if (accountUid) {
-          // Use the Outseta account UID as the ChatKit user id and set a session cookie
+          // Use the Outseta account UID as the base ChatKit user id (namespacing happens in POST)
           return { userId: accountUid, sessionCookie: serializeSessionCookie(accountUid) };
         } else {
           console.warn("Outseta token verified but account UID not found in payload", payload);
@@ -186,7 +194,6 @@ function extractTokenFromHeader(headerValue: string | null): string | null {
 }
 
 /* ---------- Helpers: JWT parsing & verification ---------- */
-
 function base64UrlDecodeToUint8Array(input: string): Uint8Array {
   // base64url -> base64
   let str = input.replace(/-/g, "+").replace(/_/g, "/");
