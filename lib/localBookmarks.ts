@@ -22,11 +22,12 @@ function safeParse<T>(s: string | null): T | null {
 function generateId(): string {
   // Use crypto.randomUUID if available, otherwise fallback to a safe string
   try {
-    const c = (globalThis as any).crypto as (Crypto & { randomUUID?: () => string }) | undefined;
+    const maybeCrypto = (globalThis as unknown) as { crypto?: Crypto };
+    const c = maybeCrypto.crypto;
     if (c && typeof c.randomUUID === "function") {
       return c.randomUUID();
     }
-  } catch (e) {
+  } catch {
     // ignore
   }
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -60,8 +61,8 @@ export function saveLocalBookmark(payload: {
     const current = listLocalBookmarks();
     current.unshift(bm);
     window.localStorage.setItem(KEY, JSON.stringify(current));
-  } catch (e) {
-    console.error("saveLocalBookmark error", e);
+  } catch {
+    // ignore errors writing to localStorage
   }
   return bm;
 }
@@ -70,15 +71,15 @@ export function deleteLocalBookmark(id: string) {
   try {
     const current = listLocalBookmarks().filter((b) => b.id !== id);
     window.localStorage.setItem(KEY, JSON.stringify(current));
-  } catch (e) {
-    console.error("deleteLocalBookmark error", e);
+  } catch {
+    // ignore
   }
 }
 
 export function clearLocalBookmarks() {
   try {
     window.localStorage.removeItem(KEY);
-  } catch (e) {
-    console.error(e);
+  } catch {
+    // ignore
   }
 }
