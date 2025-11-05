@@ -47,6 +47,22 @@ const createInitialErrors = (): ErrorState => ({
   retryable: false,
 });
 
+/**
+ * Minimal typing for the ChatKit control surface we use.
+ * If the chatkit.control exposes more methods, you can extend this.
+ */
+type ChatKitControl = {
+  getActiveThread?: () =>
+    | {
+        id?: string;
+        messages?: Array<{ text?: string }>;
+      }
+    | undefined;
+  openThread?: (id: string) => void;
+  // keep index signature to allow other methods without 'any' usage
+  [key: string]: unknown;
+};
+
 // Outseta client surface (partial) for typing
 type OutsetaClientSurface = {
   getAccessToken?: () => string | null;
@@ -289,8 +305,9 @@ export function ChatKitPanel({
           <button
             onClick={async () => {
               try {
-                // try to read the active thread messages from chatkit control if available
-                const thread = (chatkit.control as any)?.getActiveThread?.();
+                // Use typed control surface to avoid `any`
+                const control = chatkit.control as unknown as ChatKitControl;
+                const thread = control?.getActiveThread?.();
                 const messages = thread?.messages ?? null;
                 const snippet = messages && messages.length ? (messages[messages.length - 1]?.text ?? "") : "";
                 const title = window.prompt("Bookmark title", `Conversation ${new Date().toLocaleString()}`) || `Conversation ${new Date().toLocaleString()}`;
