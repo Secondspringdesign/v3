@@ -233,6 +233,8 @@ async function verifyOutsetaToken(token: string): Promise<{ verified: boolean; p
   // Parse token parts
   const { header, payload, signatureB64, signingInput } = parseJwt(token);
   const sigBytes = base64UrlDecodeToUint8Array(signatureB64);
+  // Ensure we pass a plain ArrayBuffer containing only the signature bytes (slice respects byteOffset/length)
+  const sigArrayBuffer = sigBytes.buffer.slice(sigBytes.byteOffset, sigBytes.byteOffset + sigBytes.byteLength);
   const data = new TextEncoder().encode(signingInput);
 
   const headerAlg = typeof header?.alg === "string" ? header.alg : undefined;
@@ -250,7 +252,8 @@ async function verifyOutsetaToken(token: string): Promise<{ verified: boolean; p
       false,
       ["verify"]
     );
-    const ok = await crypto.subtle.verify("HMAC", key, sigBytes, data);
+    // Pass signature ArrayBuffer
+    const ok = await crypto.subtle.verify("HMAC", key, sigArrayBuffer, data);
     return { verified: ok, payload: payload as object };
   } else if (jwksUrl) {
     // RS256 verification via JWKS
@@ -268,7 +271,7 @@ async function verifyOutsetaToken(token: string): Promise<{ verified: boolean; p
       false,
       ["verify"]
     );
-    const ok = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", cryptoKey, sigBytes, data);
+    const ok = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", cryptoKey, sigArrayBuffer, data);
     return { verified: ok, payload: payload as object };
   } else {
     // No verification configured — decode only (insecure)
