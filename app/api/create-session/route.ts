@@ -20,15 +20,23 @@ const OUTSETA_HEADER_NAME = (process.env.OUTSETA_TOKEN_HEADER as string) || "aut
 let jwksCache: { fetchedAt: number; jwks: unknown } | null = null;
 const JWKS_TTL = 5 * 60 * 1000; // 5 minutes
 
+// --- CORS: handle preflight OPTIONS so browser will allow POST with Authorization header.
+export async function OPTIONS(): Promise<Response> {
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Max-Age": String(60 * 60 * 24), // 24h
+  };
+  return new Response(null, { status: 204, headers });
+}
+
 export async function POST(request: Request): Promise<Response> {
   let sessionCookie: string | null = null;
   try {
     const openaiApiKey = process.env.OPENAI_API_KEY;
     if (!openaiApiKey) {
-      return new Response(JSON.stringify({ error: "Missing OPENAI_API_KEY" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
+      return buildJsonResponse({ error: "Missing OPENAI_API_KEY" }, 500, {}, sessionCookie);
     }
 
     // Read agent param early so we can namespace user id with it
@@ -37,18 +45,12 @@ export async function POST(request: Request): Promise<Response> {
     const workflowId = WORKFLOWS[agent];
 
     if (!workflowId) {
-      return buildJsonResponse(
-        { error: `Invalid agent: ${agent}` },
-        400,
-        { "Content-Type": "application/json" },
-        sessionCookie
-      );
+      return buildJsonResponse({ error: `Invalid agent: ${agent}` }, 400, {}, sessionCookie);
     }
 
     // Resolve base user id (Outseta account uid or anon id)
-    const { userId: baseUserId, sessionCookie: resolvedSessionCookie } = await resolveUserId(request);
+    const { userId: baseUserId } = await resolveUserId(request);
     // Namespace user id by agent so histories are kept separate per agent for the same account
-    // Use a safe delimiter ("-") to avoid problematic characters
     const namespacedUserId = `${String(baseUserId)}-${agent}`;
     // Set a session cookie with the namespaced id so repeat requests use same id
     sessionCookie = serializeSessionCookie(namespacedUserId);
@@ -74,7 +76,7 @@ export async function POST(request: Request): Promise<Response> {
       return buildJsonResponse(
         { error: "Failed to create session", details: upstreamJson },
         upstreamResponse.status,
-        { "Content-Type": "application/json" },
+        {},
         sessionCookie
       );
     }
@@ -85,77 +87,17 @@ export async function POST(request: Request): Promise<Response> {
     const payload: Record<string, unknown> = {
       client_secret: (upstreamJson as Record<string, unknown>)?.client_secret,
       expires_after: (upstreamJson as Record<string, unknown>)?.expires_after,
+      user_sent_to_chatkit: namespacedUserId,
     };
     if (debug) {
-      // return both the base account uid and the namespaced id for debugging
-      payload.resolved_user_id = namespacedUserId;
       payload.resolved_base_user_id = baseUserId;
     }
 
-    return buildJsonResponse(payload, 200, { "Content-Type": "application/json" }, sessionCookie);
+    return buildJsonResponse(payload, 200, {}, sessionCookie);
   } catch (error) {
     console.error("create-session error:", error);
-    return buildJsonResponse(
-      { error: "Unexpected error" },
-      500,
-      { "Content-Type": "application/json" },
-      sessionCookie
-    );
+    return buildJsonResponse({ error: "Unexpected error" }, 500, {}, sessionCookie);
   }
-}
-
-/**
- * Resolve a user id to pass to ChatKit.
- *
- * Priority:
- * 1) If a valid Outseta token is present and verified, use the extracted Outseta account UID (payload["outseta:accountUid"]).
- * 2) If an existing session cookie exists, use that.
- * 3) Otherwise generate a random id and set it as a session cookie (same as original behavior).
- */
-async function resolveUserId(request: Request) {
-  // 1) Check for token in Authorization header or cookie
-  const headerToken = extractTokenFromHeader(request.headers.get(OUTSETA_HEADER_NAME));
-  const cookieToken = getCookieValue(request.headers.get("cookie"), OUTSETA_COOKIE_NAME);
-  const token = headerToken || cookieToken;
-
-  if (token) {
-    try {
-      const verified = await verifyOutsetaToken(token);
-      if (verified && verified.payload) {
-        // Prefer the Outseta namespaced claim first
-        const payload = verified.payload as Record<string, unknown>;
-        const accountUid =
-          (payload["outseta:accountUid"] as string) ||
-          (payload["outseta:accountuid"] as string) ||
-          (payload["account_uid"] as string) ||
-          (payload["accountUid"] as string) ||
-          (payload["accountId"] as string) ||
-          (payload["account_id"] as string) ||
-          (payload["sub"] as string) ||
-          (payload["user_id"] as string) ||
-          (payload["uid"] as string) ||
-          undefined;
-
-        if (accountUid) {
-          // Use the Outseta account UID as the base ChatKit user id (namespacing happens in POST)
-          return { userId: accountUid, sessionCookie: serializeSessionCookie(accountUid) };
-        } else {
-          console.warn("Outseta token verified but account UID not found in payload", payload);
-        }
-      } else {
-        console.warn("Outseta token not verified or could not be parsed.");
-      }
-    } catch (err) {
-      console.warn("Outseta token verification failed:", err);
-      // proceed to fallback behavior
-    }
-  }
-
-  // 2) If no token or verification failed, fallback to session cookie logic
-  const existing = getCookieValue(request.headers.get("cookie"), SESSION_COOKIE_NAME);
-  if (existing) return { userId: existing, sessionCookie: null };
-  const generated = crypto.randomUUID?.() || Math.random().toString(36).slice(2);
-  return { userId: generated, sessionCookie: serializeSessionCookie(generated) };
 }
 
 /* ---------- Helpers: cookies & response building ---------- */
@@ -173,13 +115,23 @@ function serializeSessionCookie(value: string): string {
   return `${SESSION_COOKIE_NAME}=${encodeURIComponent(value)}; Path=/; Max-Age=${SESSION_COOKIE_MAX_AGE}; HttpOnly; SameSite=None; Secure`;
 }
 
+/**
+ * buildJsonResponse wraps JSON payload + status + headers and ensures CORS headers are present.
+ * Pass additional headers in the `headers` parameter (they will be merged).
+ */
 function buildJsonResponse(
   payload: unknown,
   status: number,
   headers: Record<string, string>,
   sessionCookie: string | null
 ): Response {
-  const h = new Headers(headers);
+  const defaultCors = {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  };
+  const merged = { ...defaultCors, ...headers };
+  const h = new Headers(merged);
   if (sessionCookie) h.append("Set-Cookie", sessionCookie);
   return new Response(JSON.stringify(payload), { status, headers: h });
 }
@@ -253,9 +205,6 @@ async function verifyOutsetaToken(token: string): Promise<{ verified: boolean; p
 
   if (secret) {
     // HS256 verification using HMAC-SHA256
-    if (!headerAlg || headerAlg !== "HS256") {
-      console.warn("Token alg is not HS256 but OUTSETA_JWT_SECRET is provided; attempting verification anyway.");
-    }
     const key = await crypto.subtle.importKey(
       "raw",
       new TextEncoder().encode(secret),
@@ -263,14 +212,10 @@ async function verifyOutsetaToken(token: string): Promise<{ verified: boolean; p
       false,
       ["verify"]
     );
-    // Pass signature ArrayBuffer (from sigCopy.buffer)
     const ok = await crypto.subtle.verify("HMAC", key, sigArrayBuffer, data);
     return { verified: ok, payload: payload as object };
   } else if (jwksUrl) {
     // RS256 verification via JWKS
-    if (!headerAlg || !headerAlg.startsWith("RS")) {
-      console.warn("Token alg does not indicate RS* but OUTSETA_JWKS_URL is provided; attempting verification anyway.");
-    }
     const jwk = await getJwkForKid(jwksUrl, headerKid);
     if (!jwk) throw new Error("Unable to find matching JWK to verify token signature.");
 
@@ -286,7 +231,6 @@ async function verifyOutsetaToken(token: string): Promise<{ verified: boolean; p
     return { verified: ok, payload: payload as object };
   } else {
     // No verification configured — decode only (insecure)
-    console.warn("No OUTSETA_JWT_SECRET or OUTSETA_JWKS_URL configured — token will not be signature-verified.");
     return { verified: false, payload: payload as object };
   }
 }
@@ -310,4 +254,53 @@ async function getJwkForKid(jwksUrl: string, kid?: string): Promise<unknown | nu
     console.warn("Error fetching JWKS:", err);
     return null;
   }
+}
+
+/* ---------- Resolve user id (again) ---------- */
+/**
+ * Resolve a user id to pass to ChatKit.
+ *
+ * Priority:
+ * 1) If a valid Outseta token is present and verified, use the extracted Outseta account UID (payload["outseta:accountUid"]).
+ * 2) If an existing session cookie exists, use that.
+ * 3) Otherwise generate a random id and set it as a session cookie (same as original behavior).
+ */
+async function resolveUserId(request: Request) {
+  // 1) Check for token in Authorization header or cookie
+  const headerToken = extractTokenFromHeader(request.headers.get(OUTSETA_HEADER_NAME));
+  const cookieToken = getCookieValue(request.headers.get("cookie"), OUTSETA_COOKIE_NAME);
+  const token = headerToken || cookieToken;
+
+  if (token) {
+    try {
+      const verified = await verifyOutsetaToken(token);
+      if (verified && verified.payload) {
+        const payload = verified.payload as Record<string, unknown>;
+        const accountUid =
+          (payload["outseta:accountUid"] as string) ||
+          (payload["outseta:accountuid"] as string) ||
+          (payload["account_uid"] as string) ||
+          (payload["accountUid"] as string) ||
+          (payload["accountId"] as string) ||
+          (payload["account_id"] as string) ||
+          (payload["sub"] as string) ||
+          (payload["user_id"] as string) ||
+          (payload["uid"] as string) ||
+          undefined;
+
+        if (accountUid) return { userId: accountUid, sessionCookie: null };
+        console.warn("Outseta token verified but account UID not found in payload", payload);
+      } else {
+        console.warn("Outseta token not verified or could not be parsed.");
+      }
+    } catch (err) {
+      console.warn("Outseta token verification failed:", err);
+    }
+  }
+
+  // 2) If no token or verification failed, fallback to session cookie logic
+  const existing = getCookieValue(request.headers.get("cookie"), SESSION_COOKIE_NAME);
+  if (existing) return { userId: existing, sessionCookie: null };
+  const generated = crypto.randomUUID?.() || Math.random().toString(36).slice(2);
+  return { userId: generated, sessionCookie: serializeSessionCookie(generated) };
 }
