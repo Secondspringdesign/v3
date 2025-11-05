@@ -19,6 +19,19 @@ function safeParse<T>(s: string | null): T | null {
   }
 }
 
+function generateId(): string {
+  // Use crypto.randomUUID if available, otherwise fallback to a safe string
+  try {
+    const c = (globalThis as any).crypto as (Crypto & { randomUUID?: () => string }) | undefined;
+    if (c && typeof c.randomUUID === "function") {
+      return c.randomUUID();
+    }
+  } catch (e) {
+    // ignore
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export function listLocalBookmarks(): LocalBookmark[] {
   if (typeof window === "undefined") return [];
   const raw = window.localStorage.getItem(KEY);
@@ -34,10 +47,7 @@ export function saveLocalBookmark(payload: {
   content?: unknown | null;
 }): LocalBookmark {
   const now = new Date().toISOString();
-  const id =
-    typeof crypto !== "undefined" && (crypto as any).randomUUID
-      ? (crypto as any).randomUUID()
-      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const id = generateId();
   const bm: LocalBookmark = {
     id,
     agent: payload.agent,
