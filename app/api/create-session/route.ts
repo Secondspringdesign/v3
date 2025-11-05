@@ -17,7 +17,7 @@ const OUTSETA_COOKIE_NAME = "outseta_access_token"; // client should set this co
 const OUTSETA_HEADER_NAME = (process.env.OUTSETA_TOKEN_HEADER as string) || "authorization"; // default: Authorization
 
 // JWKS cache (simple in-memory TTL)
-let jwksCache: { fetchedAt: number; jwks: any } | null = null;
+let jwksCache: { fetchedAt: number; jwks: unknown } | null = null;
 const JWKS_TTL = 5 * 60 * 1000; // 5 minutes
 
 export async function POST(request: Request): Promise<Response> {
@@ -63,10 +63,7 @@ export async function POST(request: Request): Promise<Response> {
       }),
     });
 
-    const upstreamJson = (await upstreamResponse.json().catch(() => ({}))) as Record<
-      string,
-      unknown
-    >;
+    const upstreamJson = (await upstreamResponse.json().catch(() => ({}))) as unknown;
 
     if (!upstreamResponse.ok) {
       return buildJsonResponse(
@@ -81,8 +78,8 @@ export async function POST(request: Request): Promise<Response> {
     const debug = String(process.env.OUTSETA_DEBUG ?? "").toLowerCase() === "true";
 
     const payload: Record<string, unknown> = {
-      client_secret: upstreamJson?.client_secret,
-      expires_after: upstreamJson?.expires_after,
+      client_secret: (upstreamJson as Record<string, unknown>)?.client_secret,
+      expires_after: (upstreamJson as Record<string, unknown>)?.expires_after,
     };
     if (debug) payload.resolved_user_id = userId;
 
@@ -117,10 +114,10 @@ async function resolveUserId(request: Request) {
       const verified = await verifyOutsetaToken(token);
       if (verified && verified.payload) {
         // Prefer the Outseta namespaced claim first
-        const payload: Record<string, unknown> = verified.payload as Record<string, unknown>;
+        const payload = verified.payload as Record<string, unknown>;
         const accountUid =
           (payload["outseta:accountUid"] as string) ||
-          (payload["outseta:accountUid".toLowerCase()] as string) ||
+          (payload["outseta:accountuid"] as string) ||
           (payload["account_uid"] as string) ||
           (payload["accountUid"] as string) ||
           (payload["accountId"] as string) ||
@@ -192,11 +189,11 @@ function extractTokenFromHeader(headerValue: string | null): string | null {
 
 function base64UrlDecodeToUint8Array(input: string): Uint8Array {
   // base64url -> base64
-  input = input.replace(/-/g, "+").replace(/_/g, "/");
+  let str = input.replace(/-/g, "+").replace(/_/g, "/");
   // pad
-  const pad = input.length % 4;
-  if (pad) input += "=".repeat(4 - pad);
-  const raw = atob(input);
+  const pad = str.length % 4;
+  if (pad) str += "=".repeat(4 - pad);
+  const raw = atob(str);
   const arr = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; ++i) arr[i] = raw.charCodeAt(i);
   return arr;
@@ -213,7 +210,12 @@ function parseJwt(token: string) {
   if (parts.length !== 3) throw new Error("Invalid JWT format");
   const headerJson = JSON.parse(base64UrlDecode(parts[0]));
   const payloadJson = JSON.parse(base64UrlDecode(parts[1]));
-  return { header: headerJson, payload: payloadJson, signatureB64: parts[2], signingInput: `${parts[0]}.${parts[1]}` };
+  return {
+    header: headerJson as Record<string, unknown>,
+    payload: payloadJson as Record<string, unknown>,
+    signatureB64: parts[2],
+    signingInput: `${parts[0]}.${parts[1]}`,
+  };
 }
 
 /**
@@ -233,9 +235,12 @@ async function verifyOutsetaToken(token: string): Promise<{ verified: boolean; p
   const sigBytes = base64UrlDecodeToUint8Array(signatureB64);
   const data = new TextEncoder().encode(signingInput);
 
+  const headerAlg = typeof header?.alg === "string" ? header.alg : undefined;
+  const headerKid = typeof header?.kid === "string" ? header.kid : undefined;
+
   if (secret) {
     // HS256 verification using HMAC-SHA256
-    if (!header.alg || header.alg !== "HS256") {
+    if (!headerAlg || headerAlg !== "HS256") {
       console.warn("Token alg is not HS256 but OUTSETA_JWT_SECRET is provided; attempting verification anyway.");
     }
     const key = await crypto.subtle.importKey(
@@ -249,17 +254,16 @@ async function verifyOutsetaToken(token: string): Promise<{ verified: boolean; p
     return { verified: ok, payload: payload as object };
   } else if (jwksUrl) {
     // RS256 verification via JWKS
-    if (!header.alg || !header.alg.startsWith("RS")) {
+    if (!headerAlg || !headerAlg.startsWith("RS")) {
       console.warn("Token alg does not indicate RS* but OUTSETA_JWKS_URL is provided; attempting verification anyway.");
     }
-    const kid = header.kid as string | undefined;
-    const jwk = await getJwkForKid(jwksUrl, kid);
+    const jwk = await getJwkForKid(jwksUrl, headerKid);
     if (!jwk) throw new Error("Unable to find matching JWK to verify token signature.");
 
     // Import JWK and verify signature
     const cryptoKey = await crypto.subtle.importKey(
       "jwk",
-      jwk,
+      jwk as JsonWebKey,
       { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
       false,
       ["verify"]
@@ -273,7 +277,7 @@ async function verifyOutsetaToken(token: string): Promise<{ verified: boolean; p
   }
 }
 
-async function getJwkForKid(jwksUrl: string, kid?: string) {
+async function getJwkForKid(jwksUrl: string, kid?: string): Promise<unknown | null> {
   try {
     const now = Date.now();
     if (!jwksCache || now - jwksCache.fetchedAt > JWKS_TTL) {
@@ -282,12 +286,12 @@ async function getJwkForKid(jwksUrl: string, kid?: string) {
       const jwks = await res.json();
       jwksCache = { fetchedAt: now, jwks };
     }
-    const keys: any[] = jwksCache.jwks.keys ?? jwksCache.jwks?.keys ?? [];
+    const keys = (jwksCache.jwks as Record<string, unknown>)?.keys ?? [];
     if (!kid) {
       // If no kid, use first RSA public key
-      return keys.find((k) => k.kty === "RSA");
+      return (keys as unknown[]).find((k) => (k as Record<string, unknown>).kty === "RSA") ?? null;
     }
-    return keys.find((k) => k.kid === kid);
+    return (keys as unknown[]).find((k) => (k as Record<string, unknown>).kid === kid) ?? null;
   } catch (err) {
     console.warn("Error fetching JWKS:", err);
     return null;
