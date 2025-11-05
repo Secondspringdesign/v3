@@ -24,13 +24,25 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
     // add more strategy-specific prompts as desired
   ],
   product: [
-    { label: "Product discovery", prompt: "I need help with product discovery and prioritization.", icon: "circle-question" },
+    {
+      label: "Product discovery",
+      prompt: "I need help with product discovery and prioritization.",
+      icon: "circle-question",
+    },
   ],
   marketing: [
-    { label: "Go-to-market", prompt: "Help me define a go-to-market plan and positioning.", icon: "circle-question" },
+    {
+      label: "Go-to-market",
+      prompt: "Help me define a go-to-market plan and positioning.",
+      icon: "circle-question",
+    },
   ],
   operations: [
-    { label: "Ops improvements", prompt: "Optimize my operational workflows and tooling.", icon: "circle-question" },
+    {
+      label: "Ops improvements",
+      prompt: "Optimize my operational workflows and tooling.",
+      icon: "circle-question",
+    },
   ],
 };
 
@@ -53,10 +65,11 @@ export function getGreetingForAgent(agent?: string) {
   return GREETINGS[agent] ?? GREETING;
 }
 
-// Helper to get starter prompts for a given agent (falls back to STARTER_PROMPTS)
+// Helper to get starter prompts for a given agent.
+// Always include the global STARTER_PROMPTS first, then append any agent-specific prompts.
 export function getStarterPromptsForAgent(agent?: string): StartScreenPrompt[] {
-  if (!agent) return STARTER_PROMPTS;
-  return STARTER_PROMPTS_BY_AGENT[agent] ?? STARTER_PROMPTS;
+  const agentPrompts = agent ? STARTER_PROMPTS_BY_AGENT[agent] ?? [] : [];
+  return [...STARTER_PROMPTS, ...agentPrompts];
 }
 
 export const getThemeConfig = (theme: ColorScheme): ThemeOption => ({
