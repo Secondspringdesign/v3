@@ -44,6 +44,51 @@ const createInitialErrors = (): ErrorState => ({
   retryable: false,
 });
 
+// Try to get token via Outseta client API (if present), then fallback to localStorage keys
+function findOutsetaTokenOnClient(): string | null {
+  if (!isBrowser) return null;
+
+  const out = (window as any).Outseta ?? (window as any).outseta ?? null;
+
+  try {
+    if (out) {
+      // Prefer getAccessToken or getJwtPayload if present
+      if (typeof out.getAccessToken === "function") {
+        const t = out.getAccessToken();
+        if (t) {
+          return t;
+        }
+      }
+      if (typeof out.getJwtPayload === "function") {
+        // Some Outseta clients put the raw token inside getJwtPayload() structure
+        const payload = out.getJwtPayload();
+        if (payload) {
+          if (payload.rawToken) return payload.rawToken;
+          if (payload.accessToken) return payload.accessToken;
+        }
+      }
+      // Some Outseta builds expose token under out.auth or similar
+      if (out.auth && out.auth.accessToken) return out.auth.accessToken;
+    }
+  } catch (e) {
+    // swallow errors from Outseta object access
+    console.warn("Error while calling Outseta client API:", e);
+  }
+
+  // LocalStorage fallback (your o_options uses tokenStorage:'local')
+  try {
+    const localKeys = ["outseta_access_token", "outseta_token", "outseta_auth_token"];
+    for (const k of localKeys) {
+      const v = window.localStorage.getItem(k);
+      if (v) return v;
+    }
+  } catch (e) {
+    // ignore localStorage access errors
+  }
+
+  return null;
+}
+
 export function ChatKitPanel({
   theme,
   onWidgetAction,
@@ -129,9 +174,15 @@ export function ChatKitPanel({
         const urlParams = new URLSearchParams(window.location.search);
         const agent = urlParams.get("agent") || "strategy";
 
+        // Get Outseta token (Outseta client API preferred, then localStorage fallback)
+        const outsetaToken = findOutsetaTokenOnClient();
+
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (outsetaToken) headers["Authorization"] = `Bearer ${outsetaToken}`;
+
         const response = await fetch(`${CREATE_SESSION_ENDPOINT}?agent=${agent}`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({
             user: "public-user",
             chatkit_configuration: { file_upload: { enabled: true } },
