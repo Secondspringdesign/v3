@@ -20,13 +20,13 @@ const OUTSETA_HEADER_NAME = (process.env.OUTSETA_TOKEN_HEADER as string) || "aut
 let jwksCache: { fetchedAt: number; jwks: unknown } | null = null;
 const JWKS_TTL = 5 * 60 * 1000; // 5 minutes
 
-// --- CORS: handle preflight OPTIONS so browser will allow POST with Authorization header.
+// Preflight OPTIONS so the browser can send Authorization header
 export async function OPTIONS(): Promise<Response> {
   const headers: Record<string, string> = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Max-Age": String(60 * 60 * 24), // 24h
+    "Access-Control-Max-Age": String(60 * 60 * 24),
   };
   return new Response(null, { status: 204, headers });
 }
@@ -39,7 +39,6 @@ export async function POST(request: Request): Promise<Response> {
       return buildJsonResponse({ error: "Missing OPENAI_API_KEY" }, 500, {}, sessionCookie);
     }
 
-    // Read agent param early so we can namespace user id with it
     const url = new URL(request.url);
     const agent = (url.searchParams.get("agent") || "strategy").toLowerCase();
     const workflowId = WORKFLOWS[agent];
@@ -49,9 +48,16 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     // Resolve base user id (Outseta account uid or anon id)
-    const { userId: baseUserId } = await resolveUserId(request);
-    // Namespace user id by agent so histories are kept separate per agent for the same account
-    const namespacedUserId = `${String(baseUserId)}-${agent}`;
+    const { userId: rawUserId } = await resolveUserId(request);
+
+    // Prevent accumulation of agent suffixes:
+    // If rawUserId already contains one or more "-<agent>" suffixes (from earlier runs),
+    // strip them before appending the current agent once.
+    const agentList = Object.keys(WORKFLOWS).map((a) => a.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")).join("|");
+    const stripRegex = new RegExp(`-(?:${agentList})(?:-(?:${agentList}))*$`, "i");
+    const cleanedBase = String(rawUserId).replace(stripRegex, "");
+    const namespacedUserId = `${cleanedBase}-${agent}`;
+
     // Set a session cookie with the namespaced id so repeat requests use same id
     sessionCookie = serializeSessionCookie(namespacedUserId);
 
@@ -73,15 +79,9 @@ export async function POST(request: Request): Promise<Response> {
     const upstreamJson = (await upstreamResponse.json().catch(() => ({}))) as unknown;
 
     if (!upstreamResponse.ok) {
-      return buildJsonResponse(
-        { error: "Failed to create session", details: upstreamJson },
-        upstreamResponse.status,
-        {},
-        sessionCookie
-      );
+      return buildJsonResponse({ error: "Failed to create session", details: upstreamJson }, upstreamResponse.status, {}, sessionCookie);
     }
 
-    // Optionally include resolved user id in response for debugging
     const debug = String(process.env.OUTSETA_DEBUG ?? "").toLowerCase() === "true";
 
     const payload: Record<string, unknown> = {
@@ -89,9 +89,7 @@ export async function POST(request: Request): Promise<Response> {
       expires_after: (upstreamJson as Record<string, unknown>)?.expires_after,
       user_sent_to_chatkit: namespacedUserId,
     };
-    if (debug) {
-      payload.resolved_base_user_id = baseUserId;
-    }
+    if (debug) payload.resolved_base_user_id = rawUserId;
 
     return buildJsonResponse(payload, 200, {}, sessionCookie);
   } catch (error) {
@@ -117,7 +115,6 @@ function serializeSessionCookie(value: string): string {
 
 /**
  * buildJsonResponse wraps JSON payload + status + headers and ensures CORS headers are present.
- * Pass additional headers in the `headers` parameter (they will be merged).
  */
 function buildJsonResponse(
   payload: unknown,
@@ -138,19 +135,15 @@ function buildJsonResponse(
 
 function extractTokenFromHeader(headerValue: string | null): string | null {
   if (!headerValue) return null;
-  // header e.g. "Bearer <token>"
   const parts = headerValue.trim().split(/\s+/);
   if (parts.length === 2 && /^Bearer$/i.test(parts[0])) return parts[1];
-  // also allow passing token directly
   if (parts.length === 1) return parts[0];
   return null;
 }
 
 /* ---------- Helpers: JWT parsing & verification ---------- */
 function base64UrlDecodeToUint8Array(input: string): Uint8Array {
-  // base64url -> base64
   let str = input.replace(/-/g, "+").replace(/_/g, "/");
-  // pad
   const pad = str.length % 4;
   if (pad) str += "=".repeat(4 - pad);
   const raw = atob(str);
@@ -158,79 +151,43 @@ function base64UrlDecodeToUint8Array(input: string): Uint8Array {
   for (let i = 0; i < raw.length; ++i) arr[i] = raw.charCodeAt(i);
   return arr;
 }
-
 function base64UrlDecode(input: string): string {
   const arr = base64UrlDecodeToUint8Array(input);
-  // decode UTF-8
   return new TextDecoder().decode(arr);
 }
-
 function parseJwt(token: string) {
   const parts = token.split(".");
   if (parts.length !== 3) throw new Error("Invalid JWT format");
-  const headerJson = JSON.parse(base64UrlDecode(parts[0]));
-  const payloadJson = JSON.parse(base64UrlDecode(parts[1]));
   return {
-    header: headerJson as Record<string, unknown>,
-    payload: payloadJson as Record<string, unknown>,
+    header: JSON.parse(base64UrlDecode(parts[0])) as Record<string, unknown>,
+    payload: JSON.parse(base64UrlDecode(parts[1])) as Record<string, unknown>,
     signatureB64: parts[2],
     signingInput: `${parts[0]}.${parts[1]}`,
   };
 }
 
-/**
- * Verify an Outseta JWT. Supports:
- *  - HS256 using OUTSETA_JWT_SECRET env var
- *  - RS256 using OUTSETA_JWKS_URL env var
- *
- * Returns { verified: boolean, payload }.
- * If no verification mechanism configured, returns { verified: false, payload } (decoded).
- */
 async function verifyOutsetaToken(token: string): Promise<{ verified: boolean; payload?: object }> {
   const secret = process.env.OUTSETA_JWT_SECRET;
   const jwksUrl = process.env.OUTSETA_JWKS_URL;
-
-  // Parse token parts
   const { header, payload, signatureB64, signingInput } = parseJwt(token);
   const sigBytes = base64UrlDecodeToUint8Array(signatureB64);
-
-  // Make a fresh Uint8Array copy so we have a plain ArrayBuffer (avoids SharedArrayBuffer typing)
   const sigCopy = new Uint8Array(sigBytes);
   const sigArrayBuffer = sigCopy.buffer;
-
   const data = new TextEncoder().encode(signingInput);
-
   const headerAlg = typeof header?.alg === "string" ? header.alg : undefined;
   const headerKid = typeof header?.kid === "string" ? header.kid : undefined;
 
   if (secret) {
-    // HS256 verification using HMAC-SHA256
-    const key = await crypto.subtle.importKey(
-      "raw",
-      new TextEncoder().encode(secret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["verify"]
-    );
+    const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
     const ok = await crypto.subtle.verify("HMAC", key, sigArrayBuffer, data);
     return { verified: ok, payload: payload as object };
   } else if (jwksUrl) {
-    // RS256 verification via JWKS
     const jwk = await getJwkForKid(jwksUrl, headerKid);
     if (!jwk) throw new Error("Unable to find matching JWK to verify token signature.");
-
-    // Import JWK and verify signature
-    const cryptoKey = await crypto.subtle.importKey(
-      "jwk",
-      jwk as JsonWebKey,
-      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-      false,
-      ["verify"]
-    );
+    const cryptoKey = await crypto.subtle.importKey("jwk", jwk as JsonWebKey, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
     const ok = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", cryptoKey, sigArrayBuffer, data);
     return { verified: ok, payload: payload as object };
   } else {
-    // No verification configured — decode only (insecure)
     return { verified: false, payload: payload as object };
   }
 }
@@ -245,10 +202,7 @@ async function getJwkForKid(jwksUrl: string, kid?: string): Promise<unknown | nu
       jwksCache = { fetchedAt: now, jwks };
     }
     const keys = (jwksCache.jwks as Record<string, unknown>)?.keys ?? [];
-    if (!kid) {
-      // If no kid, use first RSA public key
-      return (keys as unknown[]).find((k) => (k as Record<string, unknown>).kty === "RSA") ?? null;
-    }
+    if (!kid) return (keys as unknown[]).find((k) => (k as Record<string, unknown>).kty === "RSA") ?? null;
     return (keys as unknown[]).find((k) => (k as Record<string, unknown>).kid === kid) ?? null;
   } catch (err) {
     console.warn("Error fetching JWKS:", err);
@@ -256,17 +210,8 @@ async function getJwkForKid(jwksUrl: string, kid?: string): Promise<unknown | nu
   }
 }
 
-/* ---------- Resolve user id (again) ---------- */
-/**
- * Resolve a user id to pass to ChatKit.
- *
- * Priority:
- * 1) If a valid Outseta token is present and verified, use the extracted Outseta account UID (payload["outseta:accountUid"]).
- * 2) If an existing session cookie exists, use that.
- * 3) Otherwise generate a random id and set it as a session cookie (same as original behavior).
- */
+/* ---------- Resolve user id ---------- */
 async function resolveUserId(request: Request) {
-  // 1) Check for token in Authorization header or cookie
   const headerToken = extractTokenFromHeader(request.headers.get(OUTSETA_HEADER_NAME));
   const cookieToken = getCookieValue(request.headers.get("cookie"), OUTSETA_COOKIE_NAME);
   const token = headerToken || cookieToken;
@@ -288,7 +233,7 @@ async function resolveUserId(request: Request) {
           (payload["uid"] as string) ||
           undefined;
 
-        if (accountUid) return { userId: accountUid, sessionCookie: null };
+        if (accountUid) return { userId: accountUid, sessionCookie: serializeSessionCookie(accountUid) };
         console.warn("Outseta token verified but account UID not found in payload", payload);
       } else {
         console.warn("Outseta token not verified or could not be parsed.");
@@ -298,7 +243,7 @@ async function resolveUserId(request: Request) {
     }
   }
 
-  // 2) If no token or verification failed, fallback to session cookie logic
+  // fallback to session cookie logic
   const existing = getCookieValue(request.headers.get("cookie"), SESSION_COOKIE_NAME);
   if (existing) return { userId: existing, sessionCookie: null };
   const generated = crypto.randomUUID?.() || Math.random().toString(36).slice(2);
