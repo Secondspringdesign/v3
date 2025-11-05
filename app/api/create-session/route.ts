@@ -48,7 +48,8 @@ export async function POST(request: Request): Promise<Response> {
     // Resolve base user id (Outseta account uid or anon id)
     const { userId: baseUserId, sessionCookie: resolvedSessionCookie } = await resolveUserId(request);
     // Namespace user id by agent so histories are kept separate per agent for the same account
-    const namespacedUserId = `${String(baseUserId)}::${agent}`;
+    // Use a safe delimiter ("-") to avoid problematic characters
+    const namespacedUserId = `${String(baseUserId)}-${agent}`;
     // Set a session cookie with the namespaced id so repeat requests use same id
     sessionCookie = serializeSessionCookie(namespacedUserId);
 
