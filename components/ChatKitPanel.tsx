@@ -44,35 +44,48 @@ const createInitialErrors = (): ErrorState => ({
   retryable: false,
 });
 
+// Outseta client surface (partial) for typing
+type OutsetaClientSurface = {
+  getAccessToken?: () => string | null;
+  getJwtPayload?: () => Record<string, unknown> | null;
+  auth?: { accessToken?: string | null } | null;
+};
+
+function getCookie(name: string) {
+  if (!isBrowser) return null;
+  const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+  if (match) return decodeURIComponent(match[2]);
+  return null;
+}
+
 // Try to get token via Outseta client API (if present), then fallback to localStorage keys
 function findOutsetaTokenOnClient(): string | null {
   if (!isBrowser) return null;
 
-  const out = (window as any).Outseta ?? (window as any).outseta ?? null;
+  // typed access to window.Outseta
+  const out = (window as unknown as { Outseta?: OutsetaClientSurface; outseta?: OutsetaClientSurface }).Outseta
+    ?? (window as unknown as { Outseta?: OutsetaClientSurface; outseta?: OutsetaClientSurface }).outseta
+    ?? null;
 
   try {
     if (out) {
       // Prefer getAccessToken or getJwtPayload if present
       if (typeof out.getAccessToken === "function") {
         const t = out.getAccessToken();
-        if (t) {
-          return t;
-        }
+        if (t) return t;
       }
       if (typeof out.getJwtPayload === "function") {
-        // Some Outseta clients put the raw token inside getJwtPayload() structure
         const payload = out.getJwtPayload();
         if (payload) {
-          if (payload.rawToken) return payload.rawToken;
-          if (payload.accessToken) return payload.accessToken;
+          if (typeof payload["rawToken"] === "string") return payload["rawToken"] as string;
+          if (typeof payload["accessToken"] === "string") return payload["accessToken"] as string;
         }
       }
-      // Some Outseta builds expose token under out.auth or similar
-      if (out.auth && out.auth.accessToken) return out.auth.accessToken;
+      if (out.auth && typeof out.auth.accessToken === "string") return out.auth.accessToken as string;
     }
-  } catch (e) {
-    // swallow errors from Outseta object access
-    console.warn("Error while calling Outseta client API:", e);
+  } catch (err) {
+    // Log and continue to fallback
+    console.warn("Error while calling Outseta client API:", err);
   }
 
   // LocalStorage fallback (your o_options uses tokenStorage:'local')
@@ -82,8 +95,9 @@ function findOutsetaTokenOnClient(): string | null {
       const v = window.localStorage.getItem(k);
       if (v) return v;
     }
-  } catch (e) {
+  } catch (err) {
     // ignore localStorage access errors
+    console.warn("Error while reading localStorage for Outseta token:", err);
   }
 
   return null;
