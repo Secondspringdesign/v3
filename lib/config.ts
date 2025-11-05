@@ -1,4 +1,4 @@
-// lib/config.ts
+/// lib/config.ts
 import { ColorScheme, StartScreenPrompt, ThemeOption } from "@openai/chatkit";
 
 export const CREATE_SESSION_ENDPOINT = "/api/create-session";
