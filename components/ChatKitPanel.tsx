@@ -14,7 +14,7 @@ import {
 import { ErrorOverlay } from "./ErrorOverlay";
 import type { ColorScheme } from "@/hooks/useColorScheme";
 
-import { saveLocalBookmark } from "@/lib/localBookmarks";
+import { saveLocalBookmark, listLocalBookmarks } from "@/lib/localBookmarks";
 import { LocalBookmarksPanel } from "@/components/LocalBookmarksPanel";
 
 export type FactAction = {
@@ -49,17 +49,24 @@ const createInitialErrors = (): ErrorState => ({
 
 /**
  * Minimal typing for the ChatKit control surface we use.
- * If the chatkit.control exposes more methods, you can extend this.
  */
 type ChatKitControl = {
   getActiveThread?: () =>
     | {
         id?: string;
+        title?: string;
         messages?: Array<{ text?: string }>;
       }
     | undefined;
+  getThreads?: () =>
+    | Array<{
+        id?: string;
+        title?: string;
+        updated_at?: string;
+      }>
+    | undefined;
   openThread?: (id: string) => void;
-  // keep index signature to allow other methods without 'any' usage
+  openHistory?: () => void;
   [key: string]: unknown;
 };
 
@@ -74,14 +81,13 @@ type OutsetaClientSurface = {
 function findOutsetaTokenOnClient(): string | null {
   if (!isBrowser) return null;
 
-  // typed access to window.Outseta
-  const out = (window as unknown as { Outseta?: OutsetaClientSurface; outseta?: OutsetaClientSurface }).Outseta
-    ?? (window as unknown as { Outseta?: OutsetaClientSurface; outseta?: OutsetaClientSurface }).outseta
-    ?? null;
+  const out =
+    (window as unknown as { Outseta?: OutsetaClientSurface; outseta?: OutsetaClientSurface }).Outseta ??
+    (window as unknown as { Outseta?: OutsetaClientSurface; outseta?: OutsetaClientSurface }).outseta ??
+    null;
 
   try {
     if (out) {
-      // Prefer getAccessToken or getJwtPayload if present
       if (typeof out.getAccessToken === "function") {
         const t = out.getAccessToken();
         if (t) return t;
@@ -96,11 +102,9 @@ function findOutsetaTokenOnClient(): string | null {
       if (out.auth && typeof out.auth.accessToken === "string") return out.auth.accessToken as string;
     }
   } catch (err) {
-    // Log and continue to fallback
     console.warn("Error while calling Outseta client API:", err);
   }
 
-  // LocalStorage fallback (your o_options uses tokenStorage:'local')
   try {
     const localKeys = ["outseta_access_token", "outseta_token", "outseta_auth_token"];
     for (const k of localKeys) {
@@ -108,7 +112,6 @@ function findOutsetaTokenOnClient(): string | null {
       if (v) return v;
     }
   } catch (err) {
-    // ignore localStorage access errors
     console.warn("Error while reading localStorage for Outseta token:", err);
   }
 
@@ -130,7 +133,12 @@ export function ChatKitPanel({
   );
   const [widgetInstanceKey, setWidgetInstanceKey] = useState(0);
 
-  const [showBookmarks, setShowBookmarks] = useState(false);
+  // UI state: history panel + selected tab
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false);
+  const [historyTab, setHistoryTab] = useState<"chats" | "bookmarks">("chats");
+
+  // Keep track if current active thread is bookmarked (by title+agent or thread id)
+  const [activeBookmarked, setActiveBookmarked] = useState(false);
 
   const setErrorState = useCallback((updates: Partial<ErrorState>) => {
     setErrors((current) => ({ ...current, ...updates }));
@@ -202,7 +210,7 @@ export function ChatKitPanel({
         const urlParams = new URLSearchParams(window.location.search);
         const agent = urlParams.get("agent") || "strategy";
 
-        // Get Outseta token (Outseta client API preferred, then localStorage fallback)
+        // Get Outseta token
         const outsetaToken = findOutsetaTokenOnClient();
 
         const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -249,13 +257,12 @@ export function ChatKitPanel({
     [setErrorState]
   );
 
-  // Determine the current agent from the URL (fallback to "strategy")
+  // Determine agent from URL
   const agentFromUrl = isBrowser ? new URLSearchParams(window.location.search).get("agent") ?? "strategy" : "strategy";
 
   const chatkit = useChatKit({
     api: { getClientSecret },
     theme: { colorScheme: theme, ...getThemeConfig(theme) },
-    // Use per-agent greeting and prompts:
     startScreen: {
       greeting: getGreetingForAgent(agentFromUrl),
       prompts: getStarterPromptsForAgent(agentFromUrl) ?? STARTER_PROMPTS,
@@ -285,53 +292,127 @@ export function ChatKitPanel({
     },
     onResponseEnd: onResponseEnd,
     onResponseStart: () => setErrorState({ integration: null, retryable: false }),
-    onThreadChange: () => processedFacts.current.clear(),
+    onThreadChange: () => {
+      processedFacts.current.clear();
+      // update activeBookmarked when thread changes
+      try {
+        const control = chatkit.control as unknown as ChatKitControl;
+        const thread = control?.getActiveThread?.();
+        const threadTitle = thread?.title ?? (thread?.messages && thread.messages.length ? String(thread.messages[thread.messages.length - 1]?.text ?? "") : null);
+        const bookmarks = listLocalBookmarks();
+        const found = bookmarks.some((b) => b.title === (threadTitle ?? "") && b.agent === agentFromUrl);
+        setActiveBookmarked(found);
+      } catch {
+        setActiveBookmarked(false);
+      }
+    },
     onError: ({ error }) => console.error("ChatKit error", error),
   });
 
   const activeError = errors.session ?? errors.integration;
   const blockingError = errors.script ?? activeError;
 
+  // Bookmark action: save using chat name (thread.title preferred)
+  const handleBookmarkClick = useCallback(async () => {
+    try {
+      const control = chatkit.control as unknown as ChatKitControl;
+      const thread = control?.getActiveThread?.();
+      let title = thread?.title ?? null;
+      if (!title) {
+        const last = thread?.messages && thread.messages.length ? thread.messages[thread.messages.length - 1]?.text ?? "" : "";
+        if (last && typeof last === "string") {
+          title = last.trim().slice(0, 80);
+        } else {
+          title = `Conversation ${new Date().toLocaleString()}`;
+        }
+      }
+      // Save bookmark without prompting — per request
+      saveLocalBookmark({ agent: agentFromUrl, title, snippet: thread?.messages && thread.messages.length ? thread.messages[thread.messages.length - 1]?.text ?? "" : null, content: thread?.messages ?? null });
+      setActiveBookmarked(true);
+    } catch (err) {
+      console.error("Failed to save bookmark", err);
+      alert("Failed to save bookmark");
+    }
+  }, [chatkit.control, agentFromUrl]);
+
+  // History panel: try to list chat threads if the control supports it
+  const renderChatsTab = () => {
+    try {
+      const control = chatkit.control as unknown as ChatKitControl;
+      const threads = control?.getThreads?.();
+      if (threads && threads.length) {
+        return (
+          <div className="p-2 space-y-2">
+            {threads.map((t) => (
+              <div key={t.id ?? String(t.title)} className="p-2 rounded hover:bg-slate-50 cursor-pointer" onClick={() => { if (t.id && typeof control.openThread === "function") control.openThread(t.id); }}>
+                <div className="text-sm font-medium">{t.title ?? "Untitled"}</div>
+                <div className="text-xs text-slate-500">{t.updated_at ?? ""}</div>
+              </div>
+            ))}
+          </div>
+        );
+      }
+      // Fallback: show button to open ChatKit's native history (if supported)
+      return (
+        <div className="p-4">
+          <div className="mb-3 text-sm text-slate-700">ChatKit does not expose threads via the client control in this build.</div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                try {
+                  const control = chatkit.control as unknown as ChatKitControl;
+                  if (typeof control.openHistory === "function") control.openHistory();
+                  else alert("ChatKit native history is not available via control in this build.");
+                } catch {
+                  alert("Unable to open native history.");
+                }
+              }}
+              className="px-3 py-1 rounded border text-sm"
+            >
+              Open Chat history
+            </button>
+          </div>
+        </div>
+      );
+    } catch (err) {
+      return <div className="p-4 text-sm">Unable to list chats.</div>;
+    }
+  };
+
   return (
     <div className="relative pb-8 flex h-[90vh] flex-col rounded-2xl overflow-hidden bg-white shadow-sm transition-colors dark:bg-slate-900">
-      {/* Small agent header for context + bookmark controls */}
-      <div className="px-4 pt-4 flex items-center justify-between">
-        <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-          <span className="font-semibold">Agent:</span>
-          <span className="capitalize">{agentFromUrl}</span>
-        </div>
+      {/* Controls row (right-aligned icons) - removed Agent badge per request */}
+      <div className="px-4 pt-4 flex items-center justify-end gap-2">
+        {/* History icon */}
+        <button
+          title="History"
+          onClick={() => {
+            setShowHistoryPanel((s) => !s);
+            setHistoryTab("chats");
+          }}
+          className="p-2 rounded hover:bg-slate-100"
+          aria-label="Open history"
+        >
+          {/* History/clock icon */}
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <path d="M12 8v5l3 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M21 12a9 9 0 1 1-2.6-6.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={async () => {
-              try {
-                // Use typed control surface to avoid `any`
-                const control = chatkit.control as unknown as ChatKitControl;
-                const thread = control?.getActiveThread?.();
-                const messages = thread?.messages ?? null;
-                const snippet = messages && messages.length ? (messages[messages.length - 1]?.text ?? "") : "";
-                const title = window.prompt("Bookmark title", `Conversation ${new Date().toLocaleString()}`) || `Conversation ${new Date().toLocaleString()}`;
-                saveLocalBookmark({ agent: agentFromUrl, title, snippet: snippet || null, content: messages ?? null });
-                alert("Bookmark saved locally (this device only)");
-              } catch (e) {
-                console.error("Failed to save local bookmark", e);
-                alert("Failed to save bookmark");
-              }
-            }}
-            className="px-2 py-1 rounded border text-sm"
-            title="Save bookmark locally"
-          >
-            Save Bookmark
-          </button>
-
-          <button
-            onClick={() => setShowBookmarks((s) => !s)}
-            className="px-2 py-1 rounded border text-sm"
-            title="Open local bookmarks"
-          >
-            Bookmarks
-          </button>
-        </div>
+        {/* Bookmark icon (toggles blue when active) */}
+        <button
+          title="Bookmark"
+          onClick={handleBookmarkClick}
+          className={`p-2 rounded hover:bg-slate-100 ${activeBookmarked ? "text-sky-600" : "text-slate-700"}`}
+          aria-pressed={activeBookmarked}
+          aria-label="Bookmark conversation"
+        >
+          {/* Bookmark SVG */}
+          <svg width="18" height="18" viewBox="0 0 24 24" fill={activeBookmarked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M6 2h12v20l-6-4-6 4V2z" />
+          </svg>
+        </button>
       </div>
 
       <ChatKit
@@ -344,21 +425,39 @@ export function ChatKitPanel({
         }
       />
 
-      {/* Local bookmarks panel overlay */}
-      {showBookmarks && (
-        <div className="absolute right-4 top-20 z-50 w-96 bg-white shadow-lg rounded">
-          <LocalBookmarksPanel
-            onOpen={(b) => {
-              // Copy snippet to clipboard and navigate to the agent
-              try {
-                if (b.snippet) navigator.clipboard?.writeText(String(b.snippet));
-              } catch {}
-              const url = new URL(window.location.href);
-              url.searchParams.set("agent", b.agent);
-              window.location.href = url.toString();
-              alert("Opened agent. The bookmark snippet (if any) has been copied to your clipboard — paste into the chat to continue.");
-            }}
-          />
+      {/* History panel overlay (right-side) */}
+      {showHistoryPanel && (
+        <div className="absolute right-4 top-20 z-50 w-[360px] bg-white shadow-lg rounded" role="dialog" aria-modal="true">
+          <div className="flex items-center justify-between px-4 py-2 border-b">
+            <div className="flex items-center gap-4">
+              <button onClick={() => setHistoryTab("chats")} className={`px-3 py-1 rounded ${historyTab === "chats" ? "bg-slate-100 font-medium" : "text-slate-600"}`}>Chats</button>
+              <button onClick={() => setHistoryTab("bookmarks")} className={`px-3 py-1 rounded ${historyTab === "bookmarks" ? "bg-slate-100 font-medium" : "text-slate-600"}`}>Bookmarks</button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowHistoryPanel(false)} className="px-2 py-1 rounded text-sm">Close</button>
+            </div>
+          </div>
+
+          <div className="p-2">
+            {historyTab === "chats" ? (
+              renderChatsTab()
+            ) : (
+              <div style={{ maxHeight: "60vh", overflowY: "auto" }}>
+                <LocalBookmarksPanel
+                  onOpen={(b) => {
+                    try {
+                      if (b.snippet) navigator.clipboard?.writeText(String(b.snippet));
+                    } catch {}
+                    const url = new URL(window.location.href);
+                    url.searchParams.set("agent", b.agent);
+                    window.location.href = url.toString();
+                    setShowHistoryPanel(false);
+                    alert("Opened agent. The bookmark snippet (if any) has been copied to your clipboard — paste into the chat to continue.");
+                  }}
+                />
+              </div>
+            )}
+          </div>
         </div>
       )}
 
