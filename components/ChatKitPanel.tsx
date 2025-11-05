@@ -14,6 +14,9 @@ import {
 import { ErrorOverlay } from "./ErrorOverlay";
 import type { ColorScheme } from "@/hooks/useColorScheme";
 
+import { saveLocalBookmark } from "@/lib/localBookmarks";
+import { LocalBookmarksPanel } from "@/components/LocalBookmarksPanel";
+
 export type FactAction = {
   type: "save";
   factId: string;
@@ -110,6 +113,8 @@ export function ChatKitPanel({
     () => (isBrowser && window.customElements?.get("openai-chatkit") ? "ready" : "pending")
   );
   const [widgetInstanceKey, setWidgetInstanceKey] = useState(0);
+
+  const [showBookmarks, setShowBookmarks] = useState(false);
 
   const setErrorState = useCallback((updates: Partial<ErrorState>) => {
     setErrors((current) => ({ ...current, ...updates }));
@@ -273,6 +278,45 @@ export function ChatKitPanel({
 
   return (
     <div className="relative pb-8 flex h-[90vh] flex-col rounded-2xl overflow-hidden bg-white shadow-sm transition-colors dark:bg-slate-900">
+      {/* Small agent header for context + bookmark controls */}
+      <div className="px-4 pt-4 flex items-center justify-between">
+        <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+          <span className="font-semibold">Agent:</span>
+          <span className="capitalize">{agentFromUrl}</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              try {
+                // try to read the active thread messages from chatkit control if available
+                const thread = (chatkit.control as any)?.getActiveThread?.();
+                const messages = thread?.messages ?? null;
+                const snippet = messages && messages.length ? (messages[messages.length - 1]?.text ?? "") : "";
+                const title = window.prompt("Bookmark title", `Conversation ${new Date().toLocaleString()}`) || `Conversation ${new Date().toLocaleString()}`;
+                saveLocalBookmark({ agent: agentFromUrl, title, snippet: snippet || null, content: messages ?? null });
+                alert("Bookmark saved locally (this device only)");
+              } catch (e) {
+                console.error("Failed to save local bookmark", e);
+                alert("Failed to save bookmark");
+              }
+            }}
+            className="px-2 py-1 rounded border text-sm"
+            title="Save bookmark locally"
+          >
+            Save Bookmark
+          </button>
+
+          <button
+            onClick={() => setShowBookmarks((s) => !s)}
+            className="px-2 py-1 rounded border text-sm"
+            title="Open local bookmarks"
+          >
+            Bookmarks
+          </button>
+        </div>
+      </div>
+
       <ChatKit
         key={widgetInstanceKey}
         control={chatkit.control}
@@ -282,6 +326,25 @@ export function ChatKitPanel({
             : "block flex-1 w-full h-full"
         }
       />
+
+      {/* Local bookmarks panel overlay */}
+      {showBookmarks && (
+        <div className="absolute right-4 top-20 z-50 w-96 bg-white shadow-lg rounded">
+          <LocalBookmarksPanel
+            onOpen={(b) => {
+              // Copy snippet to clipboard and navigate to the agent
+              try {
+                if (b.snippet) navigator.clipboard?.writeText(String(b.snippet));
+              } catch {}
+              const url = new URL(window.location.href);
+              url.searchParams.set("agent", b.agent);
+              window.location.href = url.toString();
+              alert("Opened agent. The bookmark snippet (if any) has been copied to your clipboard — paste into the chat to continue.");
+            }}
+          />
+        </div>
+      )}
+
       <ErrorOverlay
         error={blockingError}
         fallbackMessage={
