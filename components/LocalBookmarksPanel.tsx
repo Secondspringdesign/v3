@@ -22,7 +22,6 @@ export function LocalBookmarksPanel({ onOpen }: { onOpen?: (b: Bookmark) => void
 
   useEffect(() => {
     load();
-    // update when other tabs modify storage
     const handler = () => load();
     window.addEventListener("storage", handler);
     return () => window.removeEventListener("storage", handler);
