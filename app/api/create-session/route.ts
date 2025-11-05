@@ -233,8 +233,11 @@ async function verifyOutsetaToken(token: string): Promise<{ verified: boolean; p
   // Parse token parts
   const { header, payload, signatureB64, signingInput } = parseJwt(token);
   const sigBytes = base64UrlDecodeToUint8Array(signatureB64);
-  // Ensure we pass a plain ArrayBuffer containing only the signature bytes (slice respects byteOffset/length)
-  const sigArrayBuffer = sigBytes.buffer.slice(sigBytes.byteOffset, sigBytes.byteOffset + sigBytes.byteLength);
+
+  // Make a fresh Uint8Array copy so we have a plain ArrayBuffer (avoids SharedArrayBuffer typing)
+  const sigCopy = new Uint8Array(sigBytes);
+  const sigArrayBuffer = sigCopy.buffer;
+
   const data = new TextEncoder().encode(signingInput);
 
   const headerAlg = typeof header?.alg === "string" ? header.alg : undefined;
@@ -252,7 +255,7 @@ async function verifyOutsetaToken(token: string): Promise<{ verified: boolean; p
       false,
       ["verify"]
     );
-    // Pass signature ArrayBuffer
+    // Pass signature ArrayBuffer (from sigCopy.buffer)
     const ok = await crypto.subtle.verify("HMAC", key, sigArrayBuffer, data);
     return { verified: ok, payload: payload as object };
   } else if (jwksUrl) {
