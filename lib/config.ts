@@ -51,6 +51,10 @@ export function getGreetingForAgent(agent?: string) {
 }
 
 // ---------- PER-AGENT STARTER PROMPTS ----------
+//
+// For now, to avoid type errors on ChatKitIcon,
+// we use only "circle-question" which we know is valid.
+//
 
 export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
   // Business main
@@ -65,25 +69,25 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "I’ve never made a business before—where do we start?",
       prompt:
         "I’ve never started a business before. Walk me through the basics and help me shape a business idea that could actually work for me.",
-      icon: "sparkle",
+      icon: "circle-question",
     },
     {
       label: "Help me turn a fuzzy idea into something real",
       prompt:
         "I have a vague idea but nothing concrete. Help me describe it in plain language and see if it could become a real business.",
-      icon: "lightbulb",
+      icon: "circle-question",
     },
     {
       label: "Turn this into a Lite Business Plan",
       prompt:
         "Here’s my current idea. Help me turn it into a short Lite Business Plan with audience, problem, offer, delivery, pricing, and a first experiment.",
-      icon: "file-text",
+      icon: "circle-question",
     },
     {
       label: "I’m anxious about starting—keep it small and clear",
       prompt:
         "I’m anxious about starting anything. Help me find the smallest, clearest version of this idea and simple next steps.",
-      icon: "face-smile",
+      icon: "circle-question",
     },
   ],
 
@@ -93,19 +97,19 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "Help me define my offer",
       prompt:
         "I have a rough idea but not a clear offer. Help me turn it into something a specific person would understand and want to buy.",
-      icon: "cube",
+      icon: "circle-question",
     },
     {
       label: "Narrow my niche",
       prompt:
         "I’m trying to sell to everyone. Help me choose a narrower, more realistic niche for this product or service.",
-      icon: "bullseye",
+      icon: "circle-question",
     },
     {
       label: "I have too many ideas—pick one",
       prompt:
         "Here are a few product ideas I’m considering. Help me compare them and pick one to focus on first.",
-      icon: "list-check",
+      icon: "circle-question",
     },
   ],
 
@@ -115,19 +119,19 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "Who am I actually talking to?",
       prompt:
         "Here’s my business idea. Help me define a clear target customer I can picture and talk to directly.",
-      icon: "user-group",
+      icon: "circle-question",
     },
     {
       label: "Help me write a simple pitch",
       prompt:
         "Help me write a one‑sentence pitch for my business that a friend would understand immediately.",
-      icon: "message",
+      icon: "circle-question",
     },
     {
       label: "Choose 1–2 marketing channels",
       prompt:
         "Here’s my offer and who I think it’s for. Help me pick one or two realistic marketing channels to start with, and tell me why.",
-      icon: "share-nodes",
+      icon: "circle-question",
     },
   ],
 
@@ -137,19 +141,19 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "Sanity‑check my pricing",
       prompt:
         "Here’s what I’m planning to sell and what I was thinking of charging. Help me sanity‑check this pricing and suggest a simple starting point.",
-      icon: "tag",
+      icon: "circle-question",
     },
     {
       label: "Can this realistically pay my bills?",
       prompt:
         "Here’s my business idea, my rough pricing, and how much I’d like to earn per month. Help me see if the numbers are realistic.",
-      icon: "wallet",
+      icon: "circle-question",
     },
     {
       label: "I’m scared of the numbers—start small with me",
       prompt:
         "I’m intimidated by money and spreadsheets. Help me take the tiniest step to understand the basic numbers for this idea.",
-      icon: "heart-crack",
+      icon: "circle-question",
     },
   ],
 
@@ -159,25 +163,25 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "Review my idea from scratch",
       prompt:
         "Here’s my business idea. Please give me a clear reality check on how feasible it looks, who might actually buy, and what worries you most.",
-      icon: "clipboard-list",
+      icon: "circle-question",
     },
     {
       label: "Check the plan I already wrote",
       prompt:
         "I already have a simple business plan written. I’ll paste it—please review it and give me an honest reality check on feasibility and next steps.",
-      icon: "file-text",
+      icon: "circle-question",
     },
     {
       label: "Is this realistic for one person?",
       prompt:
         "I’m one person with limited time and energy. Here’s my idea—tell me if this feels realistic for a solo founder, and what I might need to shrink or simplify.",
-      icon: "user-clock",
+      icon: "circle-question",
     },
     {
       label: "What should I test in the next 30 days?",
       prompt:
         "Given this idea, what are the 3–5 most important things I should test in the next 30 days before committing more time and money?",
-      icon: "calendar-days",
+      icon: "circle-question",
     },
   ],
 
@@ -187,25 +191,25 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "Give me a full SWOT for my idea",
       prompt:
         "Here’s my business idea. Please create a clear SWOT analysis with strengths, weaknesses, opportunities, and threats, and then tell me what to lean into and what to watch.",
-      icon: "chart-simple",
+      icon: "circle-question",
     },
     {
       label: "I’m not sure what my strengths are",
       prompt:
         "Here’s my background and my business idea. Help me identify my real strengths in this context and how they show up in a SWOT.",
-      icon: "user",
+      icon: "circle-question",
     },
     {
       label: "Compare two directions",
       prompt:
         "I’m torn between two business ideas. Please create a brief SWOT for each and help me see which one looks more promising for the next 6–12 months.",
-      icon: "shuffle",
+      icon: "circle-question",
     },
     {
       label: "Help me see the real risks",
       prompt:
         "Here’s my current plan. I want you to be honest about weaknesses and threats—what are the few things most likely to stall or derail this idea?",
-      icon: "triangle-exclamation",
+      icon: "circle-question",
     },
   ],
 
@@ -215,25 +219,25 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "Scan my plan for legal and tax issues",
       prompt:
         "Here’s my business idea and how I plan to run it. Please highlight the main legal and tax areas I should pay attention to, in simple language.",
-      icon: "shield-halved",
+      icon: "circle-question",
     },
     {
       label: "I’ll work with clients in other countries",
       prompt:
         "I’m based in [your country] but I’ll be working with clients in other countries. Here’s my plan—what kinds of legal and tax questions should I ask a professional about cross‑border work?",
-      icon: "globe",
+      icon: "circle-question",
     },
     {
       label: "I’m dealing with sensitive topics",
       prompt:
         "My business touches on health, mental health, finances, or children. Here’s what I’m planning to do. Please flag the higher‑risk areas I should definitely discuss with a lawyer or tax professional.",
-      icon: "hand-holding-heart",
+      icon: "circle-question",
     },
     {
       label: "Prepare for a call with a pro",
       prompt:
         "Here’s my current plan and where I’m based. Help me turn this into a simple list of questions to bring to a small-business lawyer or accountant.",
-      icon: "file-pen",
+      icon: "circle-question",
     },
   ],
 };
