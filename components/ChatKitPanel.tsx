@@ -56,9 +56,10 @@ function findOutsetaTokenOnClient(): string | null {
   if (!isBrowser) return null;
 
   // typed access to window.Outseta
-  const out = (window as unknown as { Outseta?: OutsetaClientSurface; outseta?: OutsetaClientSurface }).Outseta
-    ?? (window as unknown as { Outseta?: OutsetaClientSurface; outseta?: OutsetaClientSurface }).outseta
-    ?? null;
+  const out =
+    (window as unknown as { Outseta?: OutsetaClientSurface; outseta?: OutsetaClientSurface }).Outseta ??
+    (window as unknown as { Outseta?: OutsetaClientSurface; outseta?: OutsetaClientSurface }).outseta ??
+    null;
 
   try {
     if (out) {
@@ -107,7 +108,7 @@ export function ChatKitPanel({
   const [isInitializingSession, setIsInitializingSession] = useState(true);
   const isMountedRef = useRef(true);
   const [scriptStatus, setScriptStatus] = useState<"pending" | "ready" | "error">(
-    () => (isBrowser && window.customElements?.get("openai-chatkit") ? "ready" : "pending")
+    () => (isBrowser && window.customElements?.get("openai-chatkit") ? "ready" : "pending"),
   );
   const [widgetInstanceKey, setWidgetInstanceKey] = useState(0);
 
@@ -162,7 +163,8 @@ export function ChatKitPanel({
 
   const handleResetChat = useCallback(() => {
     processedFacts.current.clear();
-    if (isBrowser) setScriptStatus(window.customElements?.get("openai-chatkit") ? "ready" : "pending");
+    if (isBrowser)
+      setScriptStatus(window.customElements?.get("openai-chatkit") ? "ready" : "pending");
     setIsInitializingSession(true);
     setErrors(createInitialErrors());
     setWidgetInstanceKey((prev) => prev + 1);
@@ -218,22 +220,25 @@ export function ChatKitPanel({
 
         return clientSecret;
       } catch (error) {
-        const detail = error instanceof Error ? error.message : "Unable to start ChatKit session.";
+        const detail =
+          error instanceof Error ? error.message : "Unable to start ChatKit session.";
         if (isMountedRef.current) setErrorState({ session: detail, retryable: false });
         throw error instanceof Error ? error : new Error(detail);
       } finally {
         if (isMountedRef.current && !currentSecret) setIsInitializingSession(false);
       }
     },
-    [setErrorState]
+    [setErrorState],
   );
 
   // Determine the current agent from the URL (fallback to "strategy")
-  const agentFromUrl = isBrowser ? new URLSearchParams(window.location.search).get("agent") ?? "strategy" : "strategy";
+  const agentFromUrl = isBrowser
+    ? new URLSearchParams(window.location.search).get("agent") ?? "strategy"
+    : "strategy";
 
   const chatkit = useChatKit({
     api: { getClientSecret },
-    theme: { colorScheme: theme, ...getThemeConfig(theme) },
+    theme: getThemeConfig(theme),
     // Use per-agent greeting and prompts:
     startScreen: {
       greeting: getGreetingForAgent(agentFromUrl),
@@ -256,7 +261,11 @@ export function ChatKitPanel({
         const text = String(invocation.params.fact_text ?? "");
         if (!id || processedFacts.current.has(id)) return { success: true };
         processedFacts.current.add(id);
-        void onWidgetAction({ type: "save", factId: id, factText: text.replace(/\s+/g, " ").trim() });
+        void onWidgetAction({
+          type: "save",
+          factId: id,
+          factText: text.replace(/\s+/g, " ").trim(),
+        });
         return { success: true };
       }
 
@@ -296,7 +305,7 @@ export function ChatKitPanel({
 
 function extractErrorDetail(
   payload: Record<string, unknown> | undefined,
-  fallback: string
+  fallback: string,
 ): string {
   if (!payload) return fallback;
   const error = payload.error;
@@ -308,7 +317,12 @@ function extractErrorDetail(
   if (details && typeof details === "object" && "error" in details) {
     const nestedError = (details as { error?: unknown }).error;
     if (typeof nestedError === "string") return nestedError;
-    if (nestedError && typeof nestedError === "object" && "message" in nestedError && typeof (nestedError as { message?: unknown }).message === "string")
+    if (
+      nestedError &&
+      typeof nestedError === "object" &&
+      "message" in nestedError &&
+      typeof (nestedError as { message?: unknown }).message === "string"
+    )
       return (nestedError as { message: string }).message;
   }
   if (typeof payload.message === "string") return payload.message;
