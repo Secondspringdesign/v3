@@ -162,11 +162,11 @@ export function getStarterPromptsForAgent(agent?: string): StartScreenPrompt[] {
 
 // ---------- THEME CONFIG ----------
 //
-// Force fully dark surfaces to remove the light outer frame.
-// Still matches ChatKit Playground hue (222) and tint (5).
+// Force fully dark surfaces to remove the light outer frame,
+// while keeping hue 222 / tint 5 and Inter 16px.
 //
 
-export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
+export const getThemeConfig = (theme: ColorScheme): ThemeOption => ({
   colorScheme: "dark",
   radius: "round",
   density: "normal",
@@ -178,10 +178,8 @@ export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
     },
     surface: {
       // Outer background area of the widget
-      background: "#020617", // slate-950-ish
-      // Inner panel / card where the chat lives
-      panel: "#020617",
-      // Borders / outlines
+      background: "#020617",
+      // Border color around the widget
       border: "#020617",
     },
   },
