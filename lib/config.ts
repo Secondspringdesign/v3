@@ -181,10 +181,8 @@ export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
       shade: 0,
     },
     surface: {
-      // Outer background of the widget
-      background: "#1B202C",
-      // Default text color on that background
-      foreground: "#E5E7EB",
+      background: "#1B202C",  // your navy
+      foreground: "#EEEBE8",  // updated text color
     },
   },
   typography: {
