@@ -181,8 +181,10 @@ export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
       shade: 0,
     },
     surface: {
-      background: "#020617", // very dark slate for outer area
-      foreground: "#E5E7EB", // light gray text
+      // Outer background of the widget
+      background: "#1B202C",
+      // Default text color on that background
+      foreground: "#E5E7EB",
     },
   },
   typography: {
