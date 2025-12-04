@@ -11,7 +11,7 @@ export default function ChatPage() {
   const handleResponseEnd = useCallback(() => {}, []);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-end bg-slate-100 dark:bg-slate-950">
+    <main className="flex min-h-screen flex-col items-center justify-end bg-[#020617] text-slate-100">
       <div className="w-full min-w-[600px] p-4">
         <ChatKitPanel
           theme={scheme}
