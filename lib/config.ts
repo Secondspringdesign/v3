@@ -162,8 +162,13 @@ export function getStarterPromptsForAgent(agent?: string): StartScreenPrompt[] {
 
 // ---------- THEME CONFIG ----------
 //
-// Always dark mode with tinted grayscale (hue 222, tint 5).
-// Satisfies your SurfaceColors type: background + foreground.
+// Mirror ChatKit Playground:
+// - colorScheme: 'dark'
+// - radius: 'round'
+// - density: 'normal'
+// - grayscale tint: hue 222, tint 5
+// - typography: Inter, 16px
+// Plus: dark surface background/foreground so it matches your app.
 //
 
 export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
@@ -177,7 +182,7 @@ export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
       shade: 0,
     },
     surface: {
-      background: "#020617", // very dark slate
+      background: "#020617", // very dark slate background
       foreground: "#E5E7EB", // light gray text
     },
   },
@@ -189,6 +194,18 @@ export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
         family: "Inter",
         src: "https://rsms.me/inter/font-files/Inter-Regular.woff2",
         weight: 400,
+        style: "normal",
+      },
+      {
+        family: "Inter",
+        src: "https://rsms.me/inter/font-files/Inter-Medium.woff2",
+        weight: 500,
+        style: "normal",
+      },
+      {
+        family: "Inter",
+        src: "https://rsms.me/inter/font-files/Inter-SemiBold.woff2",
+        weight: 600,
         style: "normal",
       },
     ],
