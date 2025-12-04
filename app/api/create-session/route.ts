@@ -7,10 +7,18 @@ const SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
 
 // Map of agents -> Agent Builder workflow ids
 const WORKFLOWS: Record<string, string> = {
-  strategy: "wf_68fee66360548190a298201183a30c3803a17f3de232e2c9",
+  // Business main
+  business: "wf_68fee66360548190a298201183a30c3803a17f3de232e2c9",
+
+  // Pillars
   product: "wf_69026b8145c48190985fa5cdd1d43adf0cbd88dcb5a45b06",
   marketing: "wf_69026bf3dd9881908d0321f4dcbcf2d600b6acefcbe3958d",
-  operations: "wf_69026cf6ac808190be84ebde84951f970afd6254612434c0",
+  finance: "wf_69026cf6ac808190be84ebde84951f970afd6254612434c0",
+
+  // Business tasks
+  reality_check: "wf_6931006dad1c8190ad53d84c5c4354b50bc61651b4ace412",
+  swot: "wf_69310425a46881909175abe72281d39309c9a87a1d23696e",
+  legal_tax: "wf_69310449b8d48190ac09298db62ddb3e0656a4dba7c3a2c4",
 };
 
 const OUTSETA_COOKIE_NAME = "outseta_access_token"; // client should set this cookie (or send Authorization header)
@@ -40,7 +48,8 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const url = new URL(request.url);
-    const agent = (url.searchParams.get("agent") || "strategy").toLowerCase();
+    // Default agent is now "business" instead of "strategy"
+    const agent = (url.searchParams.get("agent") || "business").toLowerCase();
     const workflowId = WORKFLOWS[agent];
 
     if (!workflowId) {
@@ -53,7 +62,9 @@ export async function POST(request: Request): Promise<Response> {
     // Prevent accumulation of agent suffixes:
     // If rawUserId already contains one or more "-<agent>" suffixes (from earlier runs),
     // strip them before appending the current agent once.
-    const agentList = Object.keys(WORKFLOWS).map((a) => a.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")).join("|");
+    const agentList = Object.keys(WORKFLOWS)
+      .map((a) => a.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"))
+      .join("|");
     const stripRegex = new RegExp(`-(?:${agentList})(?:-(?:${agentList}))*$`, "i");
     const cleanedBase = String(rawUserId).replace(stripRegex, "");
     const namespacedUserId = `${cleanedBase}-${agent}`;
@@ -79,7 +90,12 @@ export async function POST(request: Request): Promise<Response> {
     const upstreamJson = (await upstreamResponse.json().catch(() => ({}))) as unknown;
 
     if (!upstreamResponse.ok) {
-      return buildJsonResponse({ error: "Failed to create session", details: upstreamJson }, upstreamResponse.status, {}, sessionCookie);
+      return buildJsonResponse(
+        { error: "Failed to create session", details: upstreamJson },
+        upstreamResponse.status,
+        {},
+        sessionCookie,
+      );
     }
 
     const debug = String(process.env.OUTSETA_DEBUG ?? "").toLowerCase() === "true";
@@ -110,7 +126,9 @@ function getCookieValue(cookieHeader: string | null, name: string): string | nul
 }
 
 function serializeSessionCookie(value: string): string {
-  return `${SESSION_COOKIE_NAME}=${encodeURIComponent(value)}; Path=/; Max-Age=${SESSION_COOKIE_MAX_AGE}; HttpOnly; SameSite=None; Secure`;
+  return `${SESSION_COOKIE_NAME}=${encodeURIComponent(
+    value,
+  )}; Path=/; Max-Age=${SESSION_COOKIE_MAX_AGE}; HttpOnly; SameSite=None; Secure`;
 }
 
 /**
@@ -120,7 +138,7 @@ function buildJsonResponse(
   payload: unknown,
   status: number,
   headers: Record<string, string>,
-  sessionCookie: string | null
+  sessionCookie: string | null,
 ): Response {
   const defaultCors = {
     "Content-Type": "application/json",
@@ -179,13 +197,25 @@ async function verifyOutsetaToken(token: string): Promise<{ verified: boolean; p
   const headerKid = typeof header?.kid === "string" ? header.kid : undefined;
 
   if (secret) {
-    const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["verify"],
+    );
     const ok = await crypto.subtle.verify("HMAC", key, sigArrayBuffer, data);
     return { verified: ok, payload: payload as object };
   } else if (jwksUrl) {
     const jwk = await getJwkForKid(jwksUrl, headerKid);
     if (!jwk) throw new Error("Unable to find matching JWK to verify token signature.");
-    const cryptoKey = await crypto.subtle.importKey("jwk", jwk as JsonWebKey, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+    const cryptoKey = await crypto.subtle.importKey(
+      "jwk",
+      jwk as JsonWebKey,
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false,
+      ["verify"],
+    );
     const ok = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", cryptoKey, sigArrayBuffer, data);
     return { verified: ok, payload: payload as object };
   } else {
