@@ -178,7 +178,7 @@ export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
     },
     surface: {
       background: "#020617", // very dark slate
-      foreground: "#E5E7EB", // light gray text (tailwind slate-200)
+      foreground: "#E5E7EB", // light gray text
     },
   },
   typography: {
