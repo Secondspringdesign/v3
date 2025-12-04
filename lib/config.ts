@@ -162,13 +162,12 @@ export function getStarterPromptsForAgent(agent?: string): StartScreenPrompt[] {
 
 // ---------- THEME CONFIG ----------
 //
-// Mirror ChatKit Playground:
+// Match Playground + your dark surface:
 // - colorScheme: 'dark'
 // - radius: 'round'
 // - density: 'normal'
-// - grayscale tint: hue 222, tint 5
-// - typography: Inter, 16px
-// Plus: dark surface background/foreground so it matches your app.
+// - grayscale hue 222 / tint 5
+// - Inter, 16px
 //
 
 export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
@@ -182,7 +181,7 @@ export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
       shade: 0,
     },
     surface: {
-      background: "#020617", // very dark slate background
+      background: "#020617", // very dark slate for outer area
       foreground: "#E5E7EB", // light gray text
     },
   },
