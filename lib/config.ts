@@ -10,13 +10,9 @@ export const PLACEHOLDER_INPUT = "Ask anything…";
 export const GREETING =
   "How can I help you today?"; // fallback if we ever get an unknown agent
 
-// Default starter prompts (rarely used now; most agents have their own)
 export const STARTER_PROMPTS: StartScreenPrompt[] = [];
 
 // ---------- PER-AGENT GREETINGS ----------
-//
-// Agent keys come from the `?agent=` query parameter in the URL.
-// Current mapping:
 //
 // business      -> Business main workflow
 // product       -> Product main workflow
@@ -29,105 +25,77 @@ export const STARTER_PROMPTS: StartScreenPrompt[] = [];
 
 export const GREETINGS: Record<string, string> = {
   business:
-    "You’re not broken, the world is weird.\n\nThis is your workspace for planning a business that fits your life. Together we’ll shape your idea, turn it into a Lite Business Plan, do a reality check, and give you easy next steps.",
+    "You’re not broken, the world is weird. Paste or write your idea here and I’ll help you turn it into a simple plan.",
   product:
-    "This is your Product workspace. We’ll clarify what you’re offering, who it’s for, and why it’s worth paying for—without turning it into a giant startup deck.",
+    "Describe what you’re thinking of selling and who it’s for. We’ll turn it into a clearer offer.",
   marketing:
-    "This is your Marketing workspace. We’ll figure out who you’re talking to, what to say, and a simple way to reach them—no growth hacks, just honest, doable marketing.",
+    "Tell me who you want to reach. We’ll shape a simple message and a couple of realistic channels.",
   finance:
-    "This is your Finance workspace. We’ll keep it simple: what you charge, what it costs you, and whether the math makes sense for your life and energy.",
+    "Share your pricing and income hopes. We’ll do a quick math check to see if it holds together.",
   reality_check:
-    "Welcome to Reality Check. Paste your plan or describe your idea, and I’ll review it like a calm early‑stage investor: what looks promising, what’s risky, and what might need testing before you go all‑in.",
+    "Upload or paste your plan to get a reality check: what works, what’s shaky, and what to test first.",
   swot:
-    "Welcome to SWOT Analysis. Share your business or idea, and I’ll map out your strengths, weaknesses, opportunities, and threats—then highlight what to lean into and what to watch out for.",
+    "Paste your current plan and I’ll map out a quick SWOT so you can see strengths, risks, and options.",
   legal_tax:
-    "Welcome to Legal & Tax Checkup. I’m not a lawyer or tax professional, so I can’t tell you if you’re fully compliant.\n\nWhat I can do is read your plan, highlight the main legal and tax areas to pay attention to, and help you draft better questions for a real professional in your area.",
+    "Paste your plan and where you’re based. I’ll flag general legal and tax areas to ask a professional about. This is not legal or tax advice.",
 };
 
-// Helper to get a greeting for a given agent (falls back to global GREETING)
 export function getGreetingForAgent(agent?: string) {
   if (!agent) return GREETING;
   return GREETINGS[agent] ?? GREETING;
 }
 
 // ---------- PER-AGENT STARTER PROMPTS ----------
+//
+// To keep builds stable we currently use only the known-safe icon "circle-question".
+//
 
 export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
   // Business main
   business: [
     {
-      label: "I just lost my job, what do I do?",
+      label: "I just lost my job—help me use this",
       prompt:
-        "I just lost my job. Help me figure out what kind of business I could start, based on my skills and constraints, and what my very first steps should be.",
+        "I just lost my job. Here’s my background and constraints. Help me see what kind of business could make sense and what my first steps could be.",
       icon: "circle-question",
     },
     {
-      label: "I’ve never made a business before—where do we start?",
+      label: "Turn my idea into a Lite Business Plan",
       prompt:
-        "I’ve never started a business before. Walk me through the basics and help me shape a business idea that could actually work for me.",
-      icon: "sparkle",
-    },
-    {
-      label: "Help me turn a fuzzy idea into something real",
-      prompt:
-        "I have a vague idea but nothing concrete. Help me describe it in plain language and see if it could become a real business.",
-      icon: "lightbulb",
-    },
-    {
-      label: "Turn this into a Lite Business Plan",
-      prompt:
-        "Here’s my current idea. Help me turn it into a short Lite Business Plan with audience, problem, offer, delivery, pricing, and a first experiment.",
-      icon: "file-text",
-    },
-    {
-      label: "I’m anxious about starting—keep it small and clear",
-      prompt:
-        "I’m anxious about starting anything. Help me find the smallest, clearest version of this idea and simple next steps.",
-      icon: "face-smile",
+        "Here’s my idea. Turn it into a short Lite Business Plan with audience, problem, offer, delivery, pricing, and next steps.",
+      icon: "circle-question",
     },
   ],
 
   // Product main
   product: [
     {
-      label: "Help me define my offer",
+      label: "Define my offer",
       prompt:
-        "I have a rough idea but not a clear offer. Help me turn it into something a specific person would understand and want to buy.",
-      icon: "cube",
+        "Here’s my rough idea. Help me turn it into a clear offer someone would understand and want to buy.",
+      icon: "circle-question",
     },
     {
-      label: "Narrow my niche",
+      label: "Choose a simple niche",
       prompt:
-        "I’m trying to sell to everyone. Help me choose a narrower, more realistic niche for this product or service.",
-      icon: "bullseye",
-    },
-    {
-      label: "I have too many ideas—pick one",
-      prompt:
-        "Here are a few product ideas I’m considering. Help me compare them and pick one to focus on first.",
-      icon: "list-check",
+        "Here’s what I’m thinking of selling. Help me pick a specific type of customer to focus on first.",
+      icon: "circle-question",
     },
   ],
 
   // Marketing main
   marketing: [
     {
-      label: "Who am I actually talking to?",
+      label: "Who am I really talking to?",
       prompt:
         "Here’s my business idea. Help me define a clear target customer I can picture and talk to directly.",
-      icon: "user-group",
+      icon: "circle-question",
     },
     {
-      label: "Help me write a simple pitch",
+      label: "Write a simple pitch for me",
       prompt:
-        "Help me write a one‑sentence pitch for my business that a friend would understand immediately.",
-      icon: "message",
-    },
-    {
-      label: "Choose 1–2 marketing channels",
-      prompt:
-        "Here’s my offer and who I think it’s for. Help me pick one or two realistic marketing channels to start with, and tell me why.",
-      icon: "share-nodes",
+        "Here’s my idea and who I think it’s for. Write a one‑sentence pitch I can use on my site or in an email.",
+      icon: "circle-question",
     },
   ],
 
@@ -136,127 +104,97 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
     {
       label: "Sanity‑check my pricing",
       prompt:
-        "Here’s what I’m planning to sell and what I was thinking of charging. Help me sanity‑check this pricing and suggest a simple starting point.",
-      icon: "tag",
+        "Here’s what I’m planning to sell and what I was thinking of charging. Help me sanity‑check this pricing.",
+      icon: "circle-question",
     },
     {
-      label: "Can this realistically pay my bills?",
+      label: "Could this actually cover my bills?",
       prompt:
-        "Here’s my business idea, my rough pricing, and how much I’d like to earn per month. Help me see if the numbers are realistic.",
-      icon: "wallet",
-    },
-    {
-      label: "I’m scared of the numbers—start small with me",
-      prompt:
-        "I’m intimidated by money and spreadsheets. Help me take the tiniest step to understand the basic numbers for this idea.",
-      icon: "heart-crack",
+        "Here’s my idea, rough pricing, and what I’d like to earn per month. Help me see if the math is realistic.",
+      icon: "circle-question",
     },
   ],
 
-  // Business task – Reality Check
+  // Reality Check task
   reality_check: [
     {
-      label: "Review my idea from scratch",
+      label: "Review the plan I already wrote",
       prompt:
-        "Here’s my business idea. Please give me a clear reality check on how feasible it looks, who might actually buy, and what worries you most.",
-      icon: "clipboard-list",
-    },
-    {
-      label: "Check the plan I already wrote",
-      prompt:
-        "I already have a simple business plan written. I’ll paste it—please review it and give me an honest reality check on feasibility and next steps.",
-      icon: "file-text",
-    },
-    {
-      label: "Is this realistic for one person?",
-      prompt:
-        "I’m one person with limited time and energy. Here’s my idea—tell me if this feels realistic for a solo founder, and what I might need to shrink or simplify.",
-      icon: "user-clock",
+        "I’ll paste my plan from the builder. Review it and tell me what seems solid, what’s shaky, and what needs testing.",
+      icon: "circle-question",
     },
     {
       label: "What should I test in the next 30 days?",
       prompt:
-        "Given this idea, what are the 3–5 most important things I should test in the next 30 days before committing more time and money?",
-      icon: "calendar-days",
+        "Here’s my current plan. Tell me the 3–5 most important things to test in the next 30 days before I commit more time and money.",
+      icon: "circle-question",
     },
   ],
 
-  // Business task – SWOT Analysis
+  // SWOT task
   swot: [
     {
-      label: "Give me a full SWOT for my idea",
+      label: "Give me a quick SWOT for this plan",
       prompt:
-        "Here’s my business idea. Please create a clear SWOT analysis with strengths, weaknesses, opportunities, and threats, and then tell me what to lean into and what to watch.",
-      icon: "chart-simple",
+        "Here’s my current plan. Create a brief SWOT analysis and highlight what to lean into and what to watch out for.",
+      icon: "circle-question",
     },
     {
-      label: "I’m not sure what my strengths are",
+      label: "I’m not sure where to take this next",
       prompt:
-        "Here’s my background and my business idea. Help me identify my real strengths in this context and how they show up in a SWOT.",
-      icon: "user",
-    },
-    {
-      label: "Compare two directions",
-      prompt:
-        "I’m torn between two business ideas. Please create a brief SWOT for each and help me see which one looks more promising for the next 6–12 months.",
-      icon: "shuffle",
-    },
-    {
-      label: "Help me see the real risks",
-      prompt:
-        "Here’s my current plan. I want you to be honest about weaknesses and threats—what are the few things most likely to stall or derail this idea?",
-      icon: "triangle-exclamation",
+        "Here’s my plan and the main directions I’m considering next. Compare them using a SWOT so I can see which looks better for the next year.",
+      icon: "circle-question",
     },
   ],
 
-  // Business task – Legal & Tax Checkup
+  // Legal & Tax Checkup task
   legal_tax: [
     {
-      label: "Scan my plan for legal and tax issues",
+      label: "Scan my plan for legal and tax areas",
       prompt:
-        "Here’s my business idea and how I plan to run it. Please highlight the main legal and tax areas I should pay attention to, in simple language.",
-      icon: "shield-halved",
+        "Here’s my plan and where I’m based. Highlight the main legal and tax areas I should pay attention to, in simple language. I know this isn’t legal or tax advice.",
+      icon: "circle-question",
     },
     {
-      label: "I’ll work with clients in other countries",
+      label: "Help me prepare for a pro",
       prompt:
-        "I’m based in [your country] but I’ll be working with clients in other countries. Here’s my plan—what kinds of legal and tax questions should I ask a professional about cross‑border work?",
-      icon: "globe",
-    },
-    {
-      label: "I’m dealing with sensitive topics",
-      prompt:
-        "My business touches on health, mental health, finances, or children. Here’s what I’m planning to do. Please flag the higher‑risk areas I should definitely discuss with a lawyer or tax professional.",
-      icon: "hand-holding-heart",
-    },
-    {
-      label: "Prepare for a call with a pro",
-      prompt:
-        "Here’s my current plan and where I’m based. Help me turn this into a simple list of questions to bring to a small-business lawyer or accountant.",
-      icon: "file-pen",
+        "Here’s my plan and where I’m based. Turn this into a short list of questions I can bring to a lawyer or accountant.",
+      icon: "circle-question",
     },
   ],
 };
 
-// Helper to get starter prompts for a given agent.
 export function getStarterPromptsForAgent(agent?: string): StartScreenPrompt[] {
   if (!agent) return STARTER_PROMPTS;
   return STARTER_PROMPTS_BY_AGENT[agent] ?? STARTER_PROMPTS;
 }
 
 // ---------- THEME CONFIG ----------
+//
+// Dark, tinted grayscale (hue 222, tint 5), Inter 16px.
+//
 
-export const getThemeConfig = (theme: ColorScheme): ThemeOption => ({
+export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
+  colorScheme: "dark",
+  radius: "round",
+  density: "normal",
   color: {
     grayscale: {
       hue: 222,
       tint: 5,
-      shade: theme === "dark" ? -1 : -4,
-    },
-    accent: {
-      primary: theme === "dark" ? "#f1f5f9" : "#0f172a",
-      level: 1,
+      shade: 0,
     },
   },
-  radius: "round",
+  typography: {
+    baseSize: 16,
+    fontFamily: "Inter, sans-serif",
+    fontSources: [
+      {
+        family: "Inter",
+        src: "https://rsms.me/inter/font-files/Inter-Regular.woff2",
+        weight: 400,
+        style: "normal",
+      },
+    ],
+  },
 });
