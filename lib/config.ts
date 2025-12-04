@@ -13,15 +13,6 @@ export const GREETING =
 export const STARTER_PROMPTS: StartScreenPrompt[] = [];
 
 // ---------- PER-AGENT GREETINGS ----------
-//
-// business      -> Business main workflow
-// product       -> Product main workflow
-// marketing     -> Marketing main workflow
-// finance       -> Finance main workflow
-// reality_check -> Business task: Reality Check
-// swot          -> Business task: SWOT
-// legal_tax     -> Business task: Legal & Tax Checkup
-//
 
 export const GREETINGS: Record<string, string> = {
   business:
@@ -47,7 +38,7 @@ export function getGreetingForAgent(agent?: string) {
 
 // ---------- PER-AGENT STARTER PROMPTS ----------
 //
-// To keep builds stable we currently use only the known-safe icon "circle-question".
+// Only using the known-safe icon "circle-question" to avoid type errors.
 //
 
 export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
@@ -171,7 +162,8 @@ export function getStarterPromptsForAgent(agent?: string): StartScreenPrompt[] {
 
 // ---------- THEME CONFIG ----------
 //
-// Dark, tinted grayscale (hue 222, tint 5), Inter 16px.
+// Force fully dark surfaces to remove the light outer frame.
+// Still matches ChatKit Playground hue (222) and tint (5).
 //
 
 export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
@@ -183,6 +175,14 @@ export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
       hue: 222,
       tint: 5,
       shade: 0,
+    },
+    surface: {
+      // Outer background area of the widget
+      background: "#020617", // slate-950-ish
+      // Inner panel / card where the chat lives
+      panel: "#020617",
+      // Borders / outlines
+      border: "#020617",
     },
   },
   typography: {
