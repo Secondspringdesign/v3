@@ -162,12 +162,11 @@ export function getStarterPromptsForAgent(agent?: string): StartScreenPrompt[] {
 
 // ---------- THEME CONFIG ----------
 //
-// Use dark scheme, tinted grayscale (hue 222, tint 5),
-// and a dark surface background. We only set properties
-// that exist on your SurfaceColors type.
+// Always dark mode with tinted grayscale (hue 222, tint 5).
+// Satisfies your SurfaceColors type: background + foreground.
 //
 
-export const getThemeConfig = (theme: ColorScheme): ThemeOption => ({
+export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
   colorScheme: "dark",
   radius: "round",
   density: "normal",
@@ -179,6 +178,7 @@ export const getThemeConfig = (theme: ColorScheme): ThemeOption => ({
     },
     surface: {
       background: "#020617", // very dark slate
+      foreground: "#E5E7EB", // light gray text (tailwind slate-200)
     },
   },
   typography: {
