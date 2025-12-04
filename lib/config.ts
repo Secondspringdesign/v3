@@ -16,19 +16,19 @@ export const STARTER_PROMPTS: StartScreenPrompt[] = [];
 // ---------- PER-AGENT GREETINGS ----------
 //
 // Agent keys come from the `?agent=` query parameter in the URL.
-// Current mapping you’re using:
+// Current mapping:
 //
-// strategy     -> Business main workflow
-// product      -> Product main workflow
-// marketing    -> Marketing main workflow
-// finance      -> Finance main workflow
-// reality_check-> Business task: Reality Check
-// swot         -> Business task: SWOT
-// legal_tax    -> Business task: Legal & Tax Checkup
+// business      -> Business main workflow
+// product       -> Product main workflow
+// marketing     -> Marketing main workflow
+// finance       -> Finance main workflow
+// reality_check -> Business task: Reality Check
+// swot          -> Business task: SWOT
+// legal_tax     -> Business task: Legal & Tax Checkup
 //
 
 export const GREETINGS: Record<string, string> = {
-  strategy:
+  business:
     "You’re not broken, the world is weird.\n\nThis is your workspace for planning a business that fits your life. Together we’ll shape your idea, turn it into a Lite Business Plan, do a reality check, and give you easy next steps.",
   product:
     "This is your Product workspace. We’ll clarify what you’re offering, who it’s for, and why it’s worth paying for—without turning it into a giant startup deck.",
@@ -53,8 +53,8 @@ export function getGreetingForAgent(agent?: string) {
 // ---------- PER-AGENT STARTER PROMPTS ----------
 
 export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
-  // Business main (strategy)
-  strategy: [
+  // Business main
+  business: [
     {
       label: "I just lost my job, what do I do?",
       prompt:
@@ -65,7 +65,7 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "I’ve never made a business before—where do we start?",
       prompt:
         "I’ve never started a business before. Walk me through the basics and help me shape a business idea that could actually work for me.",
-      icon: "sparkles",
+      icon: "sparkle",
     },
     {
       label: "Help me turn a fuzzy idea into something real",
@@ -153,7 +153,7 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
     },
   ],
 
-  // Business task 1 – Reality Check
+  // Business task – Reality Check
   reality_check: [
     {
       label: "Review my idea from scratch",
@@ -181,7 +181,7 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
     },
   ],
 
-  // Business task 2 – SWOT Analysis
+  // Business task – SWOT Analysis
   swot: [
     {
       label: "Give me a full SWOT for my idea",
@@ -209,7 +209,7 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
     },
   ],
 
-  // Business task 3 – Legal & Tax Checkup
+  // Business task – Legal & Tax Checkup
   legal_tax: [
     {
       label: "Scan my plan for legal and tax issues",
@@ -239,7 +239,6 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
 };
 
 // Helper to get starter prompts for a given agent.
-// We no longer prepend a generic global prompt; each agent has its own list.
 export function getStarterPromptsForAgent(agent?: string): StartScreenPrompt[] {
   if (!agent) return STARTER_PROMPTS;
   return STARTER_PROMPTS_BY_AGENT[agent] ?? STARTER_PROMPTS;
