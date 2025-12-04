@@ -192,8 +192,7 @@ async function verifyOutsetaToken(token: string): Promise<{ verified: boolean; p
   const sigCopy = new Uint8Array(sigBytes);
   const sigArrayBuffer = sigCopy.buffer;
   const data = new TextEncoder().encode(signingInput);
-  // rename to _headerAlg to avoid unused-variable lint error
-  const _headerAlg = typeof header?.alg === "string" ? header.alg : undefined;
+  // We intentionally ignore header.alg and only use header.kid (if present)
   const headerKid = typeof header?.kid === "string" ? header.kid : undefined;
 
   if (secret) {
