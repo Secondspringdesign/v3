@@ -1,11 +1,8 @@
-"use client";
-
-import type { ReactNode } from "react";
-
+// components/ErrorOverlay.tsx
 type ErrorOverlayProps = {
   error: string | null;
-  fallbackMessage?: ReactNode;
-  onRetry?: (() => void) | null;
+  fallbackMessage: string | null;
+  onRetry: (() => void) | null;
   retryLabel?: string;
 };
 
@@ -13,31 +10,30 @@ export function ErrorOverlay({
   error,
   fallbackMessage,
   onRetry,
-  retryLabel,
+  retryLabel = "Retry",
 }: ErrorOverlayProps) {
-  if (!error && !fallbackMessage) {
-    return null;
-  }
-
-  const content = error ?? fallbackMessage;
-
-  if (!content) {
-    return null;
-  }
+  if (!error && !fallbackMessage) return null;
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-10 flex h-full w-full flex-col justify-center rounded-[inherit] bg-white/85 p-6 text-center backdrop-blur dark:bg-slate-900/90">
-      <div className="pointer-events-auto mx-auto w-full max-w-md rounded-xl bg-white px-6 py-4 text-lg font-medium text-slate-700 dark:bg-transparent dark:text-slate-100">
-        <div>{content}</div>
-        {error && onRetry ? (
-          <button
-            type="button"
-            className="mt-4 inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-none transition hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
-            onClick={onRetry}
-          >
-            {retryLabel ?? "Restart chat"}
-          </button>
-        ) : null}
+    <div className="absolute inset-0 flex items-center justify-center bg-[#1B202C] text-[#EEEBE8]">
+      <div className="text-center space-y-3">
+        {error ? (
+          <>
+            <p className="text-sm opacity-80">{error}</p>
+            {onRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="mt-2 inline-flex items-center rounded-full bg-[#2A3344] px-4 py-1.5 text-sm font-medium text-[#EEEBE8]"
+              >
+                {retryLabel}
+              </button>
+            )}
+          </>
+        ) : (
+          // Loading state only
+          <p className="text-sm opacity-70">{fallbackMessage}</p>
+        )}
       </div>
     </div>
   );
