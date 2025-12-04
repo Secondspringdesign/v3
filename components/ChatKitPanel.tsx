@@ -1,4 +1,3 @@
-// components/ChatKitPanel.tsx
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -229,9 +228,17 @@ export function ChatKitPanel({
     ? new URLSearchParams(window.location.search).get("agent") ?? "strategy"
     : "strategy";
 
+  const themeConfig = getThemeConfig(theme);
+
+  if (isDev) {
+    // Helpful for verifying the actual theme ChatKit receives
+    // eslint-disable-next-line no-console
+    console.log("[ChatKitPanel] themeConfig", themeConfig);
+  }
+
   const chatkit = useChatKit({
     api: { getClientSecret },
-    theme: getThemeConfig(theme),
+    theme: themeConfig,
     startScreen: {
       greeting: getGreetingForAgent(agentFromUrl),
       prompts: getStarterPromptsForAgent(agentFromUrl) ?? STARTER_PROMPTS,
@@ -273,14 +280,14 @@ export function ChatKitPanel({
   const blockingError = errors.script ?? activeError;
 
   return (
-    <div className="relative flex h-[90vh] flex-col rounded-2xl overflow-hidden">
+    <div className="relative flex h-[90vh] w-full flex-col rounded-3xl overflow-hidden">
       <ChatKit
         key={widgetInstanceKey}
         control={chatkit.control}
         className={
           blockingError || isInitializingSession
             ? "pointer-events-none opacity-0"
-            : "block flex-1 w-full h-full"
+            : "block h-full w-full"
         }
       />
       <ErrorOverlay
