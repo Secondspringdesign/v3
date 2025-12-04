@@ -55,7 +55,6 @@ type OutsetaClientSurface = {
 function findOutsetaTokenOnClient(): string | null {
   if (!isBrowser) return null;
 
-  // typed access to window.Outseta
   const out =
     (window as unknown as { Outseta?: OutsetaClientSurface; outseta?: OutsetaClientSurface }).Outseta ??
     (window as unknown as { Outseta?: OutsetaClientSurface; outseta?: OutsetaClientSurface }).outseta ??
@@ -63,7 +62,6 @@ function findOutsetaTokenOnClient(): string | null {
 
   try {
     if (out) {
-      // Prefer getAccessToken or getJwtPayload if present
       if (typeof out.getAccessToken === "function") {
         const t = out.getAccessToken();
         if (t) return t;
@@ -78,11 +76,9 @@ function findOutsetaTokenOnClient(): string | null {
       if (out.auth && typeof out.auth.accessToken === "string") return out.auth.accessToken as string;
     }
   } catch (err) {
-    // Log and continue to fallback
     console.warn("Error while calling Outseta client API:", err);
   }
 
-  // LocalStorage fallback (your o_options uses tokenStorage:'local')
   try {
     const localKeys = ["outseta_access_token", "outseta_token", "outseta_auth_token"];
     for (const k of localKeys) {
@@ -90,7 +86,6 @@ function findOutsetaTokenOnClient(): string | null {
       if (v) return v;
     }
   } catch (err) {
-    // ignore localStorage access errors
     console.warn("Error while reading localStorage for Outseta token:", err);
   }
 
@@ -183,7 +178,6 @@ export function ChatKitPanel({
         const urlParams = new URLSearchParams(window.location.search);
         const agent = urlParams.get("agent") || "strategy";
 
-        // Get Outseta token (Outseta client API preferred, then localStorage fallback)
         const outsetaToken = findOutsetaTokenOnClient();
 
         const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -231,7 +225,6 @@ export function ChatKitPanel({
     [setErrorState],
   );
 
-  // Determine the current agent from the URL (fallback to "strategy")
   const agentFromUrl = isBrowser
     ? new URLSearchParams(window.location.search).get("agent") ?? "strategy"
     : "strategy";
@@ -239,7 +232,6 @@ export function ChatKitPanel({
   const chatkit = useChatKit({
     api: { getClientSecret },
     theme: getThemeConfig(theme),
-    // Use per-agent greeting and prompts:
     startScreen: {
       greeting: getGreetingForAgent(agentFromUrl),
       prompts: getStarterPromptsForAgent(agentFromUrl) ?? STARTER_PROMPTS,
@@ -281,7 +273,7 @@ export function ChatKitPanel({
   const blockingError = errors.script ?? activeError;
 
   return (
-    <div className="relative pb-8 flex h-[90vh] flex-col rounded-2xl overflow-hidden bg-white shadow-sm transition-colors dark:bg-slate-900">
+    <div className="relative flex h-[90vh] flex-col rounded-2xl overflow-hidden">
       <ChatKit
         key={widgetInstanceKey}
         control={chatkit.control}
@@ -310,7 +302,12 @@ function extractErrorDetail(
   if (!payload) return fallback;
   const error = payload.error;
   if (typeof error === "string") return error;
-  if (error && typeof error === "object" && "message" in error && typeof (error as { message?: unknown }).message === "string")
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof (error as { message?: unknown }).message === "string"
+  )
     return (error as { message: string }).message;
   const details = payload.details;
   if (typeof details === "string") return details;
