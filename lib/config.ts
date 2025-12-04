@@ -77,7 +77,7 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "Turn this into a Lite Business Plan",
       prompt:
         "Here’s my current idea. Help me turn it into a short Lite Business Plan with audience, problem, offer, delivery, pricing, and a first experiment.",
-      icon: "file-lines",
+      icon: "file-text",
     },
     {
       label: "I’m anxious about starting—keep it small and clear",
@@ -165,7 +165,7 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "Check the plan I already wrote",
       prompt:
         "I already have a simple business plan written. I’ll paste it—please review it and give me an honest reality check on feasibility and next steps.",
-      icon: "file-lines",
+      icon: "file-text",
     },
     {
       label: "Is this realistic for one person?",
