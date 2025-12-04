@@ -162,8 +162,9 @@ export function getStarterPromptsForAgent(agent?: string): StartScreenPrompt[] {
 
 // ---------- THEME CONFIG ----------
 //
-// Force fully dark surfaces to remove the light outer frame,
-// while keeping hue 222 / tint 5 and Inter 16px.
+// Use dark scheme, tinted grayscale (hue 222, tint 5),
+// and a dark surface background. We only set properties
+// that exist on your SurfaceColors type.
 //
 
 export const getThemeConfig = (theme: ColorScheme): ThemeOption => ({
@@ -177,10 +178,7 @@ export const getThemeConfig = (theme: ColorScheme): ThemeOption => ({
       shade: 0,
     },
     surface: {
-      // Outer background area of the widget
-      background: "#020617",
-      // Border color around the widget
-      border: "#020617",
+      background: "#020617", // very dark slate
     },
   },
   typography: {
