@@ -181,8 +181,8 @@ export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
       shade: 0,
     },
     surface: {
-      background: "#1B202C",  // your navy
-      foreground: "#EEEBE8",  // updated text color
+      background: "#1B202C", // your navy
+      foreground: "#F3F0EC", // slightly brighter for better readability
     },
   },
   typography: {
