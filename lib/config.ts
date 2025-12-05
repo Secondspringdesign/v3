@@ -16,7 +16,7 @@ export const STARTER_PROMPTS: StartScreenPrompt[] = [];
 
 export const GREETINGS: Record<string, string> = {
   business:
-    "You’re not broken, the world is weird. Paste or write your idea here and I’ll help you turn it into a simple plan.",
+    "You’re not broken, the world is weird right now.\n\nLet’s build you a real business.",
   product:
     "Describe what you’re thinking of selling and who it’s for. We’ll turn it into a clearer offer.",
   marketing:
@@ -24,11 +24,11 @@ export const GREETINGS: Record<string, string> = {
   finance:
     "Share your pricing and income hopes. We’ll do a quick math check to see if it holds together.",
   reality_check:
-    "Upload or paste your plan to get a reality check: what works, what’s shaky, and what to test first.",
+    "I’m your Reality Check.\n\nI’ll tell you straight: what works, what’s shaky, and exactly what to test first.",
   swot:
-    "Paste your current plan and I’ll map out a quick SWOT so you can see strengths, risks, and options.",
+    "I’ll map out a quick SWOT so you can see strengths, risks, and options.",
   legal_tax:
-    "Paste your plan and where you’re based. I’ll flag general legal and tax areas to ask a professional about. This is not legal or tax advice.",
+    "I’ll flag general legal and tax areas to ask a professional about. This is not legal or tax advice.",
 };
 
 export function getGreetingForAgent(agent?: string) {
@@ -45,15 +45,15 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
   // Business main
   business: [
     {
-      label: "I just lost my job—help me use this",
+      label: "I already have an idea → turn it into a full plan",
       prompt:
-        "I just lost my job. Here’s my background and constraints. Help me see what kind of business could make sense and what my first steps could be.",
+        "I already have a business idea. Please treat this as my starting point and help me turn it into a full, realistic business plan.",
       icon: "circle-question",
     },
     {
-      label: "Turn my idea into a Lite Business Plan",
+      label: "I have no idea yet → help me find a good one",
       prompt:
-        "Here’s my idea. Turn it into a short Lite Business Plan with audience, problem, offer, delivery, pricing, and next steps.",
+        "I don’t have a concrete business idea yet. Please help me find a realistic idea that fits my skills, money, and time, then outline the first steps.",
       icon: "circle-question",
     },
   ],
@@ -109,15 +109,9 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
   // Reality Check task
   reality_check: [
     {
-      label: "Review the plan I already wrote",
+      label: "Upload or paste your plan to get started",
       prompt:
-        "I’ll paste my plan from the builder. Review it and tell me what seems solid, what’s shaky, and what needs testing.",
-      icon: "circle-question",
-    },
-    {
-      label: "What should I test in the next 30 days?",
-      prompt:
-        "Here’s my current plan. Tell me the 3–5 most important things to test in the next 30 days before I commit more time and money.",
+        "I’m pasting or uploading my current plan. Please read it and act as a reality check: tell me what looks solid, what seems shaky, and exactly what to test first.",
       icon: "circle-question",
     },
   ],
