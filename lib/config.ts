@@ -162,22 +162,23 @@ export function getStarterPromptsForAgent(agent?: string): StartScreenPrompt[] {
 
 // ---------- THEME CONFIG ----------
 //
-// Dark theme, tinted grayscale effectively disabled (0/0/0).
+// Force LIGHT mode, grayscale hue 222 / tint 5 / shade 4.
 //
 
 export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
-  colorScheme: "dark",
+  colorScheme: "light",
   radius: "round",
   density: "normal",
   color: {
     grayscale: {
-      hue: 0,
-      tint: 0,
-      shade: 0,
+      hue: 222,
+      tint: 5,
+      shade: 4,
     },
     surface: {
-      background: "#1B202C", // your navy
-      foreground: "#F3F0EC", // slightly brighter for better readability
+      // These will be interpreted in the context of a light scheme
+      background: "#F3F0EC", // light background for the card
+      foreground: "#1B202C", // dark text
     },
   },
   typography: {
