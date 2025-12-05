@@ -162,7 +162,7 @@ export function getStarterPromptsForAgent(agent?: string): StartScreenPrompt[] {
 
 // ---------- THEME CONFIG ----------
 //
-// Dark theme with tinted grayscale matching Playground (hue 222, tint 9, shade -4).
+// Dark theme, tinted grayscale effectively disabled (0/0/0).
 //
 
 export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
@@ -171,9 +171,9 @@ export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
   density: "normal",
   color: {
     grayscale: {
-      hue: 222,
-      tint: 9,
-      shade: -4,
+      hue: 0,
+      tint: 0,
+      shade: 0,
     },
     surface: {
       background: "#1B202C", // your navy
