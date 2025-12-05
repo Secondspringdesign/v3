@@ -55,7 +55,7 @@ export function getGreetingForAgent(agent?: string) {
 
 // ---------- PER-AGENT STARTER PROMPTS ----------
 //
-// Different icon for the first Business prompt; others use circle-question.
+// Icons are all from the supported ChatKit icon set you listed.
 //
 
 export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
@@ -65,19 +65,19 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "I already have an idea → turn it into a full plan",
       prompt:
         "I already have a business idea. Please treat this as my starting point and help me turn it into a full, realistic business plan.",
-      icon: "lightbulb",
+      icon: "lightbulb", // idea spark
     },
     {
       label: "I have no idea yet → help me find a good one",
       prompt:
         "I don’t have a concrete business idea yet. Please help me find a realistic idea that fits my skills, money, and time, then outline the first steps.",
-      icon: "circle-question",
+      icon: "compass", // exploration / direction
     },
     {
       label: "You’re not broken, the world is weird right now.",
       prompt:
         "You’re not broken, the world is weird right now. Help me think about my situation and what kind of business could actually work for me.",
-      icon: "circle-question",
+      icon: "lifesaver", // supportive, grounding
     },
   ],
 
@@ -87,13 +87,13 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "Define my offer",
       prompt:
         "Here’s my rough idea. Help me turn it into a clear offer someone would understand and want to buy.",
-      icon: "circle-question",
+      icon: "square-text", // product description
     },
     {
       label: "Choose a simple niche",
       prompt:
         "Here’s what I’m thinking of selling. Help me pick a specific type of customer to focus on first.",
-      icon: "circle-question",
+      icon: "map-pin", // targeted niche
     },
   ],
 
@@ -103,13 +103,13 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "Who am I really talking to?",
       prompt:
         "Here’s my business idea. Help me define a clear target customer I can picture and talk to directly.",
-      icon: "circle-question",
+      icon: "profile", // customer focus
     },
     {
       label: "Write a simple pitch for me",
       prompt:
         "Here’s my idea and who I think it’s for. Write a one‑sentence pitch I can use on my site or in an email.",
-      icon: "circle-question",
+      icon: "mail", // messaging
     },
   ],
 
@@ -119,13 +119,13 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "Sanity‑check my pricing",
       prompt:
         "Here’s what I’m planning to sell and what I was thinking of charging. Help me sanity‑check this pricing.",
-      icon: "circle-question",
+      icon: "analytics", // numbers / checking
     },
     {
       label: "Could this actually cover my bills?",
       prompt:
         "Here’s my idea, rough pricing, and what I’d like to earn per month. Help me see if the math is realistic.",
-      icon: "circle-question",
+      icon: "chart", // projections
     },
   ],
 
@@ -135,7 +135,7 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "Upload or paste your plan to get started",
       prompt:
         "I’m pasting or uploading my current plan. Please read it and act as a reality check: tell me what looks solid, what seems shaky, and exactly what to test first.",
-      icon: "circle-question",
+      icon: "check-circle", // validation / check
     },
   ],
 
@@ -145,13 +145,13 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "Give me a quick SWOT for this plan",
       prompt:
         "Here’s my current plan. Create a brief SWOT analysis and highlight what to lean into and what to watch out for.",
-      icon: "circle-question",
+      icon: "compass", // strategic directions
     },
     {
       label: "I’m not sure where to take this next",
       prompt:
         "Here’s my plan and the main directions I’m considering next. Compare them using a SWOT so I can see which looks better for the next year.",
-      icon: "circle-question",
+      icon: "analytics", // comparison / analysis
     },
   ],
 
@@ -161,13 +161,13 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "Scan my plan for legal and tax areas",
       prompt:
         "Here’s my plan and where I’m based. Highlight the main legal and tax areas I should pay attention to, in simple language. I know this isn’t legal or tax advice.",
-      icon: "circle-question",
+      icon: "bug", // flagging issues / risks
     },
     {
       label: "Help me prepare for a pro",
       prompt:
         "Here’s my plan and where I’m based. Turn this into a short list of questions I can bring to a lawyer or accountant.",
-      icon: "circle-question",
+      icon: "notebook-pencil", // prep notes
     },
   ],
 };
