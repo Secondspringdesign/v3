@@ -13,30 +13,35 @@ export const GREETING =
 export const STARTER_PROMPTS: StartScreenPrompt[] = [];
 
 // ---------- PER-AGENT GREETINGS ----------
+//
+// NOTE: ChatKit is collapsing explicit \n, so these are written to
+// naturally wrap into two lines within the current container width.
+//
 
 export const GREETINGS: Record<string, string> = {
   // Business main
   business:
-    "You’re not broken, the world is weird right now.\nLet’s build you a real business.",
+    "You’re not broken, the world is weird right now. Let’s build you a real business.",
 
   // Product pillar
   product:
-    "Describe what you’re thinking of selling and who it’s for. We’ll turn it into a clearer offer.",
+    "You’re not broken, the world is weird right now. Let’s shape a clear, simple offer.",
 
   // Marketing pillar
   marketing:
-    "Tell me who you want to reach. We’ll shape a simple message and a couple of realistic channels.",
+    "You’re not broken, the world is weird right now. Let’s find the right people to talk to.",
 
   // Finance pillar
   finance:
-    "Share your pricing and income hopes. We’ll do a quick math check to see if it holds together.",
+    "You’re not broken, the world is weird right now. Let’s see if your numbers really add up.",
 
   // Reality Check task
   reality_check:
-    "I’m your Reality Check.\n\nI’ll tell you straight: what works, what’s shaky, and exactly what to test first.",
+    "I’m your Reality Check. I’ll tell you straight what works, what’s shaky, and what to test first.",
 
   // SWOT task
-  swot: "I’ll map out a quick SWOT so you can see strengths, risks, and options.",
+  swot:
+    "I’ll map out a quick SWOT so you can see strengths, risks, and options.",
 
   // Legal & Tax Checkup task
   legal_tax:
