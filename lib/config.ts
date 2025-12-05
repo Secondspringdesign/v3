@@ -55,7 +55,7 @@ export function getGreetingForAgent(agent?: string) {
 
 // ---------- PER-AGENT STARTER PROMPTS ----------
 //
-// Different icons for Business prompts; others use circle-question.
+// Different icon for the first Business prompt; others use circle-question.
 //
 
 export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
@@ -77,7 +77,7 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "You’re not broken, the world is weird right now.",
       prompt:
         "You’re not broken, the world is weird right now. Help me think about my situation and what kind of business could actually work for me.",
-      icon: "circle-info",
+      icon: "circle-question",
     },
   ],
 
