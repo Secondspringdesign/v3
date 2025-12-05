@@ -32,3 +32,16 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
 }
+
+/* --- ChatKit composer text visibility tweaks --- */
+/* Scope to our ChatKit instance so we don't affect anything else */
+.second-spring-chat openai-chat-composer::part(input),
+.second-spring-chat openai-chat-composer::part(textarea) {
+  /* User's typed text in the composer */
+  color: #f3f0ec !important; /* near-white, matches surface.foreground */
+}
+
+/* Placeholder text ("Ask anything…") */
+.second-spring-chat openai-chat-composer::part(placeholder) {
+  color: rgba(243, 240, 236, 0.7) !important;
+}
