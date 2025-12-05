@@ -55,7 +55,7 @@ export function getGreetingForAgent(agent?: string) {
 
 // ---------- PER-AGENT STARTER PROMPTS ----------
 //
-// We use different icons for each Business prompt to give them distinct roles.
+// Different icons for Business prompts; others use circle-question.
 //
 
 export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
@@ -65,7 +65,7 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "I already have an idea → turn it into a full plan",
       prompt:
         "I already have a business idea. Please treat this as my starting point and help me turn it into a full, realistic business plan.",
-      icon: "sparkles",
+      icon: "lightbulb",
     },
     {
       label: "I have no idea yet → help me find a good one",
@@ -77,7 +77,7 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "You’re not broken, the world is weird right now.",
       prompt:
         "You’re not broken, the world is weird right now. Help me think about my situation and what kind of business could actually work for me.",
-      icon: "info-circle",
+      icon: "circle-info",
     },
   ],
 
