@@ -162,12 +162,7 @@ export function getStarterPromptsForAgent(agent?: string): StartScreenPrompt[] {
 
 // ---------- THEME CONFIG ----------
 //
-// Match Playground + your dark surface:
-// - colorScheme: 'dark'
-// - radius: 'round'
-// - density: 'normal'
-// - grayscale hue 222 / tint 5
-// - Inter, 16px
+// Dark theme + custom composer styling.
 //
 
 export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
@@ -181,8 +176,14 @@ export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
       shade: 0,
     },
     surface: {
-      background: "#1B202C", // your navy
-      foreground: "#F3F0EC", // slightly brighter for better readability
+      background: "#1B202C", // overall page background
+      foreground: "#F3F0EC", // main text color (greeting, body, etc.)
+    },
+    // Darken the composer background a bit so default gray text is readable
+    accent: {
+      // used for primary surfaces like composer pill, buttons, etc.
+      background: "#E4DFD8", // slightly darker than pure white
+      foreground: "#1B202C", // dark text when accent is used directly
     },
   },
   typography: {
@@ -208,5 +209,12 @@ export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
         style: "normal",
       },
     ],
+  },
+  // Optional: nudge composer font weight/size slightly up
+  components: {
+    composer: {
+      fontSize: 15,
+      fontWeight: 500,
+    },
   },
 });
