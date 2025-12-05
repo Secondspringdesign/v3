@@ -287,13 +287,13 @@ export function ChatKitPanel({
         className={
           blockingError || isInitializingSession
             ? "pointer-events-none opacity-0"
-            : "block h-full w-full"
+            : "second-spring-chat block h-full w-full"
         }
       />
       <ErrorOverlay
         error={blockingError}
         fallbackMessage={
-          blockingError || !isInitializingSession ? null : "Loading assistant session..."
+          blockingError || !isInitializingSession ? null : "Loading your session..."
         }
         onRetry={blockingError && errors.retryable ? handleResetChat : null}
         retryLabel="Restart chat"
