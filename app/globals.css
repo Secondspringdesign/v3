@@ -34,24 +34,21 @@ body {
 }
 
 /* --- ChatKit composer visibility tweaks --- */
-/* We style inside the openai-chatkit shadow DOM via ::part(root) */
-
-/* Scope everything to our ChatKit instance */
-openai-chatkit.second-spring-chat::part(root) textarea#chatkit-composer-input,
-openai-chatkit.second-spring-chat::part(root) textarea[id^="chatkit-composer-input-"] {
-  /* User's typed text in the composer */
-  color: #f3f0ec !important; /* near-white, matches surface.foreground */
+/* Target the composer textarea by its unique id inside ChatKit. */
+textarea#chatkit-composer-input {
+  color: #f3f0ec !important; /* near-white text */
 }
 
-/* Placeholder text ("Ask anything…") */
-openai-chatkit.second-spring-chat::part(root) textarea#chatkit-composer-input::placeholder,
-openai-chatkit.second-spring-chat::part(root)
-  textarea[id^="chatkit-composer-input-"]::placeholder {
+/* Placeholder text ("Ask anything…") in the composer */
+textarea#chatkit-composer-input::placeholder {
   color: rgba(243, 240, 236, 0.7) !important;
 }
 
-/* Brighten the + button (attachment trigger) inside the composer bar */
-openai-chatkit.second-spring-chat::part(root) button[data-chatkit-attachment-trigger] svg {
+/* Brighten the + button (attachment trigger) immediately to the left of the textarea */
+textarea#chatkit-composer-input
+  ~ div
+  button[type="button"]
+  svg {
   fill: #f3f0ec !important;
   opacity: 0.9 !important;
 }
