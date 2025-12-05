@@ -14,26 +14,26 @@ export const STARTER_PROMPTS: StartScreenPrompt[] = [];
 
 // ---------- PER-AGENT GREETINGS ----------
 //
-// NOTE: ChatKit is collapsing explicit \n, so these are written to
-// naturally wrap into two lines within the current container width.
+// ChatKit treats greetings as plain text (no hard line breaks).
+// We keep them compact and let the starter prompts carry more nuance.
 //
 
 export const GREETINGS: Record<string, string> = {
   // Business main
   business:
-    "You’re not broken, the world is weird right now. Let’s build you a real business.",
+    "Let’s build you a real business, one that fits your life right now.",
 
   // Product pillar
   product:
-    "You’re not broken, the world is weird right now. Let’s shape a clear, simple offer.",
+    "Describe what you’re thinking of selling and who it’s for. We’ll turn it into a clearer offer.",
 
   // Marketing pillar
   marketing:
-    "You’re not broken, the world is weird right now. Let’s find the right people to talk to.",
+    "Tell me who you want to reach. We’ll shape a simple message and a couple of realistic channels.",
 
   // Finance pillar
   finance:
-    "You’re not broken, the world is weird right now. Let’s see if your numbers really add up.",
+    "Share your pricing and income hopes. We’ll do a quick math check to see if it holds together.",
 
   // Reality Check task
   reality_check:
@@ -55,7 +55,7 @@ export function getGreetingForAgent(agent?: string) {
 
 // ---------- PER-AGENT STARTER PROMPTS ----------
 //
-// Only using the known-safe icon "circle-question" to avoid type errors.
+// We use different icons for each Business prompt to give them distinct roles.
 //
 
 export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
@@ -65,13 +65,19 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       label: "I already have an idea → turn it into a full plan",
       prompt:
         "I already have a business idea. Please treat this as my starting point and help me turn it into a full, realistic business plan.",
-      icon: "circle-question",
+      icon: "sparkles",
     },
     {
       label: "I have no idea yet → help me find a good one",
       prompt:
         "I don’t have a concrete business idea yet. Please help me find a realistic idea that fits my skills, money, and time, then outline the first steps.",
       icon: "circle-question",
+    },
+    {
+      label: "You’re not broken, the world is weird right now.",
+      prompt:
+        "You’re not broken, the world is weird right now. Help me think about my situation and what kind of business could actually work for me.",
+      icon: "info-circle",
     },
   ],
 
