@@ -13,12 +13,18 @@ export default function ChatPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-end bg-[#1B202C] text-slate-100">
       <div className="w-full min-w-[600px] p-4">
-        <ChatKitPanel
-          theme={scheme}
-          onWidgetAction={handleWidgetAction}
-          onResponseEnd={handleResponseEnd}
-          onThemeRequest={setScheme}
-        />
+        <div className="space-y-2">
+          <ChatKitPanel
+            theme={scheme}
+            onWidgetAction={handleWidgetAction}
+            onResponseEnd={handleResponseEnd}
+            onThemeRequest={setScheme}
+          />
+          <p className="text-[11px] leading-tight text-slate-400">
+            This workspace uses AI and can make mistakes. Please double‑check important details
+            before acting on them.
+          </p>
+        </div>
       </div>
     </main>
   );
