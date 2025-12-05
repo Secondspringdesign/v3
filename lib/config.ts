@@ -17,7 +17,7 @@ export const STARTER_PROMPTS: StartScreenPrompt[] = [];
 export const GREETINGS: Record<string, string> = {
   // Business main
   business:
-    "You’re not broken, the world is weird right now.\n\nLet’s build you a real business.",
+    "You’re not broken, the world is weird right now.\nLet’s build you a real business.",
 
   // Product pillar
   product:
