@@ -15,18 +15,30 @@ export const STARTER_PROMPTS: StartScreenPrompt[] = [];
 // ---------- PER-AGENT GREETINGS ----------
 
 export const GREETINGS: Record<string, string> = {
+  // Business main
   business:
     "You’re not broken, the world is weird right now.\n\nLet’s build you a real business.",
+
+  // Product pillar
   product:
     "Describe what you’re thinking of selling and who it’s for. We’ll turn it into a clearer offer.",
+
+  // Marketing pillar
   marketing:
     "Tell me who you want to reach. We’ll shape a simple message and a couple of realistic channels.",
+
+  // Finance pillar
   finance:
     "Share your pricing and income hopes. We’ll do a quick math check to see if it holds together.",
+
+  // Reality Check task
   reality_check:
     "I’m your Reality Check.\n\nI’ll tell you straight: what works, what’s shaky, and exactly what to test first.",
-  swot:
-    "I’ll map out a quick SWOT so you can see strengths, risks, and options.",
+
+  // SWOT task
+  swot: "I’ll map out a quick SWOT so you can see strengths, risks, and options.",
+
+  // Legal & Tax Checkup task
   legal_tax:
     "I’ll flag general legal and tax areas to ask a professional about. This is not legal or tax advice.",
 };
