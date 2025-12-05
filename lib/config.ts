@@ -162,10 +162,10 @@ export function getStarterPromptsForAgent(agent?: string): StartScreenPrompt[] {
 
 // ---------- THEME CONFIG ----------
 //
-// Dark theme + slightly brighter foreground + composer typography.
+// Dark theme with slightly brighter foreground.
 //
 
-export const getThemeConfig = (theme: ColorScheme): ThemeOption => ({
+export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
   colorScheme: "dark",
   radius: "round",
   density: "normal",
@@ -203,12 +203,5 @@ export const getThemeConfig = (theme: ColorScheme): ThemeOption => ({
         style: "normal",
       },
     ],
-  },
-  components: {
-    composer: {
-      // modest bump to make input text a bit clearer
-      fontSize: 15,
-      fontWeight: 500,
-    },
   },
 });
