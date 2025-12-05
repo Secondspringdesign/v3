@@ -20,9 +20,6 @@ export default function ChatPage() {
             onResponseEnd={handleResponseEnd}
             onThemeRequest={setScheme}
           />
-          <p className="text-[11px] leading-tight text-slate-400 text-center">
-            AI can make mistakes
-          </p>
         </div>
       </div>
     </main>
