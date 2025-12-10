@@ -68,12 +68,14 @@ function findOutsetaTokenOnClient(): string | null {
       if (typeof out.getAccessToken === "function") {
         const tokenOrNull = out.getAccessToken();
         if (typeof tokenOrNull === "string" && tokenOrNull) {
+          if (isDev) console.log("[ChatKitPanel] Outseta token from getAccessToken()");
           return tokenOrNull;
         }
       }
 
       // 2) Fallback: cached auth.accessToken
       if (out.auth && typeof out.auth.accessToken === "string" && out.auth.accessToken) {
+        if (isDev) console.log("[ChatKitPanel] Outseta token from auth.accessToken");
         return out.auth.accessToken;
       }
     }
@@ -86,12 +88,16 @@ function findOutsetaTokenOnClient(): string | null {
     const localKeys = ["outseta_access_token", "outseta_token", "outseta_auth_token"];
     for (const k of localKeys) {
       const v = window.localStorage.getItem(k);
-      if (v) return v;
+      if (v) {
+        if (isDev) console.log("[ChatKitPanel] Outseta token from localStorage key:", k);
+        return v;
+      }
     }
   } catch (err) {
     console.warn("Error while reading localStorage for Outseta token:", err);
   }
 
+  if (isDev) console.warn("[ChatKitPanel] No Outseta token found on client");
   return null;
 }
 
@@ -183,7 +189,9 @@ export function ChatKitPanel({
         const agent = urlParams.get("agent") || "business";
 
         // Get the Outseta access token synchronously
+        if (isDev) console.log("[ChatKitPanel] Looking for Outseta access token…");
         const outsetaToken = findOutsetaTokenOnClient();
+        if (isDev) console.log("[ChatKitPanel] Outseta token found:", !!outsetaToken);
 
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (outsetaToken) {
