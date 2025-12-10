@@ -3,18 +3,21 @@ import { NextRequest, NextResponse } from "next/server";
 /**
  * Outseta-aware create-session route:
  * - Reads JWT from Authorization: Bearer <token> (or outseta_access_token cookie)
- * - Verifies token via Outseta JWKS
- * - Uses `sub` as universal userId
+ * - Verifies token via Outseta JWKS (RS256 only)
+ * - Checks exp/nbf/iss with small skew
+ * - Uses `sub` (or fallback account id) as universal userId
  * - Returns 401 with a clear error if token is missing/invalid
  */
 
 const OUTSETA_JWKS_URL = "https://second-spring-design.outseta.com/.well-known/jwks";
+const OUTSETA_ISSUER = "https://second-spring-design.outseta.com";
 const OUTSETA_COOKIE_NAME = "outseta_access_token";
 const SESSION_COOKIE_NAME = "chatkit_session_id";
 
 type VerifiedToken = {
   verified: boolean;
-  payload?: object;
+  payload?: Record<string, unknown>;
+  error?: string;
 };
 
 type JwksCache = {
@@ -23,6 +26,7 @@ type JwksCache = {
 };
 
 const JWKS_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const CLOCK_SKEW_SECONDS = 60; // allow 60s skew for mobile/desktop clock drift
 let jwksCache: JwksCache | null = null;
 
 /* ---------- Helpers ---------- */
@@ -57,9 +61,10 @@ function getCookieValue(cookieHeader: string | null, name: string): string | nul
 
 function serializeSessionCookie(userId: string): string {
   const maxAgeSeconds = 60 * 60 * 24 * 365; // 1 year
+  const secure = process.env.NODE_ENV === "production" ? "Secure; " : "";
   return `${SESSION_COOKIE_NAME}=${encodeURIComponent(
     userId,
-  )}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}`;
+  )}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}; ${secure}Priority=High`;
 }
 
 function extractTokenFromHeader(headerValue: string | null): string | null {
@@ -100,6 +105,8 @@ async function verifyOutsetaToken(token: string): Promise<VerifiedToken> {
     const header = JSON.parse(headerJson) as { kid?: string; alg?: string; typ?: string };
     const payload = JSON.parse(payloadJson) as Record<string, unknown>;
 
+    if (header.alg && header.alg !== "RS256") throw new Error(`Unexpected alg: ${header.alg}`);
+
     const sigArray = base64UrlToUint8Array(signatureB64);
     const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
 
@@ -121,10 +128,24 @@ async function verifyOutsetaToken(token: string): Promise<VerifiedToken> {
       data as unknown as BufferSource,
     );
 
-    return { verified: ok, payload };
+    if (!ok) throw new Error("Signature verification failed");
+
+    const now = Math.floor(Date.now() / 1000);
+    const exp = payload.exp as number | undefined;
+    const nbf = payload.nbf as number | undefined;
+    const iss = payload.iss as string | undefined;
+
+    if (typeof exp === "number" && exp < now - CLOCK_SKEW_SECONDS)
+      throw new Error("Token expired");
+    if (typeof nbf === "number" && nbf > now + CLOCK_SKEW_SECONDS)
+      throw new Error("Token not yet valid");
+    if (iss && iss !== OUTSETA_ISSUER)
+      throw new Error(`Unexpected issuer: ${iss}`);
+
+    return { verified: true, payload };
   } catch (err) {
     console.warn("verifyOutsetaToken error:", err);
-    return { verified: false };
+    return { verified: false, error: err instanceof Error ? err.message : "verify failed" };
   }
 }
 
@@ -135,7 +156,6 @@ async function resolveUserId(request: Request): Promise<{
   sessionCookie: string | null;
   error?: string;
 }> {
-  // Read token from Authorization header + optional cookie
   const headerToken = extractTokenFromHeader(request.headers.get("authorization"));
   const cookieToken = getCookieValue(request.headers.get("cookie"), OUTSETA_COOKIE_NAME);
   const token = headerToken || cookieToken;
@@ -148,12 +168,11 @@ async function resolveUserId(request: Request): Promise<{
   try {
     const verified = await verifyOutsetaToken(token);
     if (!verified.verified || !verified.payload) {
-      console.warn("[create-session] Outseta token failed verification.");
+      console.warn("[create-session] Outseta token failed verification.", verified.error);
       return { userId: null, sessionCookie: null, error: "Invalid access token" };
     }
 
-    const payload = verified.payload as Record<string, unknown>;
-
+    const payload = verified.payload;
     const userIdFromToken =
       (payload["sub"] as string) ||
       (payload["user_id"] as string) ||
@@ -177,10 +196,7 @@ async function resolveUserId(request: Request): Promise<{
       };
     }
 
-    console.warn(
-      "[create-session] Outseta token verified but user id (sub) not found in payload",
-      payload,
-    );
+    console.warn("[create-session] Outseta token verified but user id not found in payload", payload);
 
     if (accountIdFromToken) {
       console.log("[create-session] Falling back to account id as userId:", accountIdFromToken);
@@ -204,9 +220,7 @@ export async function POST(request: NextRequest) {
 
   if (!userId) {
     return NextResponse.json(
-      {
-        error: error ?? "Unable to resolve user from access token",
-      },
+      { error: error ?? "Unable to resolve user from access token" },
       { status: 401 },
     );
   }
@@ -214,7 +228,6 @@ export async function POST(request: NextRequest) {
   // TODO: plug in your existing ChatKit / Agent Builder session creation logic here.
   // For now we just echo userId so we can debug identity.
   const responseBody = { userId };
-
   const res = NextResponse.json(responseBody);
 
   if (sessionCookie) {
