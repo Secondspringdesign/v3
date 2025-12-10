@@ -91,6 +91,16 @@ function findOutsetaTokenOnClient(): string | null {
   return null;
 }
 
+// Turn the structured error state into a single string for ErrorOverlay
+function formatErrorForOverlay(errors: ErrorState): string {
+  const messages: string[] = [];
+  if (errors.script) messages.push(errors.script);
+  if (errors.session) messages.push(errors.session);
+  if (errors.integration) messages.push(errors.integration);
+  if (messages.length === 0) return "Something went wrong.";
+  return messages.join(" • ");
+}
+
 export function ChatKitPanel({
   theme,
   onWidgetAction,
@@ -114,13 +124,12 @@ export function ChatKitPanel({
   const starterPrompts =
     isMobile === true ? [] : getStarterPromptsForAgent(agent) ?? STARTER_PROMPTS;
 
-  // You can still inspect Outseta token on the client if you want (debug/logging),
-  // but ChatKit auth should be handled in your /api/create-session endpoint.
+  // Optional: still detect Outseta token on the client for future use
   useEffect(() => {
     const token = findOutsetaTokenOnClient();
     if (token) {
-      // no-op here; your API route should already use Outseta server-side
-      // console.debug("Found Outseta token on client:", !!token);
+      // Token is available if you want to use it in your session endpoint.
+      // No client-side wiring into ChatKit here.
     }
   }, []);
 
@@ -145,11 +154,13 @@ export function ChatKitPanel({
   const hasAnyError =
     errors.script !== null || errors.session !== null || errors.integration !== null;
 
+  const overlayErrorText = formatErrorForOverlay(errors);
+
   return (
     <>
       {hasAnyError && (
         <ErrorOverlay
-          error={errors}
+          error={overlayErrorText}
           onRetry={() => setErrors(createInitialErrors())}
         />
       )}
