@@ -12,8 +12,8 @@ export default function ChatPage() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-end bg-[#1B202C] text-slate-100">
-      <div className="w-full max-w-3xl p-4">
-        <div className="space-y-2">
+      <div className="w-full max-w-3xl p-4 mx-auto">
+        <div className="space-y-2 chat-shell">
           <ChatKitPanel
             theme={scheme}
             onWidgetAction={handleWidgetAction}
