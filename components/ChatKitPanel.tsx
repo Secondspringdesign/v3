@@ -92,6 +92,20 @@ function findOutsetaTokenOnClient(): string | null {
   return null;
 }
 
+// Convert ErrorState into a single string message for ErrorOverlay
+function formatError(errors: ErrorState): string {
+  const parts: string[] = [];
+  if (errors.script) parts.push(errors.script);
+  if (errors.session) parts.push(errors.session);
+  if (errors.integration) parts.push(errors.integration);
+
+  if (parts.length === 0) {
+    return "Something went wrong.";
+  }
+
+  return parts.join(" • ");
+}
+
 export function ChatKitPanel({
   theme,
   onWidgetAction,
@@ -115,7 +129,7 @@ export function ChatKitPanel({
   const starterPrompts =
     isMobile === true ? [] : getStarterPromptsForAgent(agent) ?? STARTER_PROMPTS;
 
-  // Optional: still detect Outseta token on the client (for logging / future use).
+  // Optional: Outseta token presence (debug/logging only)
   useEffect(() => {
     const token = findOutsetaTokenOnClient();
     if (isDev) {
@@ -145,11 +159,13 @@ export function ChatKitPanel({
   const hasAnyError =
     errors.script !== null || errors.session !== null || errors.integration !== null;
 
+  const overlayErrorText = formatError(errors);
+
   return (
     <>
       {hasAnyError && (
         <ErrorOverlay
-          error={errors}
+          error={overlayErrorText} // string, matches ErrorOverlayProps
           onRetry={() => setErrors(createInitialErrors())}
         />
       )}
