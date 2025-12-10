@@ -1,18 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-/**
- * This route:
- * - Verifies the Outseta JWT from the Authorization header
- * - Resolves a stable userId from the JWT (preferring `sub`)
- * - Returns 401 if we cannot resolve a valid Outseta user
- *
- * Plug `userId` into your existing ChatKit / Agent Builder session creation logic.
- */
-
 /* ---------- Constants ---------- */
 
 const OUTSETA_JWKS_URL = "https://second-spring-design.outseta.com/.well-known/jwks";
-const OUTSETA_COOKIE_NAME = "outseta_access_token"; // optional, in case Outseta sets a cookie
+const OUTSETA_COOKIE_NAME = "outseta_access_token"; // optional
 const SESSION_COOKIE_NAME = "chatkit_session_id";
 
 type VerifiedToken = {
@@ -138,7 +129,7 @@ async function resolveUserId(request: Request): Promise<{
   sessionCookie: string | null;
   error?: string;
 }> {
-  // IMPORTANT: read token from Authorization, not x-outseta-access-token
+  // Read token from Authorization header
   const headerToken = extractTokenFromHeader(request.headers.get("authorization"));
   const cookieToken = getCookieValue(request.headers.get("cookie"), OUTSETA_COOKIE_NAME);
 
@@ -218,7 +209,7 @@ export async function POST(request: NextRequest) {
   // TODO: plug in your existing ChatKit / Agent Builder session creation logic here.
   // Use `userId` as the stable identifier for history.
 
-  const responseBody = { userId }; // Replace with your actual response (client_secret, etc.)
+  const responseBody = { userId }; // Replace with your real response (client_secret, etc.)
   const res = NextResponse.json(responseBody);
 
   if (sessionCookie) {
