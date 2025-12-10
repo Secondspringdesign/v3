@@ -52,9 +52,15 @@ textarea#chatkit-composer-input
   fill: #f3f0ec !important;
   opacity: 0.9 !important;
 }
-/* Mobile-only tweaks for ChatKit starter prompts */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Your existing global styles can go here... */
+
+/* Mobile-only: let ChatKit starter prompts wrap instead of truncating */
 @media (max-width: 640px) {
-  .chat-shell [class*="start-screen"] [class*="prompt"] {
+  .chat-shell .truncate {
     white-space: normal !important;
     overflow: visible !important;
     text-overflow: clip !important;
