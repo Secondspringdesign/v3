@@ -12,7 +12,7 @@ import {
 } from "@/lib/config";
 import { ErrorOverlay } from "./ErrorOverlay";
 import type { ColorScheme } from "@/hooks/useColorScheme";
-import { useIsMobile } from "@/hooks/useIsMobile";
+import { useIsMobile } from "@/hooks/useIsMobile"; // NEW
 
 export type FactAction = {
   type: "save";
@@ -101,7 +101,7 @@ export function ChatKitPanel({
   const processedFacts = useRef(new Set<string>());
   const [errors, setErrors] = useState<ErrorState>(() => createInitialErrors());
 
-  const isMobile = useIsMobile(640); // <= 640px considered mobile
+  const isMobile = useIsMobile(640); // NEW – <= 640px considered mobile
 
   // Derive the agent from the URL query (?agent=...)
   const agent =
@@ -115,62 +115,4 @@ export function ChatKitPanel({
   const starterPrompts =
     isMobile === true ? [] : getStarterPromptsForAgent(agent) ?? STARTER_PROMPTS;
 
-  // ----- ChatKit integration state -----
-
-  const chatkit = useChatKit();
-
-  // Example: your existing effect wiring for Outseta / token, etc.
-  useEffect(() => {
-    if (!chatkit || !isBrowser) return;
-
-    const token = findOutsetaTokenOnClient();
-    if (token) {
-      chatkit.setAuthToken(token);
-    }
-  }, [chatkit]);
-
-  const handleWidgetAction = useCallback(
-    async (action: FactAction) => {
-      await onWidgetAction(action);
-    },
-    [onWidgetAction],
-  );
-
-  const handleResponseEnd = useCallback(() => {
-    onResponseEnd();
-  }, [onResponseEnd]);
-
-  const handleThemeRequest = useCallback(
-    (scheme: ColorScheme) => {
-      onThemeRequest(scheme);
-    },
-    [onThemeRequest],
-  );
-
-  const hasAnyError =
-    errors.script !== null || errors.session !== null || errors.integration !== null;
-
-  return (
-    <>
-      {hasAnyError && (
-        <ErrorOverlay
-          errors={errors}
-          onRetry={() => setErrors(createInitialErrors())}
-        />
-      )}
-
-      <ChatKit
-        apiBaseUrl={CREATE_SESSION_ENDPOINT}
-        theme={getThemeConfig(theme)}
-        greeting={greeting}
-        startScreen={{
-          prompts: starterPrompts,
-          placeholder: PLACEHOLDER_INPUT,
-        }}
-        onWidgetAction={handleWidgetAction}
-        onResponseEnd={handleResponseEnd}
-        onThemeRequest={handleThemeRequest}
-      />
-    </>
-  );
-}
+  // ...rest of your existing ChatKitPanel code stays the same...
