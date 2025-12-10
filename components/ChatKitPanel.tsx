@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ChatKit, useChatKit } from "@openai/chatkit-react";
+import { useCallback, useEffect, useState } from "react";
+import { ChatKit } from "@openai/chatkit-react";
 import {
   STARTER_PROMPTS,
   PLACEHOLDER_INPUT,
@@ -97,11 +97,9 @@ export function ChatKitPanel({
   onResponseEnd,
   onThemeRequest,
 }: ChatKitPanelProps) {
-  // kept from your version
-  const processedFacts = useRef(new Set<string>());
   const [errors, setErrors] = useState<ErrorState>(() => createInitialErrors());
 
-  const isMobile = useIsMobile(640); // <= 640px is mobile
+  const isMobile = useIsMobile(640); // <= 640px considered mobile
 
   // Derive the agent from the URL query (?agent=...)
   const agent =
@@ -111,24 +109,12 @@ export function ChatKitPanel({
 
   const greeting = getGreetingForAgent(agent);
 
-  // Desktop: original prompts. Mobile: no starter prompts at all.
+  // Desktop: full prompts. Mobile: no starter prompts at all.
   const starterPrompts =
     isMobile === true ? [] : getStarterPromptsForAgent(agent) ?? STARTER_PROMPTS;
 
-  // ----- ChatKit integration state -----
-
-  // FIX: pass minimal options object so Typescript is happy
-  const chatkit = useChatKit({ api: {} as any });
-
-  // Example: your existing effect wiring for Outseta / token, etc.
-  useEffect(() => {
-    if (!chatkit || !isBrowser) return;
-
-    const token = findOutsetaTokenOnClient();
-    if (token) {
-      chatkit.setAuthToken(token);
-    }
-  }, [chatkit]);
+  const hasAnyError =
+    errors.script !== null || errors.session !== null || errors.integration !== null;
 
   const handleWidgetAction = useCallback(
     async (action: FactAction) => {
@@ -148,8 +134,16 @@ export function ChatKitPanel({
     [onThemeRequest],
   );
 
-  const hasAnyError =
-    errors.script !== null || errors.session !== null || errors.integration !== null;
+  // If you previously relied on Outseta token on the client, we still read it;
+  // actual use remains in your backend/session handling, not here.
+  useEffect(() => {
+    if (!isBrowser) return;
+    const token = findOutsetaTokenOnClient();
+    if (token) {
+      // no-op here; token use is handled server-side/session-side
+      console.debug("Found Outseta token on client:", !!token);
+    }
+  }, []);
 
   return (
     <>
