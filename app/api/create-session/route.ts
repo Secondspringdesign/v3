@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
 /**
- * This file focuses ONLY on:
- * - Verifying the Outseta JWT from the Authorization header
- * - Resolving a stable userId from the JWT (preferring `sub`)
- * - Returning 401 if we cannot resolve a valid Outseta user
+ * This route:
+ * - Verifies the Outseta JWT from the Authorization header
+ * - Resolves a stable userId from the JWT (preferring `sub`)
+ * - Returns 401 if we cannot resolve a valid Outseta user
  *
- * You should plug this `userId` into your existing ChatKit / Agent Builder
- * session creation logic below.
+ * Plug `userId` into your existing ChatKit / Agent Builder session creation logic.
  */
 
 /* ---------- Constants ---------- */
@@ -150,14 +149,14 @@ async function resolveUserId(request: Request): Promise<{
 
   if (!token) {
     console.warn("[create-session] No Outseta access token found in headers or cookies.");
-    return { userId: null, sessionCookie: null, error: "Missing Outseta access token" };
+    return { userId: null, sessionCookie: null, error: "Missing access token" };
   }
 
   try {
     const verified = await verifyOutsetaToken(token);
     if (!verified.verified || !verified.payload) {
       console.warn("[create-session] Outseta token failed verification.");
-      return { userId: null, sessionCookie: null, error: "Invalid Outseta access token" };
+      return { userId: null, sessionCookie: null, error: "Invalid access token" };
     }
 
     const payload = verified.payload as Record<string, unknown>;
@@ -200,10 +199,10 @@ async function resolveUserId(request: Request): Promise<{
       };
     }
 
-    return { userId: null, sessionCookie: null, error: "No suitable user id in Outseta token" };
+    return { userId: null, sessionCookie: null, error: "No suitable user id in access token" };
   } catch (err) {
     console.warn("[create-session] Outseta token verification failed:", err);
-    return { userId: null, sessionCookie: null, error: "Error verifying Outseta token" };
+    return { userId: null, sessionCookie: null, error: "Error verifying access token" };
   }
 }
 
@@ -216,7 +215,7 @@ export async function POST(request: NextRequest) {
     // Strict: if we can't resolve a valid Outseta user, don't create a session
     return NextResponse.json(
       {
-        error: error ?? "Unable to resolve user from Outseta",
+        error: error ?? "Unable to resolve user from access token",
       },
       { status: 401 },
     );
@@ -225,8 +224,7 @@ export async function POST(request: NextRequest) {
   // TODO: plug in your existing ChatKit / Agent Builder session creation logic here.
   // Use `userId` as the stable identifier for history.
 
-  // Example placeholder response (replace with your existing response shape):
-  const responseBody = { userId };
+  const responseBody = { userId }; // Replace with your actual response structure (client_secret, etc.)
 
   const res = NextResponse.json(responseBody);
 
