@@ -37,6 +37,9 @@ type ErrorState = {
 const isBrowser = typeof window !== "undefined";
 const isDev = process.env.NODE_ENV !== "production";
 
+const OUTSETA_COOKIE_NAME = "outseta_access_token";
+const OUTSETA_COOKIE_MAX_AGE = 60 * 60 * 4; // 4 hours
+
 const createInitialErrors = (): ErrorState => ({
   script: null,
   session: null,
@@ -64,7 +67,6 @@ function findOutsetaTokenOnClient(): string | null {
 
   try {
     if (out) {
-      // 1) Preferred: getAccessToken() – in your environment this is a sync function returning a string
       if (typeof out.getAccessToken === "function") {
         const tokenOrNull = out.getAccessToken();
         if (typeof tokenOrNull === "string" && tokenOrNull) {
@@ -73,7 +75,6 @@ function findOutsetaTokenOnClient(): string | null {
         }
       }
 
-      // 2) Fallback: cached auth.accessToken
       if (out.auth && typeof out.auth.accessToken === "string" && out.auth.accessToken) {
         if (isDev) console.log("[ChatKitPanel] Outseta token from auth.accessToken");
         return out.auth.accessToken;
@@ -83,7 +84,6 @@ function findOutsetaTokenOnClient(): string | null {
     console.warn("Error while calling Outseta client API:", err);
   }
 
-  // 3) Last resort: legacy localStorage keys (if you had them before)
   try {
     const localKeys = ["outseta_access_token", "outseta_token", "outseta_auth_token"];
     for (const k of localKeys) {
@@ -101,17 +101,20 @@ function findOutsetaTokenOnClient(): string | null {
   return null;
 }
 
-// Small helper: wait briefly for Outseta to finish initializing and return a token
-async function waitForOutsetaToken(maxAttempts = 5, delayMs = 200): Promise<string | null> {
+function setOutsetaCookie(token: string) {
+  // Mirror token into a cookie so the API route can read it if Authorization is stripped
+  const secure = location.protocol === "https:" ? "Secure; " : "";
+  document.cookie = `${OUTSETA_COOKIE_NAME}=${encodeURIComponent(
+    token,
+  )}; Path=/; SameSite=Lax; Max-Age=${OUTSETA_COOKIE_MAX_AGE}; ${secure}Priority=High`;
+}
+
+// Wait for Outseta to finish initializing and return a token (longer + event-friendly)
+async function waitForOutsetaToken(maxAttempts = 20, delayMs = 500): Promise<string | null> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const token = findOutsetaTokenOnClient();
     if (token) {
-      if (isDev) {
-        console.log(
-          "[ChatKitPanel] waitForOutsetaToken: got token on attempt",
-          attempt,
-        );
-      }
+      if (isDev) console.log("[ChatKitPanel] waitForOutsetaToken: got token on attempt", attempt);
       return token;
     }
 
@@ -215,10 +218,9 @@ export function ChatKitPanel({
 
       try {
         const urlParams = new URLSearchParams(window.location.search);
-        // Default to the Business workspace if no agent param is present
         const agent = urlParams.get("agent") || "business";
 
-        // Wait a bit for Outseta to be ready and return an access token
+        // Wait for Outseta token (more patient for embeds/mobile)
         if (isDev) console.log("[ChatKitPanel] Waiting for Outseta access token…");
         const outsetaToken = await waitForOutsetaToken();
         if (isDev) console.log("[ChatKitPanel] Outseta token present:", !!outsetaToken);
@@ -226,11 +228,13 @@ export function ChatKitPanel({
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (outsetaToken) {
           headers["Authorization"] = `Bearer ${outsetaToken}`;
+          setOutsetaCookie(outsetaToken); // mirror to cookie for API fallback
         }
 
         const response = await fetch(`${CREATE_SESSION_ENDPOINT}?agent=${agent}`, {
           method: "POST",
           headers,
+          credentials: "include", // send cookies to API (SameSite=Lax)
           body: JSON.stringify({
             chatkit_configuration: { file_upload: { enabled: true } },
           }),
@@ -269,7 +273,6 @@ export function ChatKitPanel({
     [setErrorState],
   );
 
-  // Also default UI copy (greeting, starter prompts) to Business when no agent param exists
   const agentFromUrl = isBrowser
     ? new URLSearchParams(window.location.search).get("agent") ?? "business"
     : "business";
@@ -277,18 +280,11 @@ export function ChatKitPanel({
   const themeConfig = getThemeConfig(theme);
 
   if (isDev) {
-    // Helpful for verifying the actual theme ChatKit receives
-    // eslint-disable-next-line no-console
     console.log("[ChatKitPanel] themeConfig", themeConfig);
   }
 
-  // Detect mobile by viewport width
   const isMobile = useIsMobile(640);
-
-  // Base prompts from config
   const basePrompts = getStarterPromptsForAgent(agentFromUrl) ?? STARTER_PROMPTS;
-
-  // On mobile, remove prompts entirely; on desktop, use existing ones
   const effectivePrompts = isMobile === true ? [] : basePrompts;
 
   const chatkit = useChatKit({
