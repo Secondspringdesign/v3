@@ -13,20 +13,37 @@ export const GREETING =
 export const STARTER_PROMPTS: StartScreenPrompt[] = [];
 
 // ---------- PER-AGENT GREETINGS ----------
+//
+// ChatKit treats greetings as plain text (no hard line breaks).
+// We keep them compact and let the starter prompts carry more nuance.
+//
 
 export const GREETINGS: Record<string, string> = {
+  // Business main
   business:
     "Let’s build you a real business, one that fits your life right now.",
+
+  // Product pillar
   product:
     "Describe what you’re thinking of selling and who it’s for. We’ll turn it into a clearer offer.",
+
+  // Marketing pillar
   marketing:
     "Tell me who you want to reach. We’ll shape a simple message and a couple of realistic channels.",
+
+  // Finance pillar
   finance:
     "Share your pricing and income hopes. We’ll do a quick math check to see if it holds together.",
+
+  // Reality Check task
   reality_check:
     "I’m your Reality Check. I’ll tell you straight what works, what’s shaky, and what to test first.",
+
+  // SWOT task
   swot:
     "I’ll map out a quick SWOT so you can see strengths, risks, and options.",
+
+  // Legal & Tax Checkup task
   legal_tax:
     "I’ll flag general legal and tax areas to ask a professional about. This is not legal or tax advice.",
 };
@@ -37,104 +54,120 @@ export function getGreetingForAgent(agent?: string) {
 }
 
 // ---------- PER-AGENT STARTER PROMPTS ----------
+//
+// Icons are all from the supported ChatKit icon set you listed.
+//
 
 export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
+  // Business main
   business: [
     {
       label: "I already have an idea → turn it into a full plan",
       prompt:
         "I already have a business idea. Please treat this as my starting point and help me turn it into a full, realistic business plan.",
-      icon: "lightbulb",
+      icon: "lightbulb", // idea spark
     },
     {
       label: "I have no idea yet → help me find a good one",
       prompt:
         "I don’t have a concrete business idea yet. Please help me find a realistic idea that fits my skills, money, and time, then outline the first steps.",
-      icon: "compass",
+      icon: "compass", // exploration / direction
     },
     {
       label: "You’re not broken, the world is weird right now.",
       prompt:
         "You’re not broken, the world is weird right now. Help me think about my situation and what kind of business could actually work for me.",
-      icon: "lifesaver",
+      icon: "lifesaver", // supportive, grounding
     },
   ],
+
+  // Product main
   product: [
     {
       label: "Define my offer",
       prompt:
         "Here’s my rough idea. Help me turn it into a clear offer someone would understand and want to buy.",
-      icon: "square-text",
+      icon: "square-text", // product description
     },
     {
       label: "Choose a simple niche",
       prompt:
         "Here’s what I’m thinking of selling. Help me pick a specific type of customer to focus on first.",
-      icon: "map-pin",
+      icon: "map-pin", // targeted niche
     },
   ],
+
+  // Marketing main
   marketing: [
     {
       label: "Who am I really talking to?",
       prompt:
         "Here’s my business idea. Help me define a clear target customer I can picture and talk to directly.",
-      icon: "profile",
+      icon: "profile", // customer focus
     },
     {
       label: "Write a simple pitch for me",
       prompt:
         "Here’s my idea and who I think it’s for. Write a one‑sentence pitch I can use on my site or in an email.",
-      icon: "mail",
+      icon: "mail", // messaging
     },
   ],
+
+  // Finance main
   finance: [
     {
       label: "Sanity‑check my pricing",
       prompt:
         "Here’s what I’m planning to sell and what I was thinking of charging. Help me sanity‑check this pricing.",
-      icon: "analytics",
+      icon: "analytics", // numbers / checking
     },
     {
       label: "Could this actually cover my bills?",
       prompt:
         "Here’s my idea, rough pricing, and what I’d like to earn per month. Help me see if the math is realistic.",
-      icon: "chart",
+      icon: "chart", // projections
     },
   ],
+
+  // Reality Check task
   reality_check: [
     {
       label: "Upload or paste your plan to get started",
       prompt:
         "I’m pasting or uploading my current plan. Please read it and act as a reality check: tell me what looks solid, what seems shaky, and exactly what to test first.",
-      icon: "check-circle",
+      icon: "check-circle", // validation / check
     },
   ],
+
+  // SWOT task
   swot: [
     {
       label: "Give me a quick SWOT for this plan",
       prompt:
         "Here’s my current plan. Create a brief SWOT analysis and highlight what to lean into and what to watch out for.",
-      icon: "compass",
+      icon: "compass", // strategic directions
     },
     {
       label: "I’m not sure where to take this next",
       prompt:
         "Here’s my plan and the main directions I’m considering next. Compare them using a SWOT so I can see which looks better for the next year.",
-      icon: "analytics",
+      icon: "analytics", // comparison / analysis
     },
   ],
+
+  // Legal & Tax Checkup task
   legal_tax: [
     {
       label: "Scan my plan for legal and tax areas",
       prompt:
         "Here’s my plan and where I’m based. Highlight the main legal and tax areas I should pay attention to, in simple language. I know this isn’t legal or tax advice.",
-      icon: "bug",
+      icon: "bug", // flagging issues / risks
     },
     {
       label: "Help me prepare for a pro",
       prompt:
         "Here’s my plan and where I’m based. Turn this into a short list of questions I can bring to a lawyer or accountant.",
-      icon: "notebook-pencil",
+      icon: "notebook-pencil", // prep notes
     },
   ],
 };
@@ -145,12 +178,18 @@ export function getStarterPromptsForAgent(agent?: string): StartScreenPrompt[] {
 }
 
 // ---------- THEME CONFIG ----------
+//
+// Force DARK mode, tinted grayscale OFF, custom surface colors:
+// - background: #1B202C
+// - foreground: #272D40
+//
 
 export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
   colorScheme: "dark",
   radius: "round",
   density: "normal",
   color: {
+    // No grayscale block -> tinted grayscale effectively off
     surface: {
       background: "#1B202C",
       foreground: "#272D40",
