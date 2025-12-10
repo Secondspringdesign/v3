@@ -97,8 +97,7 @@ export function ChatKitPanel({
   onResponseEnd,
   onThemeRequest,
 }: ChatKitPanelProps) {
-  // kept from your version
-  const processedFacts = useRef(new Set<string>());
+  // removed processedFacts – it wasn’t used and caused ESLint errors
   const [errors, setErrors] = useState<ErrorState>(() => createInitialErrors());
 
   const isMobile = useIsMobile(640); // <= 640px is mobile
@@ -117,10 +116,12 @@ export function ChatKitPanel({
 
   // ----- ChatKit integration state -----
 
-  // FIX: pass minimal options object so Typescript is happy
-  const chatkit = useChatKit({ api: {} as any });
+  // Call useChatKit with a minimal, typed options object (no `any`)
+  const chatkit = useChatKit({
+    api: {}, // ChatKit will use defaults; Outseta token is set below
+  });
 
-  // Example: your existing effect wiring for Outseta / token, etc.
+  // Wire Outseta token into ChatKit
   useEffect(() => {
     if (!chatkit || !isBrowser) return;
 
