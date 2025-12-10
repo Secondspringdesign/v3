@@ -30,7 +30,6 @@ let jwksCache: JwksCache | null = null;
 
 /* ---------- Utilities ---------- */
 
-// Convert base64url to Uint8Array (works in Node/Edge runtime)
 function base64UrlToUint8Array(base64Url: string): Uint8Array {
   const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
   const pad = base64.length % 4 === 2 ? "==" : base64.length % 4 === 3 ? "=" : "";
@@ -139,10 +138,8 @@ async function resolveUserId(request: Request): Promise<{
   sessionCookie: string | null;
   error?: string;
 }> {
-  // 1) Read Outseta token from Authorization header (what ChatKitPanel sends)
+  // IMPORTANT: read token from Authorization, not x-outseta-access-token
   const headerToken = extractTokenFromHeader(request.headers.get("authorization"));
-
-  // 2) Optional: also look for an Outseta cookie (if present)
   const cookieToken = getCookieValue(request.headers.get("cookie"), OUTSETA_COOKIE_NAME);
 
   const token = headerToken || cookieToken;
@@ -161,14 +158,12 @@ async function resolveUserId(request: Request): Promise<{
 
     const payload = verified.payload as Record<string, unknown>;
 
-    // Primary: Outseta's recommended universal user id (sub)
     const userIdFromToken =
       (payload["sub"] as string) ||
       (payload["user_id"] as string) ||
       (payload["uid"] as string) ||
       undefined;
 
-    // Optional: account id fallback (only if you really want account-scoped ids)
     const accountIdFromToken =
       (payload["outseta:accountUid"] as string) ||
       (payload["outseta:accountuid"] as string) ||
@@ -212,7 +207,6 @@ export async function POST(request: NextRequest) {
   const { userId, sessionCookie, error } = await resolveUserId(request);
 
   if (!userId) {
-    // Strict: if we can't resolve a valid Outseta user, don't create a session
     return NextResponse.json(
       {
         error: error ?? "Unable to resolve user from access token",
@@ -224,8 +218,7 @@ export async function POST(request: NextRequest) {
   // TODO: plug in your existing ChatKit / Agent Builder session creation logic here.
   // Use `userId` as the stable identifier for history.
 
-  const responseBody = { userId }; // Replace with your actual response structure (client_secret, etc.)
-
+  const responseBody = { userId }; // Replace with your actual response (client_secret, etc.)
   const res = NextResponse.json(responseBody);
 
   if (sessionCookie) {
