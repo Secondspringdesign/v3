@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ChatKit, useChatKit } from "@openai/chatkit-react";
 import {
   STARTER_PROMPTS,
@@ -98,7 +98,6 @@ export function ChatKitPanel({
   onResponseEnd,
   onThemeRequest,
 }: ChatKitPanelProps) {
-  const processedFacts = useRef(new Set<string>());
   const [errors, setErrors] = useState<ErrorState>(() => createInitialErrors());
 
   const isMobile = useIsMobile(640); // <= 640px considered mobile
@@ -117,9 +116,9 @@ export function ChatKitPanel({
 
   // ----- ChatKit integration state -----
 
-  const chatkit = useChatKit();
+  const chatkit = useChatKit({}); // call with an empty config object as required
 
-  // Example: your existing effect wiring for Outseta / token, etc.
+  // Wire Outseta token into ChatKit (same as your previous pattern)
   useEffect(() => {
     if (!chatkit || !isBrowser) return;
 
