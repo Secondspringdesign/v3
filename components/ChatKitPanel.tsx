@@ -12,6 +12,7 @@ import {
 } from "@/lib/config";
 import { ErrorOverlay } from "./ErrorOverlay";
 import type { ColorScheme } from "@/hooks/useColorScheme";
+import { useIsMobile } from "@/hooks/useIsMobile"; // NEW
 
 export type FactAction = {
   type: "save";
@@ -238,12 +239,21 @@ export function ChatKitPanel({
     console.log("[ChatKitPanel] themeConfig", themeConfig);
   }
 
+  // NEW: detect mobile by width
+  const isMobile = useIsMobile(640);
+
+  // Base prompts from config
+  const basePrompts = getStarterPromptsForAgent(agentFromUrl) ?? STARTER_PROMPTS;
+
+  // On mobile, remove prompts entirely; on desktop, use existing ones
+  const effectivePrompts = isMobile === true ? [] : basePrompts;
+
   const chatkit = useChatKit({
     api: { getClientSecret },
     theme: themeConfig,
     startScreen: {
       greeting: getGreetingForAgent(agentFromUrl),
-      prompts: getStarterPromptsForAgent(agentFromUrl) ?? STARTER_PROMPTS,
+      prompts: effectivePrompts, // CHANGED
     },
     composer: { placeholder: PLACEHOLDER_INPUT, attachments: { enabled: true } },
     threadItemActions: { feedback: false },
