@@ -12,7 +12,7 @@ import {
 } from "@/lib/config";
 import { ErrorOverlay } from "./ErrorOverlay";
 import type { ColorScheme } from "@/hooks/useColorScheme";
-import { useIsMobile } from "@/hooks/useIsMobile"; // NEW
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 export type FactAction = {
   type: "save";
@@ -35,7 +35,6 @@ type ErrorState = {
 };
 
 const isBrowser = typeof window !== "undefined";
-const isDev = process.env.NODE_ENV !== "production";
 
 const createInitialErrors = (): ErrorState => ({
   script: null,
@@ -98,10 +97,11 @@ export function ChatKitPanel({
   onResponseEnd,
   onThemeRequest,
 }: ChatKitPanelProps) {
+  // kept from your version
   const processedFacts = useRef(new Set<string>());
   const [errors, setErrors] = useState<ErrorState>(() => createInitialErrors());
 
-  const isMobile = useIsMobile(640); // NEW – <= 640px is mobile
+  const isMobile = useIsMobile(640); // <= 640px is mobile
 
   // Derive the agent from the URL query (?agent=...)
   const agent =
@@ -117,7 +117,8 @@ export function ChatKitPanel({
 
   // ----- ChatKit integration state -----
 
-  const chatkit = useChatKit();
+  // FIX: pass minimal options object so Typescript is happy
+  const chatkit = useChatKit({ api: {} as any });
 
   // Example: your existing effect wiring for Outseta / token, etc.
   useEffect(() => {
@@ -154,7 +155,7 @@ export function ChatKitPanel({
     <>
       {hasAnyError && (
         <ErrorOverlay
-          error={errors} // NOTE: using your original prop name
+          error={errors}
           onRetry={() => setErrors(createInitialErrors())}
         />
       )}
