@@ -198,6 +198,10 @@ export function ChatKitPanel({
           headers["Authorization"] = `Bearer ${outsetaToken}`;
         }
 
+        if (isDev) {
+          console.log("[ChatKitPanel] create-session headers:", headers);
+        }
+
         const response = await fetch(`${CREATE_SESSION_ENDPOINT}?agent=${agent}`, {
           method: "POST",
           headers,
