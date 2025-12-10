@@ -1,7 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ColorScheme } from "@/lib/theme";
+import { ChatKit, useChatKit } from "@openai/chatkit-react";
+import {
+  STARTER_PROMPTS,
+  PLACEHOLDER_INPUT,
+  CREATE_SESSION_ENDPOINT,
+  getThemeConfig,
+  getGreetingForAgent,
+  getStarterPromptsForAgent,
+} from "@/lib/config";
+import { ErrorOverlay } from "./ErrorOverlay";
+import type { ColorScheme } from "@/hooks/useColorScheme";
 import { useIsMobile } from "@/hooks/useIsMobile";
 
 export type FactAction = {
@@ -37,60 +47,51 @@ const createInitialErrors = (): ErrorState => ({
 // Outseta client surface (partial) for typing
 type OutsetaClientSurface = {
   getAccessToken?: () => string | null;
+  getJwtPayload?: () => Promise<Record<string, unknown> | null>;
   auth?: { accessToken?: string | null } | null;
 };
-
-function getOutsetaClient(): OutsetaClientSurface | null {
-  if (!isBrowser) return null;
-  const w = window as unknown as {
-    Outseta?: OutsetaClientSurface;
-    outseta?: OutsetaClientSurface;
-  };
-  return w.Outseta ?? w.outseta ?? null;
-}
 
 // Try to get token via Outseta client API (if present), then fallback to localStorage keys
 function findOutsetaTokenOnClient(): string | null {
   if (!isBrowser) return null;
 
-  const out = getOutsetaClient();
+  const w = window as unknown as {
+    Outseta?: OutsetaClientSurface;
+    outseta?: OutsetaClientSurface;
+  };
+
+  const out = w.Outseta ?? w.outseta ?? null;
 
   try {
     if (out) {
-      // Preferred: getAccessToken() – usually sync returning a string
+      // 1) Preferred: getAccessToken() – in your environment this is a sync function returning a string
       if (typeof out.getAccessToken === "function") {
         const tokenOrNull = out.getAccessToken();
         if (typeof tokenOrNull === "string" && tokenOrNull) {
-          if (isDev) console.log("[ChatKitPanel] Outseta token from getAccessToken");
           return tokenOrNull;
         }
       }
 
-      // Fallback: cached auth.accessToken
+      // 2) Fallback: cached auth.accessToken
       if (out.auth && typeof out.auth.accessToken === "string" && out.auth.accessToken) {
-        if (isDev) console.log("[ChatKitPanel] Outseta token from auth.accessToken");
         return out.auth.accessToken;
       }
     }
   } catch (err) {
-    console.warn("[ChatKitPanel] Error while calling Outseta client API:", err);
+    console.warn("Error while calling Outseta client API:", err);
   }
 
-  // Last resort: legacy localStorage keys (if you used them historically)
+  // 3) Last resort: legacy localStorage keys (if you had them before)
   try {
     const localKeys = ["outseta_access_token", "outseta_token", "outseta_auth_token"];
     for (const k of localKeys) {
       const v = window.localStorage.getItem(k);
-      if (v) {
-        if (isDev) console.log("[ChatKitPanel] Outseta token from localStorage key:", k);
-        return v;
-      }
+      if (v) return v;
     }
   } catch (err) {
-    console.warn("[ChatKitPanel] Error while reading localStorage for Outseta token:", err);
+    console.warn("Error while reading localStorage for Outseta token:", err);
   }
 
-  console.warn("[ChatKitPanel] No Outseta token found on client");
   return null;
 }
 
@@ -108,123 +109,243 @@ export function ChatKitPanel({
     () => (isBrowser && window.customElements?.get("openai-chatkit") ? "ready" : "pending"),
   );
   const [widgetInstanceKey, setWidgetInstanceKey] = useState(0);
-  const isMobile = useIsMobile();
 
   const setErrorState = useCallback((updates: Partial<ErrorState>) => {
-    setErrors((prev) => ({ ...prev, ...updates }));
+    setErrors((current) => ({ ...current, ...updates }));
   }, []);
 
-  // Initialize ChatKit session on mount
   useEffect(() => {
-    if (!isBrowser) return;
-    isMountedRef.current = true;
-
-    const init = async () => {
-      try {
-        setIsInitializingSession(true);
-
-        // Give Outseta a brief moment to initialize in the Framer embed
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        const token = findOutsetaTokenOnClient();
-
-        if (!token) {
-          setErrorState({
-            session:
-              "Unable to find Outseta authentication token. Please make sure you are logged in and reload the page.",
-            retryable: true,
-          });
-          setIsInitializingSession(false);
-          return;
-        }
-
-        const res = await fetch("/api/create-session", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-outseta-access-token": `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            // any payload your API expects for session creation
-          }),
-        });
-
-        if (!res.ok) {
-          const errorBody = await res.json().catch(() => ({}));
-          console.error("[ChatKitPanel] Failed to initialize session:", res.status, errorBody);
-          setErrorState({
-            session:
-              errorBody?.error ??
-              "Failed to initialize chat session. Please make sure you are logged in and try again.",
-            retryable: true,
-          });
-          setIsInitializingSession(false);
-          return;
-        }
-
-        const data = await res.json();
-        if (isDev) console.log("[ChatKitPanel] Session initialized:", data);
-
-        // TODO: wire "data" into your <openai-chatkit> element if needed
-        // e.g. pass a session id or token via attributes or a global config.
-
-        setIsInitializingSession(false);
-      } catch (err) {
-        console.error("[ChatKitPanel] Error initializing session:", err);
-        setErrorState({
-          session: "Error initializing chat session. Please reload the page.",
-          retryable: true,
-        });
-        setIsInitializingSession(false);
-      }
-    };
-
-    init();
-
     return () => {
       isMountedRef.current = false;
     };
-  }, [setErrorState]);
+  }, []);
 
-  // ---- UI rendering ----
+  useEffect(() => {
+    if (!isBrowser) return;
 
-  if (errors.session) {
-    return (
-      <div>
-        <p>{errors.session}</p>
-        {errors.retryable && (
-          <button
-            onClick={() => {
-              setErrors(createInitialErrors());
-              setWidgetInstanceKey((k) => k + 1);
-              // Re-run initialization by toggling the key
-              // and letting the useEffect above fire again on re-mount.
-            }}
-          >
-            Retry
-          </button>
-        )}
-      </div>
-    );
+    let timeoutId: number | undefined;
+
+    const handleLoaded = () => {
+      if (!isMountedRef.current) return;
+      setScriptStatus("ready");
+      setErrorState({ script: null });
+    };
+
+    const handleError = (event: Event) => {
+      console.error("Failed to load chatkit.js", event);
+      if (!isMountedRef.current) return;
+      setScriptStatus("error");
+      const detail = (event as CustomEvent<unknown>)?.detail ?? "unknown error";
+      setErrorState({ script: `Error: ${detail}`, retryable: false });
+      setIsInitializingSession(false);
+    };
+
+    window.addEventListener("chatkit-script-loaded", handleLoaded);
+    window.addEventListener("chatkit-script-error", handleError as EventListener);
+
+    if (window.customElements?.get("openai-chatkit")) handleLoaded();
+    else if (scriptStatus === "pending") {
+      timeoutId = window.setTimeout(() => {
+        if (!window.customElements?.get("openai-chatkit")) {
+          handleError(new CustomEvent("chatkit-script-error", { detail: "ChatKit unavailable." }));
+        }
+      }, 5000);
+    }
+
+    return () => {
+      window.removeEventListener("chatkit-script-loaded", handleLoaded);
+      window.removeEventListener("chatkit-script-error", handleError as EventListener);
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+  }, [scriptStatus, setErrorState]);
+
+  const handleResetChat = useCallback(() => {
+    processedFacts.current.clear();
+    if (isBrowser)
+      setScriptStatus(window.customElements?.get("openai-chatkit") ? "ready" : "pending");
+    setIsInitializingSession(true);
+    setErrors(createInitialErrors());
+    setWidgetInstanceKey((prev) => prev + 1);
+  }, []);
+
+  const getClientSecret = useCallback(
+    async (currentSecret: string | null) => {
+      if (isDev) console.info("[ChatKitPanel] getClientSecret invoked");
+
+      if (isMountedRef.current) {
+        if (!currentSecret) setIsInitializingSession(true);
+        setErrorState({ session: null, integration: null, retryable: false });
+      }
+
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        // Default to the Business workspace if no agent param is present
+        const agent = urlParams.get("agent") || "business";
+
+        // Get the Outseta access token synchronously
+        const outsetaToken = findOutsetaTokenOnClient();
+
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (outsetaToken) {
+          headers["Authorization"] = `Bearer ${outsetaToken}`;
+        }
+
+        const response = await fetch(`${CREATE_SESSION_ENDPOINT}?agent=${agent}`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            chatkit_configuration: { file_upload: { enabled: true } },
+          }),
+        });
+
+        const raw = await response.text();
+        let data: Record<string, unknown> = {};
+        if (raw) {
+          try {
+            data = JSON.parse(raw) as Record<string, unknown>;
+          } catch (parseError) {
+            console.error("Failed to parse create-session response", parseError);
+          }
+        }
+
+        if (!response.ok) {
+          const detail = extractErrorDetail(data, response.statusText);
+          throw new Error(detail);
+        }
+
+        const clientSecret = data?.client_secret as string | undefined;
+        if (!clientSecret) throw new Error("Missing client secret");
+
+        if (isMountedRef.current) setErrorState({ session: null, integration: null });
+
+        return clientSecret;
+      } catch (error) {
+        const detail =
+          error instanceof Error ? error.message : "Unable to start ChatKit session.";
+        if (isMountedRef.current) setErrorState({ session: detail, retryable: false });
+        throw error instanceof Error ? error : new Error(detail);
+      } finally {
+        if (isMountedRef.current && !currentSecret) setIsInitializingSession(false);
+      }
+    },
+    [setErrorState],
+  );
+
+  // Also default UI copy (greeting, starter prompts) to Business when no agent param exists
+  const agentFromUrl = isBrowser
+    ? new URLSearchParams(window.location.search).get("agent") ?? "business"
+    : "business";
+
+  const themeConfig = getThemeConfig(theme);
+
+  if (isDev) {
+    // Helpful for verifying the actual theme ChatKit receives
+    // eslint-disable-next-line no-console
+    console.log("[ChatKitPanel] themeConfig", themeConfig);
   }
 
-  if (isInitializingSession || scriptStatus === "pending") {
-    return <div>Loading chat…</div>;
-  }
+  // Detect mobile by viewport width
+  const isMobile = useIsMobile(640);
+
+  // Base prompts from config
+  const basePrompts = getStarterPromptsForAgent(agentFromUrl) ?? STARTER_PROMPTS;
+
+  // On mobile, remove prompts entirely; on desktop, use existing ones
+  const effectivePrompts = isMobile === true ? [] : basePrompts;
+
+  const chatkit = useChatKit({
+    api: { getClientSecret },
+    theme: themeConfig,
+    startScreen: {
+      greeting: getGreetingForAgent(agentFromUrl),
+      prompts: effectivePrompts,
+    },
+    composer: { placeholder: PLACEHOLDER_INPUT, attachments: { enabled: true } },
+    threadItemActions: { feedback: false },
+    onClientTool: async (invocation: { name: string; params: Record<string, unknown> }) => {
+      if (invocation.name === "switch_theme") {
+        const requested = invocation.params.theme;
+        if (requested === "light" || requested === "dark") {
+          onThemeRequest(requested);
+          return { success: true };
+        }
+        return { success: false };
+      }
+
+      if (invocation.name === "record_fact") {
+        const id = String(invocation.params.fact_id ?? "");
+        const text = String(invocation.params.fact_text ?? "");
+        if (!id || processedFacts.current.has(id)) return { success: true };
+        processedFacts.current.add(id);
+        void onWidgetAction({
+          type: "save",
+          factId: id,
+          factText: text.replace(/\s+/g, " ").trim(),
+        });
+        return { success: true };
+      }
+
+      return { success: false };
+    },
+    onResponseEnd: onResponseEnd,
+    onResponseStart: () => setErrorState({ integration: null, retryable: false }),
+    onThreadChange: () => processedFacts.current.clear(),
+    onError: ({ error }) => console.error("ChatKit error", error),
+  });
+
+  const activeError = errors.session ?? errors.integration;
+  const blockingError = errors.script ?? activeError;
 
   return (
-    <div key={widgetInstanceKey}>
-      {/* Replace this with your actual ChatKit widget markup if it differs */}
-      <openai-chatkit
-        data-theme={theme}
-        data-device={isMobile ? "mobile" : "desktop"}
-        onOpenaiChatkitWidgetAction={async (event: CustomEvent<FactAction>) => {
-          await onWidgetAction(event.detail);
-        }}
-        onOpenaiChatkitResponseEnd={() => {
-          onResponseEnd();
-        }}
+    <div className="relative flex h-[95vh] w-full flex-col rounded-3xl overflow-hidden">
+      <ChatKit
+        key={widgetInstanceKey}
+        control={chatkit.control}
+        className={
+          blockingError || isInitializingSession
+            ? "pointer-events-none opacity-0"
+            : "second-spring-chat block h-full w-full"
+        }
+      />
+      <ErrorOverlay
+        error={blockingError}
+        fallbackMessage={
+          blockingError || !isInitializingSession ? null : "Loading your session..."
+        }
+        onRetry={blockingError && errors.retryable ? handleResetChat : null}
+        retryLabel="Restart chat"
       />
     </div>
   );
+}
+
+function extractErrorDetail(
+  payload: Record<string, unknown> | undefined,
+  fallback: string,
+): string {
+  if (!payload) return fallback;
+  const error = payload.error;
+  if (typeof error === "string") return error;
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof (error as { message?: unknown }).message === "string"
+  )
+    return (error as { message: string }).message;
+  const details = payload.details;
+  if (typeof details === "string") return details;
+  if (details && typeof details === "object" && "error" in details) {
+    const nestedError = (details as { error?: unknown }).error;
+    if (typeof nestedError === "string") return nestedError;
+    if (
+      nestedError &&
+      typeof nestedError === "object" &&
+      "message" in nestedError &&
+      typeof (nestedError as { message?: unknown }).message === "string"
+    )
+      return (nestedError as { message: string }).message;
+  }
+  if (typeof payload.message === "string") return payload.message;
+  return fallback;
 }
