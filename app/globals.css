@@ -52,21 +52,23 @@ textarea#chatkit-composer-input
   fill: #f3f0ec !important;
   opacity: 0.9 !important;
 }
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* ----- ChatKit background overrides ----- */
 
-/* Let the page background show through on the ChatKit root */
-.second-spring-chat {
-  background-color: transparent !important;
+.second-spring-chat,
+.second-spring-chat *:where([data-surface="canvas"]) {
+  background-color: #0b0f18 !important;
 }
 
-/* Darken ChatKit's own outer/primary surfaces so there is no light "cap" */
-.second-spring-chat [data-surface="canvas"],
-.second-spring-chat [data-surface="background"],
-.second-spring-chat [data-surface="primary"] {
-  background-color: #1b202c !important; /* match your dark card color */
+/* Stronger version if needed:
+
+.second-spring-chat,
+.second-spring-chat *:where([data-surface]),
+.second-spring-chat * {
+  background-color: #0b0f18 !important;
 }
+
+*/
