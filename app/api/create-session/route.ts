@@ -26,25 +26,23 @@ let jwksCache: JwksCache | null = null;
 
 /* ---------- Utilities ---------- */
 
-// Return a plain Uint8Array< number > to satisfy WebCrypto's BufferSource
+// Return a plain Uint8Array<number> to satisfy WebCrypto's BufferSource
 function base64UrlToUint8Array(base64Url: string): Uint8Array {
   const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
   const pad = base64.length % 4 === 2 ? "==" : base64.length % 4 === 3 ? "=" : "";
   const normalized = base64 + pad;
-  const raw = typeof Buffer !== "undefined" ? Buffer.from(normalized, "base64") : atob(normalized);
-  const len = typeof raw === "string" ? raw.length : raw.byteLength;
-  const arr = new Uint8Array(len);
 
-  if (typeof raw === "string") {
-    for (let i = 0; i < len; i++) {
-      arr[i] = raw.charCodeAt(i);
-    }
-  } else {
-    for (let i = 0; i < len; i++) {
-      arr[i] = raw[i];
-    }
+  // Use global Buffer when available (Node), else atob string decoding (edge/browser)
+  if (typeof Buffer !== "undefined") {
+    return new Uint8Array(Buffer.from(normalized, "base64"));
   }
 
+  const binary = atob(normalized);
+  const len = binary.length;
+  const arr = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    arr[i] = binary.charCodeAt(i);
+  }
   return arr;
 }
 
@@ -118,8 +116,14 @@ async function verifyOutsetaToken(token: string): Promise<VerifiedToken> {
       ["verify"],
     );
 
-    // sigArray and data are both Uint8Array, which is a valid BufferSource
-    const ok = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", cryptoKey, sigArray, data);
+    // Explicit BufferSource casts keep TypeScript happy
+    const ok = await crypto.subtle.verify(
+      "RSASSA-PKCS1-v1_5",
+      cryptoKey,
+      sigArray as unknown as BufferSource,
+      data as unknown as BufferSource,
+    );
+
     return { verified: ok, payload };
   } catch (err) {
     console.warn("verifyOutsetaToken error:", err);
