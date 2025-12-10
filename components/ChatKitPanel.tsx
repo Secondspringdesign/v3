@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChatKit, useChatKit } from "@openai/chatkit-react";
+import { ChatKit } from "@openai/chatkit-react";
 import {
   STARTER_PROMPTS,
   PLACEHOLDER_INPUT,
@@ -92,6 +92,16 @@ function findOutsetaTokenOnClient(): string | null {
   return null;
 }
 
+// Flatten ErrorState into a single string for ErrorOverlay
+function formatError(errors: ErrorState): string {
+  const parts: string[] = [];
+  if (errors.script) parts.push(errors.script);
+  if (errors.session) parts.push(errors.session);
+  if (errors.integration) parts.push(errors.integration);
+  if (parts.length === 0) return "Something went wrong.";
+  return parts.join(" • ");
+}
+
 export function ChatKitPanel({
   theme,
   onWidgetAction,
@@ -101,7 +111,7 @@ export function ChatKitPanel({
   const processedFacts = useRef(new Set<string>());
   const [errors, setErrors] = useState<ErrorState>(() => createInitialErrors());
 
-  const isMobile = useIsMobile(640); // <= 640px considered mobile
+  const isMobile = useIsMobile(640); // <= 640px is mobile
 
   // Derive the agent from the URL query (?agent=...)
   const agent =
@@ -115,19 +125,14 @@ export function ChatKitPanel({
   const starterPrompts =
     isMobile === true ? [] : getStarterPromptsForAgent(agent) ?? STARTER_PROMPTS;
 
-  // ----- ChatKit integration state -----
-
-  const chatkit = useChatKit();
-
-  // Example: your existing effect wiring for Outseta / token, etc.
+  // Optional: log whether an Outseta token is present on the client
   useEffect(() => {
-    if (!chatkit || !isBrowser) return;
-
     const token = findOutsetaTokenOnClient();
-    if (token) {
-      chatkit.setAuthToken(token);
+    if (isDev) {
+      // eslint-disable-next-line no-console
+      console.debug("Outseta token present on client:", Boolean(token));
     }
-  }, [chatkit]);
+  }, []);
 
   const handleWidgetAction = useCallback(
     async (action: FactAction) => {
@@ -150,11 +155,14 @@ export function ChatKitPanel({
   const hasAnyError =
     errors.script !== null || errors.session !== null || errors.integration !== null;
 
+  const overlayErrorText = formatError(errors);
+
   return (
     <>
       {hasAnyError && (
         <ErrorOverlay
-          errors={errors}
+          error={overlayErrorText}
+          fallbackMessage="Something went wrong while loading the chat."
           onRetry={() => setErrors(createInitialErrors())}
         />
       )}
