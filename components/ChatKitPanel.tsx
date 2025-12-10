@@ -39,6 +39,8 @@ const isDev = process.env.NODE_ENV !== "production";
 
 const OUTSETA_COOKIE_NAME = "outseta_access_token";
 const OUTSETA_COOKIE_MAX_AGE = 60 * 60 * 4; // 4 hours
+const OUTSETA_LS_KEYS = ["outseta_access_token", "outseta_token", "outseta_auth_token"];
+const PARENT_MESSAGE_TYPE = "outseta-token";
 
 const createInitialErrors = (): ErrorState => ({
   script: null,
@@ -53,6 +55,27 @@ type OutsetaClientSurface = {
   getJwtPayload?: () => Promise<Record<string, unknown> | null>;
   auth?: { accessToken?: string | null } | null;
 };
+
+// ---------- Token helpers ----------
+
+function setOutsetaCookie(token: string) {
+  if (!isBrowser) return;
+  const secure = location.protocol === "https:" ? "Secure; " : "";
+  document.cookie = `${OUTSETA_COOKIE_NAME}=${encodeURIComponent(
+    token,
+  )}; Path=/; SameSite=Lax; Max-Age=${OUTSETA_COOKIE_MAX_AGE}; ${secure}Priority=High`;
+}
+
+function stashTokenLocally(token: string) {
+  try {
+    for (const k of OUTSETA_LS_KEYS) {
+      window.localStorage.setItem(k, token);
+    }
+  } catch (err) {
+    console.warn("Unable to write token to localStorage", err);
+  }
+  setOutsetaCookie(token);
+}
 
 // Try to get token via Outseta client API (if present), then fallback to localStorage keys
 function findOutsetaTokenOnClient(): string | null {
@@ -74,7 +97,6 @@ function findOutsetaTokenOnClient(): string | null {
           return tokenOrNull;
         }
       }
-
       if (out.auth && typeof out.auth.accessToken === "string" && out.auth.accessToken) {
         if (isDev) console.log("[ChatKitPanel] Outseta token from auth.accessToken");
         return out.auth.accessToken;
@@ -85,8 +107,7 @@ function findOutsetaTokenOnClient(): string | null {
   }
 
   try {
-    const localKeys = ["outseta_access_token", "outseta_token", "outseta_auth_token"];
-    for (const k of localKeys) {
+    for (const k of OUTSETA_LS_KEYS) {
       const v = window.localStorage.getItem(k);
       if (v) {
         if (isDev) console.log("[ChatKitPanel] Outseta token from localStorage key:", k);
@@ -101,14 +122,6 @@ function findOutsetaTokenOnClient(): string | null {
   return null;
 }
 
-function setOutsetaCookie(token: string) {
-  // Mirror token into a cookie so the API route can read it if Authorization is stripped
-  const secure = location.protocol === "https:" ? "Secure; " : "";
-  document.cookie = `${OUTSETA_COOKIE_NAME}=${encodeURIComponent(
-    token,
-  )}; Path=/; SameSite=Lax; Max-Age=${OUTSETA_COOKIE_MAX_AGE}; ${secure}Priority=High`;
-}
-
 // Wait for Outseta to finish initializing and return a token (longer + event-friendly)
 async function waitForOutsetaToken(maxAttempts = 20, delayMs = 500): Promise<string | null> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -117,7 +130,6 @@ async function waitForOutsetaToken(maxAttempts = 20, delayMs = 500): Promise<str
       if (isDev) console.log("[ChatKitPanel] waitForOutsetaToken: got token on attempt", attempt);
       return token;
     }
-
     if (isDev) {
       console.log(
         "[ChatKitPanel] waitForOutsetaToken: no token yet, attempt",
@@ -126,13 +138,13 @@ async function waitForOutsetaToken(maxAttempts = 20, delayMs = 500): Promise<str
         maxAttempts,
       );
     }
-
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
-
   if (isDev) console.warn("[ChatKitPanel] waitForOutsetaToken: giving up, no token found");
   return null;
 }
+
+// ---------- Component ----------
 
 export function ChatKitPanel({
   theme,
@@ -157,6 +169,30 @@ export function ChatKitPanel({
     return () => {
       isMountedRef.current = false;
     };
+  }, []);
+
+  // Listen for parent -> iframe token handoff and URL override (?outseta_token=...)
+  useEffect(() => {
+    if (!isBrowser) return;
+
+    const url = new URL(window.location.href);
+    const tokenFromUrl = url.searchParams.get("outseta_token");
+    if (tokenFromUrl) {
+      if (isDev) console.log("[ChatKitPanel] using outseta_token from URL");
+      stashTokenLocally(tokenFromUrl);
+    }
+
+    const handleMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (!data || typeof data !== "object") return;
+      if (data.type === PARENT_MESSAGE_TYPE && typeof data.token === "string") {
+        if (isDev) console.log("[ChatKitPanel] received token via postMessage from parent");
+        stashTokenLocally(data.token);
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
   }, []);
 
   useEffect(() => {
@@ -220,7 +256,6 @@ export function ChatKitPanel({
         const urlParams = new URLSearchParams(window.location.search);
         const agent = urlParams.get("agent") || "business";
 
-        // Wait for Outseta token (more patient for embeds/mobile)
         if (isDev) console.log("[ChatKitPanel] Waiting for Outseta access token…");
         const outsetaToken = await waitForOutsetaToken();
         if (isDev) console.log("[ChatKitPanel] Outseta token present:", !!outsetaToken);
@@ -228,7 +263,7 @@ export function ChatKitPanel({
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (outsetaToken) {
           headers["Authorization"] = `Bearer ${outsetaToken}`;
-          setOutsetaCookie(outsetaToken); // mirror to cookie for API fallback
+          stashTokenLocally(outsetaToken); // ensure cookie/localStorage are set
         }
 
         const response = await fetch(`${CREATE_SESSION_ENDPOINT}?agent=${agent}`, {
