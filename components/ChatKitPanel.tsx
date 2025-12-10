@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChatKit, useChatKit } from "@openai/chatkit-react";
+import { ChatKit } from "@openai/chatkit-react";
 import {
   STARTER_PROMPTS,
   PLACEHOLDER_INPUT,
@@ -100,7 +100,6 @@ export function ChatKitPanel({
   const processedFacts = useRef(new Set<string>());
   const [errors, setErrors] = useState<ErrorState>(() => createInitialErrors());
 
-  // NEW: mobile detection – this is the only *behavior* change
   const isMobile = useIsMobile(640); // <= 640px is mobile
 
   // Derive the agent from the URL query (?agent=...)
@@ -115,22 +114,15 @@ export function ChatKitPanel({
   const starterPrompts =
     isMobile === true ? [] : getStarterPromptsForAgent(agent) ?? STARTER_PROMPTS;
 
-  // ----- ChatKit integration state -----
-
-  const chatkit = useChatKit({
-    // This matches the old behavior: let ChatKit manage its own API config.
-    // We only use chatkit.setAuthToken below.
-  });
-
-  // Wire Outseta token into ChatKit
+  // You can still inspect Outseta token on the client if you want (debug/logging),
+  // but ChatKit auth should be handled in your /api/create-session endpoint.
   useEffect(() => {
-    if (!chatkit || !isBrowser) return;
-
     const token = findOutsetaTokenOnClient();
     if (token) {
-      chatkit.setAuthToken(token);
+      // no-op here; your API route should already use Outseta server-side
+      // console.debug("Found Outseta token on client:", !!token);
     }
-  }, [chatkit]);
+  }, []);
 
   const handleWidgetAction = useCallback(
     async (action: FactAction) => {
