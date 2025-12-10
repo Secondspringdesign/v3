@@ -12,7 +12,7 @@ import {
 } from "@/lib/config";
 import { ErrorOverlay } from "./ErrorOverlay";
 import type { ColorScheme } from "@/hooks/useColorScheme";
-import { useIsMobile } from "@/hooks/useIsMobile"; // << add this
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 export type FactAction = {
   type: "save";
@@ -292,7 +292,7 @@ export function ChatKitPanel({
   const blockingError = errors.script ?? activeError;
 
   return (
-    <div className="relative flex h-[90vh] w-full flex-col rounded-3xl overflow-hidden">
+    <div className="relative flex h-full w-full flex-col rounded-3xl overflow-hidden">
       <ChatKit
         key={widgetInstanceKey}
         control={chatkit.control}
