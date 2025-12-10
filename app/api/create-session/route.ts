@@ -26,12 +26,26 @@ let jwksCache: JwksCache | null = null;
 
 /* ---------- Utilities ---------- */
 
+// Return a plain Uint8Array< number > to satisfy WebCrypto's BufferSource
 function base64UrlToUint8Array(base64Url: string): Uint8Array {
   const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
   const pad = base64.length % 4 === 2 ? "==" : base64.length % 4 === 3 ? "=" : "";
   const normalized = base64 + pad;
-  const raw = Buffer.from(normalized, "base64");
-  return new Uint8Array(raw);
+  const raw = typeof Buffer !== "undefined" ? Buffer.from(normalized, "base64") : atob(normalized);
+  const len = typeof raw === "string" ? raw.length : raw.byteLength;
+  const arr = new Uint8Array(len);
+
+  if (typeof raw === "string") {
+    for (let i = 0; i < len; i++) {
+      arr[i] = raw.charCodeAt(i);
+    }
+  } else {
+    for (let i = 0; i < len; i++) {
+      arr[i] = raw[i];
+    }
+  }
+
+  return arr;
 }
 
 function getCookieValue(cookieHeader: string | null, name: string): string | null {
@@ -90,7 +104,7 @@ async function verifyOutsetaToken(token: string): Promise<VerifiedToken> {
     const header = JSON.parse(headerJson) as { kid?: string; alg?: string; typ?: string };
     const payload = JSON.parse(payloadJson) as Record<string, unknown>;
 
-    const sigArrayBuffer = base64UrlToUint8Array(signatureB64);
+    const sigArray = base64UrlToUint8Array(signatureB64);
     const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
 
     const jwk = await getJwkForKid(OUTSETA_JWKS_URL, header.kid);
@@ -104,7 +118,8 @@ async function verifyOutsetaToken(token: string): Promise<VerifiedToken> {
       ["verify"],
     );
 
-    const ok = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", cryptoKey, sigArrayBuffer, data);
+    // sigArray and data are both Uint8Array, which is a valid BufferSource
+    const ok = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", cryptoKey, sigArray, data);
     return { verified: ok, payload };
   } catch (err) {
     console.warn("verifyOutsetaToken error:", err);
