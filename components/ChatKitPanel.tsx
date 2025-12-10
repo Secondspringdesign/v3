@@ -12,7 +12,7 @@ import {
 } from "@/lib/config";
 import { ErrorOverlay } from "./ErrorOverlay";
 import type { ColorScheme } from "@/hooks/useColorScheme";
-import { useIsMobile } from "@/hooks/useIsMobile"; // << mobile hook
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 export type FactAction = {
   type: "save";
@@ -47,7 +47,7 @@ const createInitialErrors = (): ErrorState => ({
 // Outseta client surface (partial) for typing
 type OutsetaClientSurface = {
   getAccessToken?: () => string | null;
-  getJwtPayload?: () => Record<string, unknown> | null;
+  getJwtPayload?: () => Promise<Record<string, unknown> | null>;
   auth?: { accessToken?: string | null } | null;
 };
 
@@ -55,30 +55,33 @@ type OutsetaClientSurface = {
 function findOutsetaTokenOnClient(): string | null {
   if (!isBrowser) return null;
 
-  const out =
-    (window as unknown as { Outseta?: OutsetaClientSurface; outseta?: OutsetaClientSurface }).Outseta ??
-    (window as unknown as { Outseta?: OutsetaClientSurface; outseta?: OutsetaClientSurface }).outseta ??
-    null;
+  const w = window as unknown as {
+    Outseta?: OutsetaClientSurface;
+    outseta?: OutsetaClientSurface;
+  };
+
+  const out = w.Outseta ?? w.outseta ?? null;
 
   try {
     if (out) {
+      // 1) Preferred: getAccessToken() – in your environment this is a sync function returning a string
       if (typeof out.getAccessToken === "function") {
-        const t = out.getAccessToken();
-        if (t) return t;
-      }
-      if (typeof out.getJwtPayload === "function") {
-        const payload = out.getJwtPayload();
-        if (payload) {
-          if (typeof payload["rawToken"] === "string") return payload["rawToken"] as string;
-          if (typeof payload["accessToken"] === "string") return payload["accessToken"] as string;
+        const tokenOrNull = out.getAccessToken();
+        if (typeof tokenOrNull === "string" && tokenOrNull) {
+          return tokenOrNull;
         }
       }
-      if (out.auth && typeof out.auth.accessToken === "string") return out.auth.accessToken as string;
+
+      // 2) Fallback: cached auth.accessToken
+      if (out.auth && typeof out.auth.accessToken === "string" && out.auth.accessToken) {
+        return out.auth.accessToken;
+      }
     }
   } catch (err) {
     console.warn("Error while calling Outseta client API:", err);
   }
 
+  // 3) Last resort: legacy localStorage keys (if you had them before)
   try {
     const localKeys = ["outseta_access_token", "outseta_token", "outseta_auth_token"];
     for (const k of localKeys) {
@@ -179,16 +182,18 @@ export function ChatKitPanel({
         // Default to the Business workspace if no agent param is present
         const agent = urlParams.get("agent") || "business";
 
+        // Get the Outseta access token synchronously
         const outsetaToken = findOutsetaTokenOnClient();
 
         const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (outsetaToken) headers["Authorization"] = `Bearer ${outsetaToken}`;
+        if (outsetaToken) {
+          headers["Authorization"] = `Bearer ${outsetaToken}`;
+        }
 
         const response = await fetch(`${CREATE_SESSION_ENDPOINT}?agent=${agent}`, {
           method: "POST",
           headers,
           body: JSON.stringify({
-            user: "public-user",
             chatkit_configuration: { file_upload: { enabled: true } },
           }),
         });
