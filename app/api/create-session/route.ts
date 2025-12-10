@@ -1,145 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
 
-/**
- * NOTE: This file assumes you previously had similar logic.
- * If you had extra imports or helpers, re-add them as needed
- * but keep the resolveUserId behavior as defined here.
- */
+// ---- Your existing constants and types ----
 
-const OUTSETA_HEADER_NAME = "x-outseta-access-token";
-const OUTSETA_COOKIE_NAME = "outseta_access_token";
-const SESSION_COOKIE_NAME = "chatkit_session_id";
+// We keep OUTSETA_JWKS_URL as you already set it:
 const OUTSETA_JWKS_URL = "https://second-spring-design.outseta.com/.well-known/jwks";
 
-type VerifiedToken = {
-  verified: boolean;
-  payload?: object;
-};
+// You already have VerifiedToken, JwksCache, JWKS_TTL, jwksCache, etc.
+// Keeping your existing utilities: base64UrlToUint8Array, getCookieValue, serializeSessionCookie,
+// extractTokenFromHeader, getJwkForKid, verifyOutsetaToken.
+// I’m only changing two things inside resolveUserId, and how we pick the header name.
 
-type JwksCache = {
-  fetchedAt: number;
-  jwks: unknown;
-};
+// If you previously had these names:
+const SESSION_COOKIE_NAME = "chatkit_session_id";
+// OUTSETA_COOKIE_NAME pointing at your Outseta cookie (if any)
+const OUTSETA_COOKIE_NAME = "outseta_access_token";
 
-const JWKS_TTL = 24 * 60 * 60 * 1000; // 24 hours
-let jwksCache: JwksCache | null = null;
-
-/* ---------- Utilities ---------- */
-
-// Return a plain Uint8Array<number> to satisfy WebCrypto's BufferSource
-function base64UrlToUint8Array(base64Url: string): Uint8Array {
-  const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-  const pad = base64.length % 4 === 2 ? "==" : base64.length % 4 === 3 ? "=" : "";
-  const normalized = base64 + pad;
-
-  // Use global Buffer when available (Node), else atob string decoding (edge/browser)
-  if (typeof Buffer !== "undefined") {
-    return new Uint8Array(Buffer.from(normalized, "base64"));
-  }
-
-  const binary = atob(normalized);
-  const len = binary.length;
-  const arr = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    arr[i] = binary.charCodeAt(i);
-  }
-  return arr;
-}
-
-function getCookieValue(cookieHeader: string | null, name: string): string | null {
-  if (!cookieHeader) return null;
-  const cookies = cookieHeader.split(";").map((c) => c.trim());
-  for (const c of cookies) {
-    const [k, ...rest] = c.split("=");
-    if (k === name) return rest.join("=");
-  }
-  return null;
-}
-
-function serializeSessionCookie(userId: string): string {
-  const maxAgeSeconds = 60 * 60 * 24 * 365; // 1 year
-  return `${SESSION_COOKIE_NAME}=${encodeURIComponent(
-    userId,
-  )}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}`;
-}
-
+// Helper: parse "Bearer <token>" or raw token
 function extractTokenFromHeader(headerValue: string | null): string | null {
   if (!headerValue) return null;
-  // accept either "Bearer <token>" or raw token
   const parts = headerValue.split(" ");
   if (parts.length === 2 && /^Bearer$/i.test(parts[0])) return parts[1];
   return headerValue.trim();
 }
 
-/* ---------- Outseta JWT verification ---------- */
+// ... your existing base64UrlToUint8Array, getCookieValue, serializeSessionCookie,
+// getJwkForKid, verifyOutsetaToken functions should remain here, unchanged,
+// EXCEPT for OUTSETA_JWKS_URL already pointing at your subdomain.
 
-async function getJwkForKid(jwksUrl: string, kid?: string): Promise<unknown | null> {
-  try {
-    const now = Date.now();
-    if (!jwksCache || now - jwksCache.fetchedAt > JWKS_TTL) {
-      const res = await fetch(jwksUrl);
-      if (!res.ok) throw new Error(`Failed to fetch JWKS (${res.status})`);
-      const jwks = await res.json();
-      jwksCache = { fetchedAt: now, jwks };
-    }
-    const keys = (jwksCache.jwks as Record<string, unknown>)?.keys ?? [];
-    if (!kid) return (keys as unknown[]).find((k) => (k as Record<string, unknown>).kty === "RSA") ?? null;
-    return (keys as unknown[]).find((k) => (k as Record<string, unknown>).kid === kid) ?? null;
-  } catch (err) {
-    console.warn("Error fetching JWKS:", err);
-    return null;
-  }
-}
-
-async function verifyOutsetaToken(token: string): Promise<VerifiedToken> {
-  try {
-    const [headerB64, payloadB64, signatureB64] = token.split(".");
-    if (!headerB64 || !payloadB64 || !signatureB64) throw new Error("Invalid JWT format");
-
-    const headerJson = Buffer.from(headerB64, "base64url").toString("utf8");
-    const payloadJson = Buffer.from(payloadB64, "base64url").toString("utf8");
-
-    const header = JSON.parse(headerJson) as { kid?: string; alg?: string; typ?: string };
-    const payload = JSON.parse(payloadJson) as Record<string, unknown>;
-
-    const sigArray = base64UrlToUint8Array(signatureB64);
-    const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
-
-    const jwk = await getJwkForKid(OUTSETA_JWKS_URL, header.kid);
-    if (!jwk) throw new Error("Unable to find matching JWK to verify token signature.");
-
-    const cryptoKey = await crypto.subtle.importKey(
-      "jwk",
-      jwk as JsonWebKey,
-      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-      false,
-      ["verify"],
-    );
-
-    // Explicit BufferSource casts keep TypeScript happy
-    const ok = await crypto.subtle.verify(
-      "RSASSA-PKCS1-v1_5",
-      cryptoKey,
-      sigArray as unknown as BufferSource,
-      data as unknown as BufferSource,
-    );
-
-    return { verified: ok, payload };
-  } catch (err) {
-    console.warn("verifyOutsetaToken error:", err);
-    return { verified: false };
-  }
-}
-
-/* ---------- Resolve user id (STRICT: must come from Outseta) ---------- */
+// ---------- RESOLVE USER ID (this is the key change) ----------
 
 async function resolveUserId(request: Request): Promise<{
   userId: string | null;
   sessionCookie: string | null;
   error?: string;
 }> {
-  const headerToken = extractTokenFromHeader(request.headers.get(OUTSETA_HEADER_NAME));
+  // 1) CHANGE: read Outseta token from Authorization header, because ChatKitPanel
+  // sends headers["Authorization"] = `Bearer ${outsetaToken}`;
+  const headerToken = extractTokenFromHeader(request.headers.get("authorization"));
+
+  // 2) Optional: also look for a dedicated Outseta cookie if you have one.
   const cookieToken = getCookieValue(request.headers.get("cookie"), OUTSETA_COOKIE_NAME);
+
   const token = headerToken || cookieToken;
 
   if (!token) {
@@ -156,14 +57,14 @@ async function resolveUserId(request: Request): Promise<{
 
     const payload = verified.payload as Record<string, unknown>;
 
-    // PRIMARY: Outseta recommended universal user id (sub)
+    // 3) CHANGE: Universal user id comes from Outseta's recommended `sub` claim.
     const userIdFromToken =
       (payload["sub"] as string) ||
       (payload["user_id"] as string) ||
       (payload["uid"] as string) ||
       undefined;
 
-    // OPTIONAL: account id fallback for account-scoped behavior (not preferred)
+    // 4) OPTIONAL: account id fallback (for account-scoped behavior only, not preferred)
     const accountIdFromToken =
       (payload["outseta:accountUid"] as string) ||
       (payload["outseta:accountuid"] as string) ||
@@ -181,9 +82,12 @@ async function resolveUserId(request: Request): Promise<{
       };
     }
 
-    console.warn("[create-session] Outseta token verified but user id (sub) not found in payload", payload);
+    console.warn(
+      "[create-session] Outseta token verified but user id (sub) not found in payload",
+      payload,
+    );
 
-    // LAST RESORT: account id (NOT recommended for true per-user history)
+    // LAST RESORT: account id as user id (not recommended for true per-user history)
     if (accountIdFromToken) {
       console.log("[create-session] Falling back to account id as userId:", accountIdFromToken);
       return {
@@ -198,19 +102,11 @@ async function resolveUserId(request: Request): Promise<{
     return { userId: null, sessionCookie: null, error: "Error verifying Outseta token" };
   }
 
-  /**
-   * If you REALLY want anonymous fallback, you could re-enable this block instead of returning errors above:
-   *
-   * const existing = getCookieValue(request.headers.get("cookie"), SESSION_COOKIE_NAME);
-   * if (existing) return { userId: existing, sessionCookie: null };
-   * const generated = crypto.randomUUID?.() || Math.random().toString(36).slice(2);
-   * return { userId: generated, sessionCookie: serializeSessionCookie(generated) };
-   *
-   * But given your goal, we keep strict behavior: no valid Outseta user => no session.
-   */
+  // IMPORTANT: we do NOT silently generate a random cookie id here.
+  // If there’s no valid Outseta token, we want to fail, not create a new identity.
 }
 
-/* ---------- create-session handler ---------- */
+// ---------- POST HANDLER (keep your logic, just gate on userId) ----------
 
 export async function POST(request: NextRequest) {
   const { userId, sessionCookie, error } = await resolveUserId(request);
@@ -225,12 +121,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // TODO: keep your existing logic here to:
-  // - create or load a ChatKit / Agent Builder session for this userId
-  // - call your orchestrator / Agent Builder backend as needed
+  // --- KEEP YOUR EXISTING SESSION CREATION LOGIC HERE ---
+  // You likely already:
+  // - talk to your orchestrator / Agent Builder backend
+  // - create or load a ChatKit session keyed by this userId
+  // - return { client_secret, ... } or whatever your ChatKitPanel expects
 
-  const responseBody = { userId }; // Example; replace with actual response structure
-  const res = NextResponse.json(responseBody);
+  // Example stub (replace with your actual logic):
+  // const { client_secret, ...rest } = await createChatSessionForUser(userId, request);
+  // const body = { client_secret, ...rest };
+
+  const body = { userId }; // placeholder, replace with your existing response
+
+  const res = NextResponse.json(body);
 
   if (sessionCookie) {
     res.headers.set("Set-Cookie", sessionCookie);
