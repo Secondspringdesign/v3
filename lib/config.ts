@@ -55,7 +55,7 @@ export function getGreetingForAgent(agent?: string) {
 
 // ---------- PER-AGENT STARTER PROMPTS ----------
 //
-// Icons are all from the supported ChatKit icon set you listed.
+// Icons are all from the supported ChatKit icon set.
 //
 
 export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
@@ -106,68 +106,50 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       icon: "profile", // customer focus
     },
     {
-      label: "Write a simple pitch for me",
+      label: "Write a simple message",
       prompt:
-        "Here’s my idea and who I think it’s for. Write a one‑sentence pitch I can use on my site or in an email.",
-      icon: "mail", // messaging
+        "Given this idea and target, help me write a simple message I can actually say out loud or type in a DM.",
+      icon: "megaphone", // message
     },
   ],
 
   // Finance main
   finance: [
     {
-      label: "Sanity‑check my pricing",
+      label: "Check if my numbers make sense",
       prompt:
-        "Here’s what I’m planning to sell and what I was thinking of charging. Help me sanity‑check this pricing.",
-      icon: "analytics", // numbers / checking
-    },
-    {
-      label: "Could this actually cover my bills?",
-      prompt:
-        "Here’s my idea, rough pricing, and what I’d like to earn per month. Help me see if the math is realistic.",
-      icon: "chart", // projections
+        "Here’s my rough pricing and income goal. Help me see if the math basically works and what would need to change.",
+      icon: "calculator", // numbers check
     },
   ],
 
   // Reality Check task
   reality_check: [
     {
-      label: "Upload or paste your plan to get started",
+      label: "Be brutally honest about this plan",
       prompt:
-        "I’m pasting or uploading my current plan. Please read it and act as a reality check: tell me what looks solid, what seems shaky, and exactly what to test first.",
-      icon: "check-circle", // validation / check
+        "Here’s my plan. Be honest about what’s strong, what’s weak, and what I should test first.",
+      icon: "triangle-alert", // caution
     },
   ],
 
   // SWOT task
   swot: [
     {
-      label: "Give me a quick SWOT for this plan",
+      label: "Give me a quick SWOT",
       prompt:
-        "Here’s my current plan. Create a brief SWOT analysis and highlight what to lean into and what to watch out for.",
-      icon: "compass", // strategic directions
-    },
-    {
-      label: "I’m not sure where to take this next",
-      prompt:
-        "Here’s my plan and the main directions I’m considering next. Compare them using a SWOT so I can see which looks better for the next year.",
-      icon: "analytics", // comparison / analysis
+        "Here’s my idea. Give me a quick SWOT so I can see strengths, weaknesses, opportunities, and threats.",
+      icon: "grid-3x3", // matrix
     },
   ],
 
   // Legal & Tax Checkup task
   legal_tax: [
     {
-      label: "Scan my plan for legal and tax areas",
+      label: "What should I ask a professional?",
       prompt:
-        "Here’s my plan and where I’m based. Highlight the main legal and tax areas I should pay attention to, in simple language. I know this isn’t legal or tax advice.",
-      icon: "bug", // flagging issues / risks
-    },
-    {
-      label: "Help me prepare for a pro",
-      prompt:
-        "Here’s my plan and where I’m based. Turn this into a short list of questions I can bring to a lawyer or accountant.",
-      icon: "notebook-pencil", // prep notes
+        "Given this business idea and where I live, what general legal and tax topics should I ask a professional about? I know you’re not giving legal or tax advice.",
+      icon: "scale", // legal scale
     },
   ],
 };
@@ -178,45 +160,10 @@ export function getStarterPromptsForAgent(agent?: string): StartScreenPrompt[] {
 }
 
 // ---------- THEME CONFIG ----------
-//
-// Force DARK mode, tinted grayscale OFF, custom surface colors:
-// - background: #1B202C
-// - foreground: #272D40
-//
 
-export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
-  colorScheme: "dark",
-  radius: "round",
-  density: "normal",
-  color: {
-    // No grayscale block -> tinted grayscale effectively off
-    surface: {
-      background: "#1B202C",
-      foreground: "#272D40",
-    },
-  },
-  typography: {
-    baseSize: 16,
-    fontFamily: "Inter, sans-serif",
-    fontSources: [
-      {
-        family: "Inter",
-        src: "https://rsms.me/inter/font-files/Inter-Regular.woff2",
-        weight: 400,
-        style: "normal",
-      },
-      {
-        family: "Inter",
-        src: "https://rsms.me/inter/font-files/Inter-Medium.woff2",
-        weight: 500,
-        style: "normal",
-      },
-      {
-        family: "Inter",
-        src: "https://rsms.me/inter/font-files/Inter-SemiBold.woff2",
-        weight: 600,
-        style: "normal",
-      },
-    ],
-  },
-});
+export function getThemeConfig(colorScheme: ColorScheme): ThemeOption {
+  return {
+    appearance: colorScheme, // "light" | "dark" | "system"
+    // extend this if you’re using more theme options
+  };
+}
