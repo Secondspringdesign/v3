@@ -68,12 +68,14 @@ function findOutsetaTokenOnClient(): string | null {
       if (typeof out.getAccessToken === "function") {
         const tokenOrNull = out.getAccessToken();
         if (typeof tokenOrNull === "string" && tokenOrNull) {
+          if (isDev) console.log("[ChatKitPanel] Outseta token from getAccessToken()");
           return tokenOrNull;
         }
       }
 
       // 2) Fallback: cached auth.accessToken
       if (out.auth && typeof out.auth.accessToken === "string" && out.auth.accessToken) {
+        if (isDev) console.log("[ChatKitPanel] Outseta token from auth.accessToken");
         return out.auth.accessToken;
       }
     }
@@ -86,12 +88,46 @@ function findOutsetaTokenOnClient(): string | null {
     const localKeys = ["outseta_access_token", "outseta_token", "outseta_auth_token"];
     for (const k of localKeys) {
       const v = window.localStorage.getItem(k);
-      if (v) return v;
+      if (v) {
+        if (isDev) console.log("[ChatKitPanel] Outseta token from localStorage key:", k);
+        return v;
+      }
     }
   } catch (err) {
     console.warn("Error while reading localStorage for Outseta token:", err);
   }
 
+  if (isDev) console.warn("[ChatKitPanel] No Outseta token found on client");
+  return null;
+}
+
+// Small helper: wait briefly for Outseta to finish initializing and return a token
+async function waitForOutsetaToken(maxAttempts = 5, delayMs = 200): Promise<string | null> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const token = findOutsetaTokenOnClient();
+    if (token) {
+      if (isDev) {
+        console.log(
+          "[ChatKitPanel] waitForOutsetaToken: got token on attempt",
+          attempt,
+        );
+      }
+      return token;
+    }
+
+    if (isDev) {
+      console.log(
+        "[ChatKitPanel] waitForOutsetaToken: no token yet, attempt",
+        attempt,
+        "of",
+        maxAttempts,
+      );
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  if (isDev) console.warn("[ChatKitPanel] waitForOutsetaToken: giving up, no token found");
   return null;
 }
 
@@ -182,8 +218,10 @@ export function ChatKitPanel({
         // Default to the Business workspace if no agent param is present
         const agent = urlParams.get("agent") || "business";
 
-        // Get the Outseta access token synchronously
-        const outsetaToken = findOutsetaTokenOnClient();
+        // Wait a bit for Outseta to be ready and return an access token
+        if (isDev) console.log("[ChatKitPanel] Waiting for Outseta access token…");
+        const outsetaToken = await waitForOutsetaToken();
+        if (isDev) console.log("[ChatKitPanel] Outseta token present:", !!outsetaToken);
 
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (outsetaToken) {
