@@ -175,7 +175,8 @@ export function ChatKitPanel({
 
       try {
         const urlParams = new URLSearchParams(window.location.search);
-        const agent = urlParams.get("agent") || "strategy";
+        // Default to the Business workspace if no agent param is present
+        const agent = urlParams.get("agent") || "business";
 
         const outsetaToken = findOutsetaTokenOnClient();
 
@@ -224,9 +225,10 @@ export function ChatKitPanel({
     [setErrorState],
   );
 
+  // Also default UI copy (greeting, starter prompts) to Business when no agent param exists
   const agentFromUrl = isBrowser
-    ? new URLSearchParams(window.location.search).get("agent") ?? "strategy"
-    : "strategy";
+    ? new URLSearchParams(window.location.search).get("agent") ?? "business"
+    : "business";
 
   const themeConfig = getThemeConfig(theme);
 
