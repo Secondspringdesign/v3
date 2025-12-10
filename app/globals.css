@@ -52,3 +52,11 @@ textarea#chatkit-composer-input
   fill: #f3f0ec !important;
   opacity: 0.9 !important;
 }
+/* Mobile-only tweaks for ChatKit starter prompts */
+@media (max-width: 640px) {
+  .chat-shell [class*="start-screen"] [class*="prompt"] {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+  }
+}
