@@ -56,13 +56,19 @@ textarea#chatkit-composer-input
 @tailwind components;
 @tailwind utilities;
 
-/* Your existing global styles can go here... */
+/* ----- ChatKit background overrides ----- */
 
-/* Mobile-only: let ChatKit starter prompts wrap instead of truncating */
-@media (max-width: 640px) {
-  .chat-shell .truncate {
-    white-space: normal !important;
-    overflow: visible !important;
-    text-overflow: clip !important;
-  }
+.second-spring-chat,
+.second-spring-chat *:where([data-surface="canvas"]) {
+  background-color: #0b0f18 !important;
 }
+
+/* Stronger version if needed:
+
+.second-spring-chat,
+.second-spring-chat *:where([data-surface]),
+.second-spring-chat * {
+  background-color: #0b0f18 !important;
+}
+
+*/
