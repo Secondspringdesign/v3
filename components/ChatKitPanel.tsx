@@ -97,9 +97,10 @@ export function ChatKitPanel({
   onResponseEnd,
   onThemeRequest,
 }: ChatKitPanelProps) {
-  // removed processedFacts – it wasn’t used and caused ESLint errors
+  const processedFacts = useRef(new Set<string>());
   const [errors, setErrors] = useState<ErrorState>(() => createInitialErrors());
 
+  // NEW: mobile detection – this is the only *behavior* change
   const isMobile = useIsMobile(640); // <= 640px is mobile
 
   // Derive the agent from the URL query (?agent=...)
@@ -116,9 +117,9 @@ export function ChatKitPanel({
 
   // ----- ChatKit integration state -----
 
-  // Call useChatKit with a minimal, typed options object (no `any`)
   const chatkit = useChatKit({
-    api: {}, // ChatKit will use defaults; Outseta token is set below
+    // This matches the old behavior: let ChatKit manage its own API config.
+    // We only use chatkit.setAuthToken below.
   });
 
   // Wire Outseta token into ChatKit
