@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { ChatKit, useChatKit } from "@openai/chatkit-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChatKit } from "@openai/chatkit-react";
 import {
   STARTER_PROMPTS,
   PLACEHOLDER_INPUT,
@@ -51,7 +51,6 @@ type OutsetaClientSurface = {
   auth?: { accessToken?: string | null } | null;
 };
 
-// Try to get token via Outseta client API (if present), then fallback to localStorage keys
 function findOutsetaTokenOnClient(): string | null {
   if (!isBrowser) return null;
 
@@ -100,7 +99,7 @@ export function ChatKitPanel({
 }: ChatKitPanelProps) {
   const [errors, setErrors] = useState<ErrorState>(() => createInitialErrors());
 
-  const isMobile = useIsMobile(640); // <= 640px considered mobile
+  const isMobile = useIsMobile(640); // <= 640px is "mobile"
 
   // Derive the agent from the URL query (?agent=...)
   const agent =
@@ -114,19 +113,8 @@ export function ChatKitPanel({
   const starterPrompts =
     isMobile === true ? [] : getStarterPromptsForAgent(agent) ?? STARTER_PROMPTS;
 
-  // ----- ChatKit integration state -----
-
-  const chatkit = useChatKit({}); // call with an empty config object as required
-
-  // Wire Outseta token into ChatKit (same as your previous pattern)
-  useEffect(() => {
-    if (!chatkit || !isBrowser) return;
-
-    const token = findOutsetaTokenOnClient();
-    if (token) {
-      chatkit.setAuthToken(token);
-    }
-  }, [chatkit]);
+  const hasAnyError =
+    errors.script !== null || errors.session !== null || errors.integration !== null;
 
   const handleWidgetAction = useCallback(
     async (action: FactAction) => {
@@ -146,9 +134,6 @@ export function ChatKitPanel({
     [onThemeRequest],
   );
 
-  const hasAnyError =
-    errors.script !== null || errors.session !== null || errors.integration !== null;
-
   return (
     <>
       {hasAnyError && (
@@ -158,6 +143,7 @@ export function ChatKitPanel({
         />
       )}
 
+      {/* keep the rest of your existing JSX here, BUT make sure <ChatKit> uses starterPrompts */}
       <ChatKit
         apiBaseUrl={CREATE_SESSION_ENDPOINT}
         theme={getThemeConfig(theme)}
