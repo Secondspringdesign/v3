@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChatKit } from "@openai/chatkit-react";
+import { ChatKit, useChatKit } from "@openai/chatkit-react";
 import {
   STARTER_PROMPTS,
   PLACEHOLDER_INPUT,
@@ -12,6 +12,7 @@ import {
 } from "@/lib/config";
 import { ErrorOverlay } from "./ErrorOverlay";
 import type { ColorScheme } from "@/hooks/useColorScheme";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 export type FactAction = {
   type: "save";
@@ -91,16 +92,6 @@ function findOutsetaTokenOnClient(): string | null {
   return null;
 }
 
-// Convert ErrorState into a flat string for ErrorOverlay
-function formatError(errors: ErrorState): string {
-  const parts: string[] = [];
-  if (errors.script) parts.push(errors.script);
-  if (errors.session) parts.push(errors.session);
-  if (errors.integration) parts.push(errors.integration);
-  if (parts.length === 0) return "Something went wrong.";
-  return parts.join(" • ");
-}
-
 export function ChatKitPanel({
   theme,
   onWidgetAction,
@@ -110,6 +101,8 @@ export function ChatKitPanel({
   const processedFacts = useRef(new Set<string>());
   const [errors, setErrors] = useState<ErrorState>(() => createInitialErrors());
 
+  const isMobile = useIsMobile(640); // <= 640px considered mobile
+
   // Derive the agent from the URL query (?agent=...)
   const agent =
     typeof window !== "undefined"
@@ -118,17 +111,23 @@ export function ChatKitPanel({
 
   const greeting = getGreetingForAgent(agent);
 
-  // ORIGINAL behavior: always use full prompts
-  const starterPrompts = getStarterPromptsForAgent(agent) ?? STARTER_PROMPTS;
+  // Desktop: full prompts. Mobile: no starter prompts at all.
+  const starterPrompts =
+    isMobile === true ? [] : getStarterPromptsForAgent(agent) ?? STARTER_PROMPTS;
 
-  // Optional: Outseta token presence (for logging or future use)
+  // ----- ChatKit integration state -----
+
+  const chatkit = useChatKit();
+
+  // Example: your existing effect wiring for Outseta / token, etc.
   useEffect(() => {
+    if (!chatkit || !isBrowser) return;
+
     const token = findOutsetaTokenOnClient();
-    if (isDev) {
-      // eslint-disable-next-line no-console
-      console.debug("Outseta token present on client:", Boolean(token));
+    if (token) {
+      chatkit.setAuthToken(token);
     }
-  }, []);
+  }, [chatkit]);
 
   const handleWidgetAction = useCallback(
     async (action: FactAction) => {
@@ -151,14 +150,11 @@ export function ChatKitPanel({
   const hasAnyError =
     errors.script !== null || errors.session !== null || errors.integration !== null;
 
-  const overlayErrorText = formatError(errors);
-
   return (
     <>
       {hasAnyError && (
         <ErrorOverlay
-          error={overlayErrorText}
-          fallbackMessage="Something went wrong while loading the chat."
+          errors={errors}
           onRetry={() => setErrors(createInitialErrors())}
         />
       )}
