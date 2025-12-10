@@ -179,9 +179,8 @@ export function getStarterPromptsForAgent(agent?: string): StartScreenPrompt[] {
 
 // ---------- THEME CONFIG ----------
 //
-// Force DARK mode, tinted grayscale OFF, custom surface colors:
-// - background: #1B202C
-// - foreground: #272D40
+// Force DARK mode and explicitly darken all surfaces so there is no
+// light "cap" above the chat.
 //
 
 export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
@@ -189,10 +188,17 @@ export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
   radius: "round",
   density: "normal",
   color: {
-    // No grayscale block -> tinted grayscale effectively off
     surface: {
+      // This is the outermost canvas behind the chat card
+      canvas: "#0B0F18",      // darker than the card
+      // Main "card" surface
       background: "#1B202C",
+      // Inner foreground panels
       foreground: "#272D40",
+    },
+    border: {
+      subtle: "#272D40",
+      strong: "#272D40",
     },
   },
   typography: {
