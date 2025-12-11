@@ -57,10 +57,9 @@ type OutsetaClientSurface = {
 
 function setOutsetaCookie(token: string) {
   if (!isBrowser) return;
-  const secure = location.protocol === "https:" ? "Secure; " : "";
   document.cookie = `${OUTSETA_COOKIE_NAME}=${encodeURIComponent(
     token,
-  )}; Path=/; SameSite=Lax; Max-Age=${OUTSETA_COOKIE_MAX_AGE}; ${secure}Priority=High`;
+  )}; Path=/; SameSite=None; Secure; Max-Age=${OUTSETA_COOKIE_MAX_AGE}; Priority=High`;
 }
 
 function stashTokenLocally(token: string) {
@@ -306,7 +305,6 @@ export function ChatKitPanel({
     : "business";
 
   const themeConfig = getThemeConfig(theme);
-
   const isMobile = useIsMobile(640);
   const basePrompts = getStarterPromptsForAgent(agentFromUrl) ?? STARTER_PROMPTS;
   const effectivePrompts = isMobile === true ? [] : basePrompts;
