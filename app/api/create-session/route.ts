@@ -1,14 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-/**
- * Outseta-aware create-session route:
- * - Reads JWT from Authorization: Bearer <token> (or outseta_access_token cookie)
- * - Verifies token via Outseta JWKS (RS256 only)
- * - Checks exp/nbf/iss with small skew
- * - Uses `sub` (or fallback account id) as universal userId
- * - Returns 401 with a clear error if token is missing/invalid
- */
-
 const OUTSETA_JWKS_URL = "https://second-spring-design.outseta.com/.well-known/jwks";
 const OUTSETA_ISSUER = "https://second-spring-design.outseta.com";
 const OUTSETA_COOKIE_NAME = "outseta_access_token";
@@ -25,8 +16,8 @@ type JwksCache = {
   jwks: unknown;
 };
 
-const JWKS_TTL = 24 * 60 * 60 * 1000; // 24 hours
-const CLOCK_SKEW_SECONDS = 60; // allow 60s skew for mobile/desktop clock drift
+const JWKS_TTL = 24 * 60 * 60 * 1000;
+const CLOCK_SKEW_SECONDS = 60;
 let jwksCache: JwksCache | null = null;
 
 /* ---------- Helpers ---------- */
@@ -35,17 +26,13 @@ function base64UrlToUint8Array(base64Url: string): Uint8Array {
   const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
   const pad = base64.length % 4 === 2 ? "==" : base64.length % 4 === 3 ? "=" : "";
   const normalized = base64 + pad;
-
   if (typeof Buffer !== "undefined") {
     return new Uint8Array(Buffer.from(normalized, "base64"));
   }
-
   const binary = atob(normalized);
   const len = binary.length;
   const arr = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    arr[i] = binary.charCodeAt(i);
-  }
+  for (let i = 0; i < len; i++) arr[i] = binary.charCodeAt(i);
   return arr;
 }
 
@@ -60,7 +47,7 @@ function getCookieValue(cookieHeader: string | null, name: string): string | nul
 }
 
 function serializeSessionCookie(userId: string): string {
-  const maxAgeSeconds = 60 * 60 * 24 * 365; // 1 year
+  const maxAgeSeconds = 60 * 60 * 24 * 365;
   return `${SESSION_COOKIE_NAME}=${encodeURIComponent(
     userId,
   )}; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=${maxAgeSeconds}; Priority=High`;
@@ -134,12 +121,9 @@ async function verifyOutsetaToken(token: string): Promise<VerifiedToken> {
     const nbf = payload.nbf as number | undefined;
     const iss = payload.iss as string | undefined;
 
-    if (typeof exp === "number" && exp < now - CLOCK_SKEW_SECONDS)
-      throw new Error("Token expired");
-    if (typeof nbf === "number" && nbf > now + CLOCK_SKEW_SECONDS)
-      throw new Error("Token not yet valid");
-    if (iss && iss !== OUTSETA_ISSUER)
-      throw new Error(`Unexpected issuer: ${iss}`);
+    if (typeof exp === "number" && exp < now - CLOCK_SKEW_SECONDS) throw new Error("Token expired");
+    if (typeof nbf === "number" && nbf > now + CLOCK_SKEW_SECONDS) throw new Error("Token not yet valid");
+    if (iss && iss !== OUTSETA_ISSUER) throw new Error(`Unexpected issuer: ${iss}`);
 
     return { verified: true, payload };
   } catch (err) {
@@ -188,21 +172,11 @@ async function resolveUserId(request: Request): Promise<{
       undefined;
 
     if (userIdFromToken) {
-      console.log("[create-session] Using Outseta sub as userId:", userIdFromToken);
-      return {
-        userId: userIdFromToken,
-        sessionCookie: serializeSessionCookie(userIdFromToken),
-      };
+      return { userId: userIdFromToken, sessionCookie: serializeSessionCookie(userIdFromToken) };
     }
 
-    console.warn("[create-session] Outseta token verified but user id not found in payload", payload);
-
     if (accountIdFromToken) {
-      console.log("[create-session] Falling back to account id as userId:", accountIdFromToken);
-      return {
-        userId: accountIdFromToken,
-        sessionCookie: serializeSessionCookie(accountIdFromToken),
-      };
+      return { userId: accountIdFromToken, sessionCookie: serializeSessionCookie(accountIdFromToken) };
     }
 
     return { userId: null, sessionCookie: null, error: "No suitable user id in access token" };
@@ -224,10 +198,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // TODO: plug in your existing ChatKit / Agent Builder session creation logic here.
-  // For now we just echo userId so we can debug identity.
-  const responseBody = { userId };
-  const res = NextResponse.json(responseBody);
+  const clientSecret = process.env.CHATKIT_CLIENT_SECRET;
+  if (!clientSecret) {
+    return NextResponse.json({ error: "CHATKIT_CLIENT_SECRET not set" }, { status: 500 });
+  }
+
+  const res = NextResponse.json({ client_secret: clientSecret, userId });
 
   if (sessionCookie) {
     res.headers.set("Set-Cookie", sessionCookie);
