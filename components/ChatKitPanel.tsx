@@ -49,14 +49,11 @@ const createInitialErrors = (): ErrorState => ({
   retryable: false,
 });
 
-// Outseta client surface (partial) for typing
 type OutsetaClientSurface = {
   getAccessToken?: () => string | null;
   getJwtPayload?: () => Promise<Record<string, unknown> | null>;
   auth?: { accessToken?: string | null } | null;
 };
-
-// ---------- Token helpers ----------
 
 function setOutsetaCookie(token: string) {
   if (!isBrowser) return;
@@ -77,7 +74,6 @@ function stashTokenLocally(token: string) {
   setOutsetaCookie(token);
 }
 
-// Try to get token via Outseta client API (if present), then fallback to localStorage keys
 function findOutsetaTokenOnClient(): string | null {
   if (!isBrowser) return null;
 
@@ -122,7 +118,6 @@ function findOutsetaTokenOnClient(): string | null {
   return null;
 }
 
-// Wait for Outseta to finish initializing and return a token (longer + event-friendly)
 async function waitForOutsetaToken(maxAttempts = 20, delayMs = 500): Promise<string | null> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const token = findOutsetaTokenOnClient();
@@ -143,8 +138,6 @@ async function waitForOutsetaToken(maxAttempts = 20, delayMs = 500): Promise<str
   if (isDev) console.warn("[ChatKitPanel] waitForOutsetaToken: giving up, no token found");
   return null;
 }
-
-// ---------- Component ----------
 
 export function ChatKitPanel({
   theme,
@@ -171,7 +164,7 @@ export function ChatKitPanel({
     };
   }, []);
 
-  // Listen for parent -> iframe token handoff and URL override (?outseta_token=...)
+  // Listen for parent -> iframe token and URL override
   useEffect(() => {
     if (!isBrowser) return;
 
@@ -263,13 +256,13 @@ export function ChatKitPanel({
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (outsetaToken) {
           headers["Authorization"] = `Bearer ${outsetaToken}`;
-          stashTokenLocally(outsetaToken); // ensure cookie/localStorage are set
+          stashTokenLocally(outsetaToken);
         }
 
         const response = await fetch(`${CREATE_SESSION_ENDPOINT}?agent=${agent}`, {
           method: "POST",
           headers,
-          credentials: "include", // send cookies to API (SameSite=Lax)
+          credentials: "include",
           body: JSON.stringify({
             chatkit_configuration: { file_upload: { enabled: true } },
           }),
@@ -313,10 +306,6 @@ export function ChatKitPanel({
     : "business";
 
   const themeConfig = getThemeConfig(theme);
-
-  if (isDev) {
-    console.log("[ChatKitPanel] themeConfig", themeConfig);
-  }
 
   const isMobile = useIsMobile(640);
   const basePrompts = getStarterPromptsForAgent(agentFromUrl) ?? STARTER_PROMPTS;
