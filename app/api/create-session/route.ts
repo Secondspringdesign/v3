@@ -5,6 +5,9 @@ const OUTSETA_ISSUER = "https://second-spring-design.outseta.com";
 const OUTSETA_COOKIE_NAME = "outseta_access_token";
 const SESSION_COOKIE_NAME = "chatkit_session_id";
 
+const CLOCK_SKEW_SECONDS = 60;
+const JWKS_TTL = 24 * 60 * 60 * 1000;
+
 type VerifiedToken = {
   verified: boolean;
   payload?: Record<string, unknown>;
@@ -16,8 +19,6 @@ type JwksCache = {
   jwks: unknown;
 };
 
-const JWKS_TTL = 24 * 60 * 60 * 1000;
-const CLOCK_SKEW_SECONDS = 60;
 let jwksCache: JwksCache | null = null;
 
 /* ---------- Helpers ---------- */
@@ -26,13 +27,10 @@ function base64UrlToUint8Array(base64Url: string): Uint8Array {
   const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
   const pad = base64.length % 4 === 2 ? "==" : base64.length % 4 === 3 ? "=" : "";
   const normalized = base64 + pad;
-  if (typeof Buffer !== "undefined") {
-    return new Uint8Array(Buffer.from(normalized, "base64"));
-  }
+  if (typeof Buffer !== "undefined") return new Uint8Array(Buffer.from(normalized, "base64"));
   const binary = atob(normalized);
-  const len = binary.length;
-  const arr = new Uint8Array(len);
-  for (let i = 0; i < len; i++) arr[i] = binary.charCodeAt(i);
+  const arr = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
   return arr;
 }
 
@@ -59,8 +57,6 @@ function extractTokenFromHeader(headerValue: string | null): string | null {
   if (parts.length === 2 && /^Bearer$/i.test(parts[0])) return parts[1];
   return headerValue.trim();
 }
-
-/* ---------- Outseta JWT verification ---------- */
 
 async function getJwkForKid(jwksUrl: string, kid?: string): Promise<unknown | null> {
   try {
@@ -132,8 +128,6 @@ async function verifyOutsetaToken(token: string): Promise<VerifiedToken> {
   }
 }
 
-/* ---------- Resolve user id from Outseta JWT ---------- */
-
 async function resolveUserId(request: Request): Promise<{
   userId: string | null;
   sessionCookie: string | null;
@@ -143,52 +137,111 @@ async function resolveUserId(request: Request): Promise<{
   const cookieToken = getCookieValue(request.headers.get("cookie"), OUTSETA_COOKIE_NAME);
   const token = headerToken || cookieToken;
 
-  if (!token) {
-    console.warn("[create-session] No Outseta access token found in headers or cookies.");
-    return { userId: null, sessionCookie: null, error: "Missing access token" };
+  if (!token) return { userId: null, sessionCookie: null, error: "Missing access token" };
+
+  const verified = await verifyOutsetaToken(token);
+  if (!verified.verified || !verified.payload) {
+    return { userId: null, sessionCookie: null, error: "Invalid access token" };
   }
 
-  try {
-    const verified = await verifyOutsetaToken(token);
-    if (!verified.verified || !verified.payload) {
-      console.warn("[create-session] Outseta token failed verification.", verified.error);
-      return { userId: null, sessionCookie: null, error: "Invalid access token" };
-    }
+  const payload = verified.payload;
+  const userIdFromToken =
+    (payload["sub"] as string) ||
+    (payload["user_id"] as string) ||
+    (payload["uid"] as string) ||
+    undefined;
 
-    const payload = verified.payload;
-    const userIdFromToken =
-      (payload["sub"] as string) ||
-      (payload["user_id"] as string) ||
-      (payload["uid"] as string) ||
-      undefined;
+  const accountIdFromToken =
+    (payload["outseta:accountUid"] as string) ||
+    (payload["outseta:accountuid"] as string) ||
+    (payload["account_uid"] as string) ||
+    (payload["accountUid"] as string) ||
+    (payload["accountId"] as string) ||
+    (payload["account_id"] as string) ||
+    undefined;
 
-    const accountIdFromToken =
-      (payload["outseta:accountUid"] as string) ||
-      (payload["outseta:accountuid"] as string) ||
-      (payload["account_uid"] as string) ||
-      (payload["accountUid"] as string) ||
-      (payload["accountId"] as string) ||
-      (payload["account_id"] as string) ||
-      undefined;
-
-    if (userIdFromToken) {
-      return { userId: userIdFromToken, sessionCookie: serializeSessionCookie(userIdFromToken) };
-    }
-
-    if (accountIdFromToken) {
-      return { userId: accountIdFromToken, sessionCookie: serializeSessionCookie(accountIdFromToken) };
-    }
-
-    return { userId: null, sessionCookie: null, error: "No suitable user id in access token" };
-  } catch (err) {
-    console.warn("[create-session] Outseta token verification failed:", err);
-    return { userId: null, sessionCookie: null, error: "Error verifying access token" };
+  if (userIdFromToken) {
+    return { userId: userIdFromToken, sessionCookie: serializeSessionCookie(userIdFromToken) };
   }
+  if (accountIdFromToken) {
+    return { userId: accountIdFromToken, sessionCookie: serializeSessionCookie(accountIdFromToken) };
+  }
+  return { userId: null, sessionCookie: null, error: "No suitable user id in access token" };
+}
+
+/* ---------- Workflow selection ---------- */
+
+function pickWorkflow(agent: string | null): string | null {
+  const a = agent ?? "business";
+  // Prefer server-side envs; fall back to NEXT_PUBLIC_ if needed
+  const env = (name: string) => process.env[name] ?? null;
+
+  switch (a) {
+    case "business_task1":
+      return env("CHATKIT_WORKFLOW_BUSINESS_TASK1") ?? env("NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS_TASK1");
+    case "business_task2":
+      return env("CHATKIT_WORKFLOW_BUSINESS_TASK2") ?? env("NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS_TASK2");
+    case "business_task3":
+      return env("CHATKIT_WORKFLOW_BUSINESS_TASK3") ?? env("NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS_TASK3");
+    case "product":
+      return env("CHATKIT_WORKFLOW_PRODUCT") ?? env("NEXT_PUBLIC_CHATKIT_WORKFLOW_PRODUCT");
+    case "marketing":
+      return env("CHATKIT_WORKFLOW_MARKETING") ?? env("NEXT_PUBLIC_CHATKIT_WORKFLOW_MARKETING");
+    case "finance":
+      return env("CHATKIT_WORKFLOW_FINANCE") ?? env("NEXT_PUBLIC_CHATKIT_WORKFLOW_FINANCE");
+    case "business":
+    default:
+      return (
+        env("CHATKIT_WORKFLOW_BUSINESS") ??
+        env("NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS") ??
+        env("NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS_TASK1") // last-resort fallback
+      );
+  }
+}
+
+/* ---------- ChatKit session creation ---------- */
+
+async function createChatKitSession({
+  userId,
+  agent,
+}: {
+  userId: string;
+  agent: string;
+}): Promise<string> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
+
+  const workflowId = pickWorkflow(agent);
+  if (!workflowId) throw new Error("Missing workflow id for agent");
+
+  const resp = await fetch("https://api.openai.com/v1/chatkit/sessions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      user: { id: userId },
+      config: {
+        workflow_id: workflowId,
+      },
+    }),
+  });
+
+  const json = await resp.json();
+  if (!resp.ok) {
+    throw new Error(json?.error ?? "Failed to create ChatKit session");
+  }
+  if (!json.client_secret) {
+    throw new Error("Missing client_secret in ChatKit session response");
+  }
+  return json.client_secret as string;
 }
 
 /* ---------- POST handler ---------- */
 
 export async function POST(request: NextRequest) {
+  const agent = request.nextUrl.searchParams.get("agent") ?? "business";
   const { userId, sessionCookie, error } = await resolveUserId(request);
 
   if (!userId) {
@@ -198,16 +251,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const clientSecret = process.env.CHATKIT_CLIENT_SECRET;
-  if (!clientSecret) {
-    return NextResponse.json({ error: "CHATKIT_CLIENT_SECRET not set" }, { status: 500 });
+  try {
+    const clientSecret = await createChatKitSession({ userId, agent });
+    const res = NextResponse.json({ client_secret: clientSecret, userId });
+    if (sessionCookie) res.headers.set("Set-Cookie", sessionCookie);
+    return res;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to create ChatKit session";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  const res = NextResponse.json({ client_secret: clientSecret, userId });
-
-  if (sessionCookie) {
-    res.headers.set("Set-Cookie", sessionCookie);
-  }
-
-  return res;
 }
