@@ -1,28 +1,161 @@
-import { NextRequest, NextResponse } from "next/server";
+export const runtime = "edge";
 
-const OUTSETA_JWKS_URL = "https://second-spring-design.outseta.com/.well-known/jwks";
-const OUTSETA_ISSUER = "https://second-spring-design.outseta.com";
-const OUTSETA_COOKIE_NAME = "outseta_access_token";
+const DEFAULT_CHATKIT_BASE = "https://api.openai.com";
 const SESSION_COOKIE_NAME = "chatkit_session_id";
+const SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+
+// Outseta
+const OUTSETA_COOKIE_NAME = "outseta_access_token";
+const OUTSETA_ISSUER = "https://second-spring-design.outseta.com";
+const OUTSETA_JWKS_URL = "https://second-spring-design.outseta.com/.well-known/jwks";
 
 const CLOCK_SKEW_SECONDS = 60;
 const JWKS_TTL = 24 * 60 * 60 * 1000;
 
-type VerifiedToken = {
-  verified: boolean;
-  payload?: Record<string, unknown>;
-  error?: string;
+// JWKS cache
+let jwksCache: { fetchedAt: number; jwks: unknown } | null = null;
+
+// Map of agents -> workflow ids (prefer server-side; fallback to NEXT_PUBLIC_)
+const WORKFLOWS: Record<string, string | undefined> = {
+  business: process.env.CHATKIT_WORKFLOW_BUSINESS ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS,
+  business_task1:
+    process.env.CHATKIT_WORKFLOW_BUSINESS_TASK1 ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS_TASK1,
+  business_task2:
+    process.env.CHATKIT_WORKFLOW_BUSINESS_TASK2 ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS_TASK2,
+  business_task3:
+    process.env.CHATKIT_WORKFLOW_BUSINESS_TASK3 ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS_TASK3,
+  product: process.env.CHATKIT_WORKFLOW_PRODUCT ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_PRODUCT,
+  marketing: process.env.CHATKIT_WORKFLOW_MARKETING ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_MARKETING,
+  finance: process.env.CHATKIT_WORKFLOW_FINANCE ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_FINANCE,
 };
 
-type JwksCache = {
-  fetchedAt: number;
-  jwks: unknown;
-};
+// ---------- CORS preflight ----------
+export async function OPTIONS(): Promise<Response> {
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Max-Age": String(60 * 60 * 24),
+  };
+  return new Response(null, { status: 204, headers });
+}
 
-let jwksCache: JwksCache | null = null;
+// ---------- Main handler ----------
+export async function POST(request: Request): Promise<Response> {
+  let sessionCookie: string | null = null;
+  try {
+    const openaiApiKey = process.env.OPENAI_API_KEY;
+    if (!openaiApiKey) {
+      return buildJsonResponse({ error: "Missing OPENAI_API_KEY" }, 500, {}, sessionCookie);
+    }
 
-/* ---------- Helpers ---------- */
+    const url = new URL(request.url);
+    const agent = (url.searchParams.get("agent") || "business").toLowerCase();
+    const workflowId = WORKFLOWS[agent];
 
+    if (!workflowId) {
+      return buildJsonResponse({ error: `Invalid or missing workflow for agent: ${agent}` }, 400, {}, sessionCookie);
+    }
+
+    // Resolve user id (Outseta or fallback)
+    const { userId: rawUserId } = await resolveUserId(request);
+
+    // Strip prior agent suffixes and append current agent
+    const agentList = Object.keys(WORKFLOWS)
+      .map((a) => a.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"))
+      .join("|");
+    const stripRegex = new RegExp(`-(?:${agentList})(?:-(?:${agentList}))*$`, "i");
+    const cleanedBase = String(rawUserId).replace(stripRegex, "");
+    const namespacedUserId = `${cleanedBase}-${agent}`;
+
+    // Session cookie for stability
+    sessionCookie = serializeSessionCookie(namespacedUserId);
+
+    // Call ChatKit Sessions API (old, working shape)
+    const apiUrl = `${DEFAULT_CHATKIT_BASE}/v1/chatkit/sessions`;
+    const upstreamResponse = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${openaiApiKey}`,
+        "OpenAI-Beta": "chatkit_beta=v1",
+      },
+      body: JSON.stringify({
+        workflow: { id: workflowId },
+        user: namespacedUserId,
+        chatkit_configuration: {
+          file_upload: { enabled: true },
+        },
+      }),
+    });
+
+    const upstreamJson = (await upstreamResponse.json().catch(() => ({}))) as Record<string, unknown>;
+
+    if (!upstreamResponse.ok) {
+      return buildJsonResponse(
+        { error: "Failed to create session", details: upstreamJson },
+        upstreamResponse.status,
+        {},
+        sessionCookie,
+      );
+    }
+
+    const payload: Record<string, unknown> = {
+      client_secret: upstreamJson.client_secret,
+      expires_after: upstreamJson.expires_after,
+      user_sent_to_chatkit: namespacedUserId,
+    };
+
+    return buildJsonResponse(payload, 200, {}, sessionCookie);
+  } catch (error) {
+    console.error("create-session error:", error);
+    return buildJsonResponse({ error: "Unexpected error" }, 500, {}, sessionCookie);
+  }
+}
+
+// ---------- Helpers ----------
+function buildJsonResponse(
+  payload: unknown,
+  status: number,
+  headers: Record<string, string>,
+  sessionCookie: string | null,
+): Response {
+  const defaultCors = {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  };
+  const merged = { ...defaultCors, ...headers };
+  const h = new Headers(merged);
+  if (sessionCookie) h.append("Set-Cookie", sessionCookie);
+  return new Response(JSON.stringify(payload), { status, headers: h });
+}
+
+function serializeSessionCookie(value: string): string {
+  return `${SESSION_COOKIE_NAME}=${encodeURIComponent(
+    value,
+  )}; Path=/; Max-Age=${SESSION_COOKIE_MAX_AGE}; HttpOnly; SameSite=None; Secure`;
+}
+
+function getCookieValue(cookieHeader: string | null, name: string): string | null {
+  if (!cookieHeader) return null;
+  const cookies = cookieHeader.split(";");
+  for (const cookie of cookies) {
+    const [rawName, ...rest] = cookie.split("=");
+    if (rawName?.trim() === name) return rest.join("=").trim();
+  }
+  return null;
+}
+
+function extractTokenFromHeader(headerValue: string | null): string | null {
+  if (!headerValue) return null;
+  const parts = headerValue.trim().split(/\s+/);
+  if (parts.length === 2 && /^Bearer$/i.test(parts[0])) return parts[1];
+  if (parts.length === 1) return parts[0];
+  return null;
+}
+
+/* ---------- Outseta verification (RS256 via JWKS) ---------- */
 function base64UrlToUint8Array(base64Url: string): Uint8Array {
   const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
   const pad = base64.length % 4 === 2 ? "==" : base64.length % 4 === 3 ? "=" : "";
@@ -32,30 +165,6 @@ function base64UrlToUint8Array(base64Url: string): Uint8Array {
   const arr = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
   return arr;
-}
-
-function getCookieValue(cookieHeader: string | null, name: string): string | null {
-  if (!cookieHeader) return null;
-  const cookies = cookieHeader.split(";").map((c) => c.trim());
-  for (const c of cookies) {
-    const [k, ...rest] = c.split("=");
-    if (k === name) return rest.join("=");
-  }
-  return null;
-}
-
-function serializeSessionCookie(userId: string): string {
-  const maxAgeSeconds = 60 * 60 * 24 * 365;
-  return `${SESSION_COOKIE_NAME}=${encodeURIComponent(
-    userId,
-  )}; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=${maxAgeSeconds}; Priority=High`;
-}
-
-function extractTokenFromHeader(headerValue: string | null): string | null {
-  if (!headerValue) return null;
-  const parts = headerValue.split(" ");
-  if (parts.length === 2 && /^Bearer$/i.test(parts[0])) return parts[1];
-  return headerValue.trim();
 }
 
 async function getJwkForKid(jwksUrl: string, kid?: string): Promise<unknown | null> {
@@ -76,188 +185,94 @@ async function getJwkForKid(jwksUrl: string, kid?: string): Promise<unknown | nu
   }
 }
 
-async function verifyOutsetaToken(token: string): Promise<VerifiedToken> {
-  try {
-    const [headerB64, payloadB64, signatureB64] = token.split(".");
-    if (!headerB64 || !payloadB64 || !signatureB64) throw new Error("Invalid JWT format");
+async function verifyOutsetaToken(token: string): Promise<{ verified: boolean; payload?: object }> {
+  const { header, payload, signatureB64, signingInput } = parseJwt(token);
+  const jwk = await getJwkForKid(OUTSETA_JWKS_URL, typeof header.kid === "string" ? header.kid : undefined);
+  if (!jwk) return { verified: false, payload };
+  const sigArray = base64UrlToUint8Array(signatureB64);
+  const cryptoKey = await crypto.subtle.importKey(
+    "jwk",
+    jwk as JsonWebKey,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["verify"],
+  );
+  const ok = await crypto.subtle.verify(
+    "RSASSA-PKCS1-v1_5",
+    cryptoKey,
+    sigArray as unknown as BufferSource,
+    new TextEncoder().encode(signingInput) as unknown as BufferSource,
+  );
 
-    const headerJson = Buffer.from(headerB64, "base64url").toString("utf8");
-    const payloadJson = Buffer.from(payloadB64, "base64url").toString("utf8");
+  // exp / nbf / iss checks
+  const now = Math.floor(Date.now() / 1000);
+  const exp = payload.exp as number | undefined;
+  const nbf = payload.nbf as number | undefined;
+  const iss = payload.iss as string | undefined;
+  if (typeof exp === "number" && exp < now - CLOCK_SKEW_SECONDS) return { verified: false, payload };
+  if (typeof nbf === "number" && nbf > now + CLOCK_SKEW_SECONDS) return { verified: false, payload };
+  if (iss && iss !== OUTSETA_ISSUER) return { verified: false, payload };
 
-    const header = JSON.parse(headerJson) as { kid?: string; alg?: string; typ?: string };
-    const payload = JSON.parse(payloadJson) as Record<string, unknown>;
-
-    if (header.alg && header.alg !== "RS256") throw new Error(`Unexpected alg: ${header.alg}`);
-
-    const sigArray = base64UrlToUint8Array(signatureB64);
-    const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
-
-    const jwk = await getJwkForKid(OUTSETA_JWKS_URL, header.kid);
-    if (!jwk) throw new Error("Unable to find matching JWK to verify token signature.");
-
-    const cryptoKey = await crypto.subtle.importKey(
-      "jwk",
-      jwk as JsonWebKey,
-      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-      false,
-      ["verify"],
-    );
-
-    const ok = await crypto.subtle.verify(
-      "RSASSA-PKCS1-v1_5",
-      cryptoKey,
-      sigArray as unknown as BufferSource,
-      data as unknown as BufferSource,
-    );
-
-    if (!ok) throw new Error("Signature verification failed");
-
-    const now = Math.floor(Date.now() / 1000);
-    const exp = payload.exp as number | undefined;
-    const nbf = payload.nbf as number | undefined;
-    const iss = payload.iss as string | undefined;
-
-    if (typeof exp === "number" && exp < now - CLOCK_SKEW_SECONDS) throw new Error("Token expired");
-    if (typeof nbf === "number" && nbf > now + CLOCK_SKEW_SECONDS) throw new Error("Token not yet valid");
-    if (iss && iss !== OUTSETA_ISSUER) throw new Error(`Unexpected issuer: ${iss}`);
-
-    return { verified: true, payload };
-  } catch (err) {
-    console.warn("verifyOutsetaToken error:", err);
-    return { verified: false, error: err instanceof Error ? err.message : "verify failed" };
-  }
+  return { verified: ok, payload };
 }
 
-async function resolveUserId(request: Request): Promise<{
-  userId: string | null;
-  sessionCookie: string | null;
-  error?: string;
-}> {
+function parseJwt(token: string) {
+  const parts = token.split(".");
+  if (parts.length !== 3) throw new Error("Invalid JWT format");
+  return {
+    header: JSON.parse(base64UrlDecode(parts[0])) as Record<string, unknown>,
+    payload: JSON.parse(base64UrlDecode(parts[1])) as Record<string, unknown>,
+    signatureB64: parts[2],
+    signingInput: `${parts[0]}.${parts[1]}`,
+  };
+}
+function base64UrlDecodeToUint8Array(input: string): Uint8Array {
+  let str = input.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = str.length % 4;
+  if (pad) str += "=".repeat(4 - pad);
+  const raw = atob(str);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; ++i) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+function base64UrlDecode(input: string): string {
+  const arr = base64UrlDecodeToUint8Array(input);
+  return new TextDecoder().decode(arr);
+}
+
+/* ---------- Resolve user id ---------- */
+async function resolveUserId(request: Request) {
   const headerToken = extractTokenFromHeader(request.headers.get("authorization"));
   const cookieToken = getCookieValue(request.headers.get("cookie"), OUTSETA_COOKIE_NAME);
   const token = headerToken || cookieToken;
 
-  if (!token) return { userId: null, sessionCookie: null, error: "Missing access token" };
+  if (token) {
+    try {
+      const verified = await verifyOutsetaToken(token);
+      if (verified?.verified && verified.payload) {
+        const payload = verified.payload as Record<string, unknown>;
+        const accountUid =
+          (payload["outseta:accountUid"] as string) ||
+          (payload["outseta:accountuid"] as string) ||
+          (payload["account_uid"] as string) ||
+          (payload["accountUid"] as string) ||
+          (payload["accountId"] as string) ||
+          (payload["account_id"] as string) ||
+          (payload["sub"] as string) ||
+          (payload["user_id"] as string) ||
+          (payload["uid"] as string) ||
+          undefined;
 
-  const verified = await verifyOutsetaToken(token);
-  if (!verified.verified || !verified.payload) {
-    return { userId: null, sessionCookie: null, error: "Invalid access token" };
+        if (accountUid) return { userId: accountUid, sessionCookie: serializeSessionCookie(accountUid) };
+      }
+    } catch (err) {
+      console.warn("Outseta token verification failed:", err);
+    }
   }
 
-  const payload = verified.payload;
-  const userIdFromToken =
-    (payload["sub"] as string) ||
-    (payload["user_id"] as string) ||
-    (payload["uid"] as string) ||
-    undefined;
-
-  const accountIdFromToken =
-    (payload["outseta:accountUid"] as string) ||
-    (payload["outseta:accountuid"] as string) ||
-    (payload["account_uid"] as string) ||
-    (payload["accountUid"] as string) ||
-    (payload["accountId"] as string) ||
-    (payload["account_id"] as string) ||
-    undefined;
-
-  if (userIdFromToken) {
-    return { userId: userIdFromToken, sessionCookie: serializeSessionCookie(userIdFromToken) };
-  }
-  if (accountIdFromToken) {
-    return { userId: accountIdFromToken, sessionCookie: serializeSessionCookie(accountIdFromToken) };
-  }
-  return { userId: null, sessionCookie: null, error: "No suitable user id in access token" };
-}
-
-/* ---------- Workflow selection ---------- */
-
-function pickWorkflow(agent: string | null): string | null {
-  const a = agent ?? "business";
-  // Prefer server-side envs; fall back to NEXT_PUBLIC_ if needed
-  const env = (name: string) => process.env[name] ?? null;
-
-  switch (a) {
-    case "business_task1":
-      return env("CHATKIT_WORKFLOW_BUSINESS_TASK1") ?? env("NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS_TASK1");
-    case "business_task2":
-      return env("CHATKIT_WORKFLOW_BUSINESS_TASK2") ?? env("NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS_TASK2");
-    case "business_task3":
-      return env("CHATKIT_WORKFLOW_BUSINESS_TASK3") ?? env("NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS_TASK3");
-    case "product":
-      return env("CHATKIT_WORKFLOW_PRODUCT") ?? env("NEXT_PUBLIC_CHATKIT_WORKFLOW_PRODUCT");
-    case "marketing":
-      return env("CHATKIT_WORKFLOW_MARKETING") ?? env("NEXT_PUBLIC_CHATKIT_WORKFLOW_MARKETING");
-    case "finance":
-      return env("CHATKIT_WORKFLOW_FINANCE") ?? env("NEXT_PUBLIC_CHATKIT_WORKFLOW_FINANCE");
-    case "business":
-    default:
-      return (
-        env("CHATKIT_WORKFLOW_BUSINESS") ??
-        env("NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS") ??
-        env("NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS_TASK1") // last-resort fallback
-      );
-  }
-}
-
-/* ---------- ChatKit session creation ---------- */
-
-async function createChatKitSession({
-  userId,
-  agent,
-}: {
-  userId: string;
-  agent: string;
-}): Promise<string> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
-
-  const workflowId = pickWorkflow(agent);
-  if (!workflowId) throw new Error("Missing workflow id for agent");
-
-  const resp = await fetch("https://api.openai.com/v1/chatkit/sessions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      user: { id: userId },
-      config: {
-        workflow_id: workflowId,
-      },
-    }),
-  });
-
-  const json = await resp.json();
-  if (!resp.ok) {
-    throw new Error(json?.error ?? "Failed to create ChatKit session");
-  }
-  if (!json.client_secret) {
-    throw new Error("Missing client_secret in ChatKit session response");
-  }
-  return json.client_secret as string;
-}
-
-/* ---------- POST handler ---------- */
-
-export async function POST(request: NextRequest) {
-  const agent = request.nextUrl.searchParams.get("agent") ?? "business";
-  const { userId, sessionCookie, error } = await resolveUserId(request);
-
-  if (!userId) {
-    return NextResponse.json(
-      { error: error ?? "Unable to resolve user from access token" },
-      { status: 401 },
-    );
-  }
-
-  try {
-    const clientSecret = await createChatKitSession({ userId, agent });
-    const res = NextResponse.json({ client_secret: clientSecret, userId });
-    if (sessionCookie) res.headers.set("Set-Cookie", sessionCookie);
-    return res;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to create ChatKit session";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
+  // fallback: session cookie or random
+  const existing = getCookieValue(request.headers.get("cookie"), SESSION_COOKIE_NAME);
+  if (existing) return { userId: existing, sessionCookie: null };
+  const generated = crypto.randomUUID?.() || Math.random().toString(36).slice(2);
+  return { userId: generated, sessionCookie: serializeSessionCookie(generated) };
 }
