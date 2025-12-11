@@ -61,10 +61,9 @@ function getCookieValue(cookieHeader: string | null, name: string): string | nul
 
 function serializeSessionCookie(userId: string): string {
   const maxAgeSeconds = 60 * 60 * 24 * 365; // 1 year
-  const secure = process.env.NODE_ENV === "production" ? "Secure; " : "";
   return `${SESSION_COOKIE_NAME}=${encodeURIComponent(
     userId,
-  )}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}; ${secure}Priority=High`;
+  )}; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=${maxAgeSeconds}; Priority=High`;
 }
 
 function extractTokenFromHeader(headerValue: string | null): string | null {
