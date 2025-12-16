@@ -136,7 +136,7 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
     },
   ],
 
-  // Business tasks (map to existing task prompt sets)
+  // Business tasks
   business_task1: [
     {
       label:
@@ -233,7 +233,7 @@ export function getStarterPromptsForAgent(agent?: string): StartScreenPrompt[] {
 }
 
 // ---------- PER-AGENT STARTER PROMPTS (MOBILE) ----------
-// Labels == prompts per request. Only Business customized; others fall back to desktop set.
+// Only Business gets mobile prompts; others get none on mobile.
 
 export const STARTER_PROMPTS_MOBILE_BY_AGENT: Record<string, StartScreenPrompt[]> = {
   business: [
@@ -245,7 +245,9 @@ export const STARTER_PROMPTS_MOBILE_BY_AGENT: Record<string, StartScreenPrompt[]
 
 export function getMobilePromptsForAgent(agent?: string): StartScreenPrompt[] | null {
   if (!agent) return STARTER_PROMPTS_MOBILE_BY_AGENT["business"] ?? null;
-  return STARTER_PROMPTS_MOBILE_BY_AGENT[agent] ?? null;
+  if (agent === "business") return STARTER_PROMPTS_MOBILE_BY_AGENT["business"] ?? null;
+  // No mobile prompts for non-business agents
+  return [];
 }
 
 // ---------- THEME CONFIG ----------
