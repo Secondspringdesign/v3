@@ -187,7 +187,7 @@ export function getStarterPromptsForAgent(agent?: string): StartScreenPrompt[] {
 export const STARTER_PROMPTS_MOBILE_BY_AGENT: Record<string, StartScreenPrompt[]> = {
   business: [
     { label: "Ideate", prompt: "Ideate", icon: "lightbulb" },
-    { label: "Create", prompt: "Create", icon: "pencil" },
+    { label: "Create", prompt: "Create", icon: "notebook-pencil" },
     { label: "Refine", prompt: "Refine", icon: "sparkle" },
     { label: "Ask Anything", prompt: "Ask Anything", icon: "mail" },
   ],
