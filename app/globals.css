@@ -52,6 +52,7 @@ textarea#chatkit-composer-input
   fill: #f3f0ec !important;
   opacity: 0.9 !important;
 }
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -63,12 +64,9 @@ textarea#chatkit-composer-input
   background-color: #0b0f18 !important;
 }
 
-/* Stronger version if needed:
-
-.second-spring-chat,
-.second-spring-chat *:where([data-surface]),
-.second-spring-chat * {
-  background-color: #0b0f18 !important;
+/* Optional: hide composer disclaimer globally (if any workflow injects one) */
+.second-spring-chat [data-testid="composer-disclaimer"],
+.second-spring-chat [data-qa="composer-disclaimer"],
+.second-spring-chat .composer-disclaimer {
+  display: none !important;
 }
-
-*/
