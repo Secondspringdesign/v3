@@ -25,9 +25,17 @@ export const GREETINGS: Record<string, string> = {
   marketing:
     "Tell me who you want to reach. We’ll shape a simple message and a couple of realistic channels.",
 
-  // Finance pillar
+  // Finance pillar (Money)
   finance:
     "Share your pricing and income hopes. We’ll do a quick math check to see if it holds together.",
+
+  // Business tasks
+  business_task1:
+    "I’m your Reality Check. I’ll tell you straight what works, what’s shaky, and what to test first.",
+  business_task2:
+    "I’ll map out a quick SWOT so you can see strengths, risks, and options.",
+  business_task3:
+    "I’ll flag general legal and tax areas to ask a professional about. This is not legal or tax advice.",
 
   // Reality Check task
   reality_check:
@@ -110,7 +118,7 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
     },
   ],
 
-  // Finance main
+  // Finance main (Money)
   finance: [
     {
       label:
@@ -125,6 +133,49 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
       prompt:
         "Here’s my idea, rough pricing, and what I’d like to earn per month. Help me see if the math is realistic.",
       icon: "chart",
+    },
+  ],
+
+  // Business tasks (map to existing task prompt sets)
+  business_task1: [
+    {
+      label:
+        "I’m pasting or uploading my current plan. Please read it and act as a reality check: tell me what looks solid, what seems shaky, and exactly what to test first.",
+      prompt:
+        "I’m pasting or uploading my current plan. Please read it and act as a reality check: tell me what looks solid, what seems shaky, and exactly what to test first.",
+      icon: "check-circle",
+    },
+  ],
+  business_task2: [
+    {
+      label:
+        "Here’s my current plan. Create a brief SWOT analysis and highlight what to lean into and what to watch out for.",
+      prompt:
+        "Here’s my current plan. Create a brief SWOT analysis and highlight what to lean into and what to watch out for.",
+      icon: "compass",
+    },
+    {
+      label:
+        "Here’s my plan and the main directions I’m considering next. Compare them using a SWOT so I can see which looks better for the next year.",
+      prompt:
+        "Here’s my plan and the main directions I’m considering next. Compare them using a SWOT so I can see which looks better for the next year.",
+      icon: "analytics",
+    },
+  ],
+  business_task3: [
+    {
+      label:
+        "Here’s my plan and where I’m based. Highlight the main legal and tax areas I should pay attention to, in simple language. I know this isn’t legal or tax advice.",
+      prompt:
+        "Here’s my plan and where I’m based. Highlight the main legal and tax areas I should pay attention to, in simple language. I know this isn’t legal or tax advice.",
+      icon: "bug",
+    },
+    {
+      label:
+        "Here’s my plan and where I’m based. Turn this into a short list of questions I can bring to a lawyer or accountant.",
+      prompt:
+        "Here’s my plan and where I’m based. Turn this into a short list of questions I can bring to a lawyer or accountant.",
+      icon: "notebook-pencil",
     },
   ],
 
