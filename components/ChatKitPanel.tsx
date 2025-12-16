@@ -321,7 +321,6 @@ export function ChatKitPanel({
     composer: {
       placeholder: PLACEHOLDER_INPUT,
       attachments: { enabled: true },
-      disclaimer: null, // remove composer disclaimer for all workflows
     },
     threadItemActions: { feedback: false },
     onClientTool: async (invocation: { name: string; params: Record<string, unknown> }) => {
