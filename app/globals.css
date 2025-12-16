@@ -86,3 +86,14 @@ textarea#chatkit-composer-input
 .second-spring-chat [data-testid="chatkit-container"] {
   padding: clamp(12px, 2vw, 28px) !important;
 }
+
+/* Wider but capped container for ChatKit */
+.chat-container {
+  max-width: 90rem; /* 1440px */
+}
+
+@media (min-width: 1600px) {
+  .chat-container {
+    max-width: 96rem; /* 1536px */
+  }
+}
