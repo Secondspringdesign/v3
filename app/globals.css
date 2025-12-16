@@ -34,17 +34,14 @@ body {
 }
 
 /* --- ChatKit composer visibility tweaks --- */
-/* Target the composer textarea by its unique id inside ChatKit. */
 textarea#chatkit-composer-input {
-  color: #f3f0ec !important; /* near-white text */
+  color: #f3f0ec !important;
 }
 
-/* Placeholder text ("Ask anything…") in the composer */
 textarea#chatkit-composer-input::placeholder {
   color: rgba(243, 240, 236, 0.7) !important;
 }
 
-/* Brighten the + button (attachment trigger) immediately to the left of the textarea */
 textarea#chatkit-composer-input
   ~ div
   button[type="button"]
@@ -69,4 +66,13 @@ textarea#chatkit-composer-input
 .second-spring-chat [data-qa="composer-disclaimer"],
 .second-spring-chat .composer-disclaimer {
   display: none !important;
+}
+
+/* Make ChatKit stretch to the full available width (helps on ultrawide screens) */
+.second-spring-chat {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+.second-spring-chat [data-testid="chatkit-container"] {
+  max-width: 100% !important;
 }
