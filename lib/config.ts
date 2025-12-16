@@ -25,8 +25,8 @@ export const GREETINGS: Record<string, string> = {
   marketing:
     "Tell me who you want to reach. We’ll shape a simple message and a couple of realistic channels.",
 
-  // Finance pillar (Money)
-  finance:
+  // Money pillar (formerly finance)
+  money:
     "Share your pricing and income hopes. We’ll do a quick math check to see if it holds together.",
 
   // Business tasks
@@ -118,8 +118,8 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
     },
   ],
 
-  // Finance main (Money)
-  finance: [
+  // Money main (replaces canonical "finance" key)
+  money: [
     {
       label:
         "Here’s what I’m planning to sell and what I was thinking of charging. Help me sanity‑check this pricing.",
