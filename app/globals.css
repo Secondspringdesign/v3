@@ -82,9 +82,12 @@ textarea#chatkit-composer-input
   max-width: 100% !important;
 }
 
-/* Add gentle inset: more than your current default, less than edge-to-edge */
+/* Reduced top padding to restore header position; keep generous side and bottom insets */
 .second-spring-chat [data-testid="chatkit-container"] {
-  padding: clamp(12px, 2vw, 28px) !important;
+  padding-top: 8px !important; /* restored to small top inset */
+  padding-right: clamp(16px, 2vw, 56px) !important; /* keep roomy sides */
+  padding-bottom: 28px !important; /* keep bottom spacing for composer */
+  padding-left: clamp(16px, 2vw, 56px) !important;
 }
 
 /* Wider but capped container for ChatKit */
