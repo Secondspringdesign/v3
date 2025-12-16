@@ -306,7 +306,7 @@ export function ChatKitPanel({
     : "business";
 
   const themeConfig = getThemeConfig(theme);
-  const isMobile = useIsMobile(580);
+  const isMobile = useIsMobile(540);
   const basePrompts = getStarterPromptsForAgent(agentFromUrl) ?? STARTER_PROMPTS;
   const mobilePrompts = getMobilePromptsForAgent(agentFromUrl) ?? basePrompts;
   const effectivePrompts = isMobile === true ? mobilePrompts : basePrompts;
