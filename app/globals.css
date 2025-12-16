@@ -34,14 +34,17 @@ body {
 }
 
 /* --- ChatKit composer visibility tweaks --- */
+/* Target the composer textarea by its unique id inside ChatKit. */
 textarea#chatkit-composer-input {
-  color: #f3f0ec !important;
+  color: #f3f0ec !important; /* near-white text */
 }
 
+/* Placeholder text ("Ask anything…") in the composer */
 textarea#chatkit-composer-input::placeholder {
   color: rgba(243, 240, 236, 0.7) !important;
 }
 
+/* Brighten the + button (attachment trigger) immediately to the left of the textarea */
 textarea#chatkit-composer-input
   ~ div
   button[type="button"]
@@ -61,18 +64,25 @@ textarea#chatkit-composer-input
   background-color: #0b0f18 !important;
 }
 
-/* Optional: hide composer disclaimer globally (if any workflow injects one) */
-.second-spring-chat [data-testid="composer-disclaimer"],
-.second-spring-chat [data-qa="composer-disclaimer"],
-.second-spring-chat .composer-disclaimer {
-  display: none !important;
+/* Stronger version if needed:
+
+.second-spring-chat,
+.second-spring-chat *:where([data-surface]),
+.second-spring-chat * {
+  background-color: #0b0f18 !important;
 }
 
-/* Make ChatKit stretch to the full available width (helps on ultrawide screens) */
-.second-spring-chat {
+*/
+
+/* Wider ChatKit surface on large screens, with modest padding */
+.second-spring-chat [data-testid="chatkit-container"],
+.second-spring-chat [data-testid="chatkit-container"] > main,
+.second-spring-chat [data-testid="chatkit-container"] > main > div {
   width: 100% !important;
   max-width: 100% !important;
 }
+
+/* Add gentle inset: more than your current default, less than edge-to-edge */
 .second-spring-chat [data-testid="chatkit-container"] {
-  max-width: 100% !important;
+  padding: clamp(12px, 2vw, 28px) !important;
 }
