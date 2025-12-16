@@ -9,6 +9,7 @@ import {
   getThemeConfig,
   getGreetingForAgent,
   getStarterPromptsForAgent,
+  getMobilePromptsForAgent,
 } from "@/lib/config";
 import { ErrorOverlay } from "./ErrorOverlay";
 import type { ColorScheme } from "@/hooks/useColorScheme";
@@ -305,9 +306,10 @@ export function ChatKitPanel({
     : "business";
 
   const themeConfig = getThemeConfig(theme);
-  const isMobile = useIsMobile(640);
+  const isMobile = useIsMobile(580);
   const basePrompts = getStarterPromptsForAgent(agentFromUrl) ?? STARTER_PROMPTS;
-  const effectivePrompts = isMobile === true ? [] : basePrompts;
+  const mobilePrompts = getMobilePromptsForAgent(agentFromUrl) ?? basePrompts;
+  const effectivePrompts = isMobile === true ? mobilePrompts : basePrompts;
 
   const chatkit = useChatKit({
     api: { getClientSecret },
