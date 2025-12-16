@@ -318,7 +318,11 @@ export function ChatKitPanel({
       greeting: getGreetingForAgent(agentFromUrl),
       prompts: effectivePrompts,
     },
-    composer: { placeholder: PLACEHOLDER_INPUT, attachments: { enabled: true } },
+    composer: {
+      placeholder: PLACEHOLDER_INPUT,
+      attachments: { enabled: true },
+      disclaimer: null, // remove composer disclaimer for all workflows
+    },
     threadItemActions: { feedback: false },
     onClientTool: async (invocation: { name: string; params: Record<string, unknown> }) => {
       if (invocation.name === "switch_theme") {
