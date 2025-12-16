@@ -26,7 +26,8 @@ const WORKFLOWS: Record<string, string | undefined> = {
     process.env.CHATKIT_WORKFLOW_BUSINESS_TASK3 ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS_TASK3,
   product: process.env.CHATKIT_WORKFLOW_PRODUCT ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_PRODUCT,
   marketing: process.env.CHATKIT_WORKFLOW_MARKETING ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_MARKETING,
-  finance: process.env.CHATKIT_WORKFLOW_FINANCE ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_FINANCE,
+  // Money tab (formerly "finance") — use the env var names you have in Vercel (CHATKIT_WORKFLOW_MONEY / NEXT_PUBLIC_CHATKIT_WORKFLOW_MONEY)
+  money: process.env.CHATKIT_WORKFLOW_MONEY ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_MONEY,
 };
 
 // ---------- CORS preflight ----------
