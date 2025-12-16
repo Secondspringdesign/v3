@@ -65,7 +65,7 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
     {
       label: "I have a plan → let’s make it better",
       prompt: "I have a plan → let’s make it better",
-      icon: "sparkles",
+      icon: "sparkle", // fixed
     },
     {
       label: "Just have a question → ask me anything",
@@ -188,7 +188,7 @@ export const STARTER_PROMPTS_MOBILE_BY_AGENT: Record<string, StartScreenPrompt[]
   business: [
     { label: "Ideate", prompt: "Ideate", icon: "lightbulb" },
     { label: "Create", prompt: "Create", icon: "pencil" },
-    { label: "Refine", prompt: "Refine", icon: "sparkles" },
+    { label: "Refine", prompt: "Refine", icon: "sparkle" }, // fixed
     { label: "Ask Anything", prompt: "Ask Anything", icon: "chat" },
   ],
 };
