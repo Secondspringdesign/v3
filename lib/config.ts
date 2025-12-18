@@ -31,22 +31,28 @@ export const GREETINGS: Record<string, string> = {
 
   // Business tasks
   business_task1:
-    "I’m your Reality Check. I’ll tell you straight what works, what’s shaky, and what to test first.",
+    "I run a real market feasibility review. I'll tell you straight what works, what's shaky, and what to test first.",
   business_task2:
-    "I’ll map out a quick SWOT so you can see strengths, risks, and options.",
+    "I'll map out strengths, weaknesses, opportunities, and threats for your plan.",
   business_task3:
-    "I’ll flag general legal and tax areas to ask a professional about. This is not legal or tax advice.",
+    "I'll walk you through the fundamentals step by step — no rush, just general info to get you started.",
+  business_task4:
+    "Ready to turn your Lite Business Plan into daily action? \n\nLet's get your first 30 days planned — one small step at a time!",
+
+  // Planner (alias for business_task4, if used)
+  planner:
+    "Ready to turn your Lite Business Plan into daily action? \n\nLet's get your first 30 days planned — one small step at a time!",
 
   // Reality Check task
   reality_check:
-    "I’m your Reality Check. I’ll tell you straight what works, what’s shaky, and what to test first.",
+    "I run a real market feasibility review. I'll tell you straight what works, what's shaky, and what to test first.",
 
   // SWOT task
-  swot: "I’ll map out a quick SWOT so you can see strengths, risks, and options.",
+  swot: "I'll map out strengths, weaknesses, opportunities, and threats for your plan.",
 
   // Legal & Tax Checkup task
   legal_tax:
-    "I’ll flag general legal and tax areas to ask a professional about. This is not legal or tax advice.",
+    "I'll walk you through the fundamentals step by step — no rush, just general info to get you started.",
 };
 
 export function getGreetingForAgent(agent?: string) {
@@ -136,93 +142,63 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
     },
   ],
 
-  // Business tasks
+  // === UPDATED BUSINESS TASK PROMPTS AND ALIASES ===
   business_task1: [
     {
-      label:
-        "I’m pasting or uploading my current plan. Please read it and act as a reality check: tell me what looks solid, what seems shaky, and exactly what to test first.",
-      prompt:
-        "I’m pasting or uploading my current plan. Please read it and act as a reality check: tell me what looks solid, what seems shaky, and exactly what to test first.",
+      label: "Upload or paste your plan and run a market feasibility review.",
+      prompt: "Upload or paste your plan and run a market feasibility review.",
       icon: "check-circle",
     },
   ],
   business_task2: [
     {
-      label:
-        "Here’s my current plan. Create a brief SWOT analysis and highlight what to lean into and what to watch out for.",
-      prompt:
-        "Here’s my current plan. Create a brief SWOT analysis and highlight what to lean into and what to watch out for.",
+      label: "Upload or paste your plan to create a quick SWOT.",
+      prompt: "Upload or paste your plan to create a quick SWOT.",
       icon: "compass",
-    },
-    {
-      label:
-        "Here’s my plan and the main directions I’m considering next. Compare them using a SWOT so I can see which looks better for the next year.",
-      prompt:
-        "Here’s my plan and the main directions I’m considering next. Compare them using a SWOT so I can see which looks better for the next year.",
-      icon: "analytics",
     },
   ],
   business_task3: [
     {
-      label:
-        "Here’s my plan and where I’m based. Highlight the main legal and tax areas I should pay attention to, in simple language. I know this isn’t legal or tax advice.",
-      prompt:
-        "Here’s my plan and where I’m based. Highlight the main legal and tax areas I should pay attention to, in simple language. I know this isn’t legal or tax advice.",
+      label: "Upload or paste your business idea/plan (or just tell me about it) and we'll begin.",
+      prompt: "Upload or paste your business idea/plan (or just tell me about it) and we'll begin.",
       icon: "bug",
     },
+  ],
+  business_task4: [
     {
-      label:
-        "Here’s my plan and where I’m based. Turn this into a short list of questions I can bring to a lawyer or accountant.",
-      prompt:
-        "Here’s my plan and where I’m based. Turn this into a short list of questions I can bring to a lawyer or accountant.",
-      icon: "notebook-pencil",
+      label: "Upload or paste your plan (PDF or text) to get started.",
+      prompt: "Upload or paste your plan (PDF or text) to get started.",
+      icon: "list-check",
+    },
+  ],
+  planner: [
+    {
+      label: "Upload or paste your plan (PDF or text) to get started.",
+      prompt: "Upload or paste your plan (PDF or text) to get started.",
+      icon: "list-check",
     },
   ],
 
-  // Reality Check task
+  // === UPDATED REALITY CHECK, SWOT, LEGAL_TAX ALIASES ===
   reality_check: [
     {
-      label:
-        "I’m pasting or uploading my current plan. Please read it and act as a reality check: tell me what looks solid, what seems shaky, and exactly what to test first.",
-      prompt:
-        "I’m pasting or uploading my current plan. Please read it and act as a reality check: tell me what looks solid, what seems shaky, and exactly what to test first.",
+      label: "Upload or paste your plan and run a market feasibility review.",
+      prompt: "Upload or paste your plan and run a market feasibility review.",
       icon: "check-circle",
     },
   ],
-
-  // SWOT task
   swot: [
     {
-      label:
-        "Here’s my current plan. Create a brief SWOT analysis and highlight what to lean into and what to watch out for.",
-      prompt:
-        "Here’s my current plan. Create a brief SWOT analysis and highlight what to lean into and what to watch out for.",
+      label: "Upload or paste your plan to create a quick SWOT.",
+      prompt: "Upload or paste your plan to create a quick SWOT.",
       icon: "compass",
     },
-    {
-      label:
-        "Here’s my plan and the main directions I’m considering next. Compare them using a SWOT so I can see which looks better for the next year.",
-      prompt:
-        "Here’s my plan and the main directions I’m considering next. Compare them using a SWOT so I can see which looks better for the next year.",
-      icon: "analytics",
-    },
   ],
-
-  // Legal & Tax Checkup task
   legal_tax: [
     {
-      label:
-        "Here’s my plan and where I’m based. Highlight the main legal and tax areas I should pay attention to, in simple language. I know this isn’t legal or tax advice.",
-      prompt:
-        "Here’s my plan and where I’m based. Highlight the main legal and tax areas I should pay attention to, in simple language. I know this isn’t legal or tax advice.",
+      label: "Upload or paste your business idea/plan (or just tell me about it) and we'll begin.",
+      prompt: "Upload or paste your business idea/plan (or just tell me about it) and we'll begin.",
       icon: "bug",
-    },
-    {
-      label:
-        "Here’s my plan and where I’m based. Turn this into a short list of questions I can bring to a lawyer or accountant.",
-      prompt:
-        "Here’s my plan and where I’m based. Turn this into a short list of questions I can bring to a lawyer or accountant.",
-      icon: "notebook-pencil",
     },
   ],
 };
@@ -233,7 +209,8 @@ export function getStarterPromptsForAgent(agent?: string): StartScreenPrompt[] {
 }
 
 // ---------- PER-AGENT STARTER PROMPTS (MOBILE) ----------
-// Only Business gets mobile prompts; others get none on mobile.
+// Only Business gets mobile prompts; others get none on mobile. For all business tasks, NO mobile prompts.
+// Planner (business_task4) gets mobile prompt as requested.
 
 export const STARTER_PROMPTS_MOBILE_BY_AGENT: Record<string, StartScreenPrompt[]> = {
   business: [
@@ -241,12 +218,27 @@ export const STARTER_PROMPTS_MOBILE_BY_AGENT: Record<string, StartScreenPrompt[]
     { label: "Create", prompt: "Create", icon: "notebook-pencil" },
     { label: "Refine", prompt: "Refine", icon: "sparkle" },
   ],
+  business_task1: [],
+  business_task2: [],
+  business_task3: [],
+  business_task4: [],
+  planner: [
+    {
+      label: "Upload or paste your plan (PDF or text) to get started.",
+      prompt: "Upload or paste your plan (PDF or text) to get started.",
+      icon: "list-check",
+    },
+  ],
+  reality_check: [],
+  swot: [],
+  legal_tax: [],
 };
 
 export function getMobilePromptsForAgent(agent?: string): StartScreenPrompt[] | null {
   if (!agent) return STARTER_PROMPTS_MOBILE_BY_AGENT["business"] ?? null;
   if (agent === "business") return STARTER_PROMPTS_MOBILE_BY_AGENT["business"] ?? null;
-  // No mobile prompts for non-business agents
+  if (agent === "planner") return STARTER_PROMPTS_MOBILE_BY_AGENT["planner"] ?? null;
+  // No mobile prompts for non-business agents and all business tasks
   return [];
 }
 
