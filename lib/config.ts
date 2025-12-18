@@ -168,14 +168,14 @@ export const STARTER_PROMPTS_BY_AGENT: Record<string, StartScreenPrompt[]> = {
     {
       label: "Upload or paste your plan (PDF or text) to get started.",
       prompt: "Upload or paste your plan (PDF or text) to get started.",
-      icon: "list-check",
+      icon: "notebook-pencil",
     },
   ],
   planner: [
     {
       label: "Upload or paste your plan (PDF or text) to get started.",
       prompt: "Upload or paste your plan (PDF or text) to get started.",
-      icon: "list-check",
+      icon: "notebook-pencil",
     },
   ],
 
@@ -209,8 +209,7 @@ export function getStarterPromptsForAgent(agent?: string): StartScreenPrompt[] {
 }
 
 // ---------- PER-AGENT STARTER PROMPTS (MOBILE) ----------
-// Only Business gets mobile prompts; others get none on mobile. For all business tasks, NO mobile prompts.
-// Planner (business_task4) gets mobile prompt as requested.
+// Only Business gets mobile prompts; all others get NONE on mobile.
 
 export const STARTER_PROMPTS_MOBILE_BY_AGENT: Record<string, StartScreenPrompt[]> = {
   business: [
@@ -222,13 +221,7 @@ export const STARTER_PROMPTS_MOBILE_BY_AGENT: Record<string, StartScreenPrompt[]
   business_task2: [],
   business_task3: [],
   business_task4: [],
-  planner: [
-    {
-      label: "Upload or paste your plan (PDF or text) to get started.",
-      prompt: "Upload or paste your plan (PDF or text) to get started.",
-      icon: "list-check",
-    },
-  ],
+  planner: [],
   reality_check: [],
   swot: [],
   legal_tax: [],
@@ -237,8 +230,7 @@ export const STARTER_PROMPTS_MOBILE_BY_AGENT: Record<string, StartScreenPrompt[]
 export function getMobilePromptsForAgent(agent?: string): StartScreenPrompt[] | null {
   if (!agent) return STARTER_PROMPTS_MOBILE_BY_AGENT["business"] ?? null;
   if (agent === "business") return STARTER_PROMPTS_MOBILE_BY_AGENT["business"] ?? null;
-  if (agent === "planner") return STARTER_PROMPTS_MOBILE_BY_AGENT["planner"] ?? null;
-  // No mobile prompts for non-business agents and all business tasks
+  // No mobile prompts for any tasks, planner, or other agents.
   return [];
 }
 
