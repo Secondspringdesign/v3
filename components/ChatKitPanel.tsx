@@ -74,6 +74,24 @@ function stashTokenLocally(token: string) {
   setOutsetaCookie(token);
 }
 
+/**
+ * Decode JWT payload (only client-side decoding of the payload part).
+ * Returns null on parse failure.
+ */
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const parts = String(token).split(".");
+    if (parts.length < 2) return null;
+    const b = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b + "=".repeat((4 - (b.length % 4)) % 4);
+    const json = atob(padded);
+    return JSON.parse(json);
+  } catch (e) {
+    if (isDev) console.warn("[ChatKitPanel] decodeJwtPayload failed", e);
+    return null;
+  }
+}
+
 function findOutsetaTokenOnClient(): string | null {
   if (!isBrowser) return null;
 
@@ -172,7 +190,16 @@ export function ChatKitPanel({
     const tokenFromUrl = url.searchParams.get("outseta_token");
     if (tokenFromUrl) {
       if (isDev) console.log("[ChatKitPanel] using outseta_token from URL");
-      stashTokenLocally(tokenFromUrl);
+      // persist and also write debug keys so we can verify which token was used
+      try {
+        stashTokenLocally(tokenFromUrl);
+        localStorage.setItem("debug_last_received_token", tokenFromUrl);
+        const payload = decodeJwtPayload(tokenFromUrl);
+        if (payload?.sub) localStorage.setItem("debug_last_received_sub", String(payload.sub));
+        if (isDev) console.log("[ChatKitPanel] stored token from URL and debug keys");
+      } catch (e) {
+        console.warn("[ChatKitPanel] error storing token from URL", e);
+      }
     }
 
     const handleMessage = (event: MessageEvent) => {
@@ -180,7 +207,31 @@ export function ChatKitPanel({
       if (!data || typeof data !== "object") return;
       if (data.type === PARENT_MESSAGE_TYPE && typeof data.token === "string") {
         if (isDev) console.log("[ChatKitPanel] received token via postMessage from parent");
-        stashTokenLocally(data.token);
+
+        // Always overwrite/persist the token we received and write debug values.
+        try {
+          // debug storage for verification
+          try {
+            localStorage.setItem("debug_last_received_token", data.token);
+            const payload = decodeJwtPayload(data.token);
+            if (payload?.sub) localStorage.setItem("debug_last_received_sub", String(payload.sub));
+            if (isDev) console.log("[ChatKitPanel] debug_last_received_sub:", payload?.sub ?? null);
+          } catch (err) {
+            console.warn("[ChatKitPanel] unable to write debug token values", err);
+          }
+
+          // persist for ChatKit to use
+          stashTokenLocally(data.token);
+
+          if (isDev) {
+            console.log(
+              "[ChatKitPanel] outseta-token persisted (snippet):",
+              String(data.token).slice(0, 12) + "...",
+            );
+          }
+        } catch (err) {
+          console.warn("[ChatKitPanel] error handling token from parent", err);
+        }
       }
     };
 
@@ -197,6 +248,14 @@ export function ChatKitPanel({
       if (!isMountedRef.current) return;
       setScriptStatus("ready");
       setErrorState({ script: null });
+
+      // Announce readiness to parent so the parent can safely send the token.
+      try {
+        window.parent?.postMessage?.({ type: "chatkit-ready" }, "*");
+        if (isDev) console.log("[ChatKitPanel] posted chatkit-ready to parent");
+      } catch (e) {
+        console.warn("[ChatKitPanel] postMessage(chatkit-ready) failed", e);
+      }
     };
 
     const handleError = (event: Event) => {
