@@ -223,6 +223,37 @@ export function ChatKitPanel({
           // persist for ChatKit to use
           stashTokenLocally(data.token);
 
+          // If the token represents a different user (different `sub`), force the widget to remount
+          try {
+            const payload = decodeJwtPayload(data.token);
+            const newSub = payload?.sub ? String(payload.sub) : null;
+
+            // Read previous sub from debug storage (if present)
+            let prevSub: string | null = null;
+            try {
+              prevSub = localStorage.getItem("debug_last_received_sub");
+            } catch (e) {
+              prevSub = null;
+            }
+
+            // Store new sub for future comparisons
+            if (newSub) {
+              try {
+                localStorage.setItem("debug_last_received_sub", newSub);
+              } catch (e) {
+                // ignore storage errors
+              }
+            }
+
+            // If different user, reinitialize widget
+            if (newSub && newSub !== prevSub) {
+              if (isDev) console.log("[ChatKitPanel] detected user change (sub), reinitializing widget");
+              setWidgetInstanceKey((k) => k + 1);
+            }
+          } catch (e) {
+            console.warn("[ChatKitPanel] error checking token sub for reinit", e);
+          }
+
           if (isDev) {
             console.log(
               "[ChatKitPanel] outseta-token persisted (snippet):",
