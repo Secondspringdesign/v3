@@ -239,6 +239,44 @@ export function ChatKitPanel({
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
+  // --- Insert: force overwrite and reinitialize when detected token changes
+  useEffect(() => {
+    if (!isBrowser) return;
+    let cancelled = false;
+
+    const applyIfChanged = async () => {
+      try {
+        const currentStored = window.localStorage.getItem("outseta_access_token") || null;
+        const newToken = findOutsetaTokenOnClient();
+        if (newToken && newToken !== currentStored) {
+          // persist & debug values
+          try {
+            stashTokenLocally(newToken);
+            localStorage.setItem("debug_last_received_token", newToken);
+            const payload = decodeJwtPayload(newToken);
+            if (payload?.sub) localStorage.setItem("debug_last_received_sub", String(payload.sub));
+          } catch (e) {
+            console.warn("[ChatKitPanel] error writing debug token on change", e);
+          }
+          // force re-initialize ChatKit by bumping the key
+          setWidgetInstanceKey((k) => k + 1);
+          if (isDev) console.log("[ChatKitPanel] token changed -> applied and reinitialized chat widget");
+        }
+      } catch (e) {
+        console.warn("[ChatKitPanel] token-check error", e);
+      }
+    };
+
+    // run immediately and a couple times in case of timing issues
+    applyIfChanged();
+    const iv = window.setInterval(() => { if (!cancelled) applyIfChanged(); }, 1200);
+    // stop after a short time to avoid permanent polling
+    const stop = window.setTimeout(() => { cancelled = true; clearInterval(iv); }, 10000);
+
+    return () => { cancelled = true; clearInterval(iv); clearTimeout(stop); };
+  }, []);
+  // --- end insert
+
   useEffect(() => {
     if (!isBrowser) return;
 
@@ -469,3 +507,4 @@ function extractErrorDetail(
   if (typeof payload.message === "string") return payload.message;
   return fallback;
 }
+```
