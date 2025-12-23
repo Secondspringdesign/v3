@@ -239,44 +239,6 @@ export function ChatKitPanel({
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
-  // --- Insert: force overwrite and reinitialize when detected token changes
-  useEffect(() => {
-    if (!isBrowser) return;
-    let cancelled = false;
-
-    const applyIfChanged = async () => {
-      try {
-        const currentStored = window.localStorage.getItem("outseta_access_token") || null;
-        const newToken = findOutsetaTokenOnClient();
-        if (newToken && newToken !== currentStored) {
-          // persist & debug values
-          try {
-            stashTokenLocally(newToken);
-            localStorage.setItem("debug_last_received_token", newToken);
-            const payload = decodeJwtPayload(newToken);
-            if (payload?.sub) localStorage.setItem("debug_last_received_sub", String(payload.sub));
-          } catch (e) {
-            console.warn("[ChatKitPanel] error writing debug token on change", e);
-          }
-          // force re-initialize ChatKit by bumping the key
-          setWidgetInstanceKey((k) => k + 1);
-          if (isDev) console.log("[ChatKitPanel] token changed -> applied and reinitialized chat widget");
-        }
-      } catch (e) {
-        console.warn("[ChatKitPanel] token-check error", e);
-      }
-    };
-
-    // run immediately and a couple times in case of timing issues
-    applyIfChanged();
-    const iv = window.setInterval(() => { if (!cancelled) applyIfChanged(); }, 1200);
-    // stop after a short time to avoid permanent polling
-    const stop = window.setTimeout(() => { cancelled = true; clearInterval(iv); }, 10000);
-
-    return () => { cancelled = true; clearInterval(iv); clearTimeout(stop); };
-  }, []);
-  // --- end insert
-
   useEffect(() => {
     if (!isBrowser) return;
 
@@ -323,6 +285,36 @@ export function ChatKitPanel({
       if (timeoutId) window.clearTimeout(timeoutId);
     };
   }, [scriptStatus, setErrorState]);
+
+  // --- click-to-parent handler for opening links on mobile/parent context ---
+  useEffect(() => {
+    if (!isBrowser) return;
+    if (window.parent === window) return; // not inside an iframe
+
+    const handleClick = (ev: MouseEvent) => {
+      try {
+        const me = ev as MouseEvent & { target: Element | null };
+        let el = me.target as Element | null;
+        while (el && el !== document.body) {
+          if (el instanceof HTMLAnchorElement && el.href) {
+            // Prevent iframe navigation and request parent to open the link
+            ev.preventDefault();
+            window.parent.postMessage({ type: "open_link", url: el.href }, "*");
+            return;
+          }
+          el = el.parentElement;
+        }
+      } catch (err) {
+        // don't break the app if something goes wrong
+        // eslint-disable-next-line no-console
+        console.warn("[ChatKitPanel] click-to-parent handler error", err);
+      }
+    };
+
+    document.addEventListener("click", handleClick, { passive: false });
+    return () => document.removeEventListener("click", handleClick);
+  }, []);
+  // -------------------------------------------------------------------------
 
   const handleResetChat = useCallback(() => {
     processedFacts.current.clear();
