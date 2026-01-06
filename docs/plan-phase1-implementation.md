@@ -2,7 +2,7 @@
 layout: default
 title: "Plan: Phase 1 Implementation"
 permalink: /plan-phase1-implementation/
-nav_order: 3
+nav_exclude: true
 
 doc_type: plan
 doc_status: approved
