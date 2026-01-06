@@ -5,7 +5,7 @@ permalink: /spec-phase1-foundation/
 nav_exclude: true
 
 doc_type: spec
-doc_status: proposed
+doc_status: approved
 doc_owner: "@engineering"
 last_updated: 2025-01-06
 related:
@@ -19,7 +19,7 @@ related:
 | Field | Value |
 |:------|:------|
 | **Owner** | @engineering |
-| **Status** | Proposed |
+| **Status** | Approved |
 | **Last Updated** | 2025-01-06 |
 | **Related** | [Backend Architecture Proposal](/secondspring-v3/design-backend-architecture/) |
 
