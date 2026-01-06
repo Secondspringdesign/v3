@@ -1,8 +1,35 @@
-# Backend Architecture Proposal
+---
+layout: default
+title: "Backend Architecture Proposal"
+permalink: /design-backend-architecture/
+nav_exclude: true
 
-> **Purpose:** Evaluate options for Second Spring's backend to store user state, facts, documents, and workflow progress.  
-> **Status:** Proposal  
-> **Date:** January 2025
+doc_type: design
+doc_status: proposed
+doc_owner: "@engineering"
+last_updated: 2025-01-06
+related:
+  - title: "Phase 1 Foundation PRD"
+    url: /secondspring-v3/spec-phase1-foundation/
+---
+
+# Backend Architecture Proposal
+{: .no_toc }
+
+| Field | Value |
+|:------|:------|
+| **Owner** | @engineering |
+| **Status** | Proposed |
+| **Last Updated** | January 2025 |
+| **Related** | [Phase 1 Foundation PRD](/secondspring-v3/spec-phase1-foundation/) |
+
+> **Purpose:** Evaluate options for Second Spring's backend to store user state, facts, documents, and workflow progress.
+
+## Table of Contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
 
 ---
 
@@ -19,12 +46,12 @@ We need a backend to persist user data as users work through workspaces. Two via
 │     Framer      │────▶│  Vercel Edge    │────▶│  OpenAI/ChatKit │
 │  (Host + Auth)  │     │   (Next.js)     │     │   (AI Engine)   │
 └────────┬────────┘     └─────────────────┘     └─────────────────┘
-         │                                              
-         ▼                                              
-┌─────────────────┐     ┌─────────────────┐            
+         │
+         ▼
+┌─────────────────┐     ┌─────────────────┐
 │    Outseta      │     │    Supabase     │  ◀── Currently only
 │  (Identity)     │     │  (PDF storage)  │      stores shared PDFs
-└─────────────────┘     └─────────────────┘            
+└─────────────────┘     └─────────────────┘
 ```
 
 **What's missing:** Persistent storage for user-specific data.
@@ -138,7 +165,8 @@ Use Vercel Postgres (powered by Neon) for a single-platform architecture.
 | Writes | $1.00/million | ~$3-8 |
 | **Total** | | **$5-15** |
 
-⚠️ Usage-based pricing means costs scale with activity. Heavy usage month could spike to $30-50.
+{: .warning }
+> Usage-based pricing means costs scale with activity. Heavy usage month could spike to $30-50.
 
 ---
 
@@ -232,4 +260,8 @@ Use Vercel Postgres (powered by Neon) for a single-platform architecture.
 
 ---
 
-*Questions? Comments? Open an issue or reach out.*
+## Changelog
+
+| Date | Author | Change |
+|:-----|:-------|:-------|
+| 2025-01 | @engineering | Initial proposal |
