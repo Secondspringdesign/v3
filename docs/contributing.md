@@ -89,11 +89,7 @@ related:
 
 Fill in the template sections. Delete sections that don't apply—don't leave empty headings.
 
-### Step 5: Add to Docs Index
-
-Edit `docs/docs.md` and add your doc to the appropriate category table.
-
-### Step 6: Submit PR
+### Step 5: Submit PR
 
 ```bash
 git checkout -b docs/your-doc-name
@@ -119,8 +115,8 @@ git push origin docs/your-doc-name
 
 | Field | Values | Description |
 |:------|:-------|:------------|
-| `doc_type` | `spec`, `design`, `adr`, `runbook`, `report` | Document category |
-| `doc_status` | `draft`, `proposed`, `accepted`, `implemented`, `deprecated` | Current lifecycle stage |
+| `doc_type` | `spec`, `design`, `plan`, `adr`, `runbook`, `report` | Document category (auto-indexed) |
+| `doc_status` | `draft`, `proposed`, `accepted`, `ready`, `final`, `implemented`, `deprecated` | Current lifecycle stage |
 | `doc_owner` | `@username` or team name | Primary maintainer |
 | `last_updated` | `YYYY-MM-DD` | Last significant edit |
 | `related` | List of `{title, url}` | Related documents |
@@ -142,17 +138,22 @@ This provides at-a-glance context for readers.
 
 ---
 
-## Tags and Categories
+## Auto-Generated Index
 
-{: .note }
-> Just the Docs doesn't support tag filtering without plugins. We use curated lists instead.
+{: .tip }
+> The [Docs Index](/secondspring-v3/docs/) is **auto-generated** from front matter. No manual editing required!
 
-Instead of tags, we organize by:
-1. **Doc type** (Spec, Design, ADR, Runbook, Report)
-2. **Status** (Draft, Proposed, Accepted, Implemented, Deprecated)
-3. **Manual curation** in `docs.md` category tables
+When you add a doc with proper `doc_type` and `doc_status` front matter, it automatically appears in:
+1. The appropriate **category table** (Specs, Design Docs, Plans, ADRs, Runbooks, Reports)
+2. The **All Docs by Status** section
 
-To "tag" a doc conceptually, mention keywords in the title or first paragraph so search finds it.
+**Required front matter for auto-indexing:**
+- `doc_type` — determines which category table
+- `doc_status` — determines status grouping
+- `doc_owner` — shown in tables
+- `last_updated` — shown in tables, used for sorting (newest first)
+
+To help search find your doc, use keywords in the title or first paragraph.
 
 ---
 
@@ -160,12 +161,11 @@ To "tag" a doc conceptually, mention keywords in the title or first paragraph so
 
 Before marking a doc as "Proposed":
 
-- [ ] Front matter is complete and accurate
+- [ ] Front matter is complete (`doc_type`, `doc_status`, `doc_owner`, `last_updated`)
 - [ ] All template sections are filled or removed
 - [ ] Links to related docs work
 - [ ] Code examples are tested
 - [ ] Diagrams have alt text
-- [ ] Doc is added to `docs.md` index
 - [ ] Spelling and grammar checked
 
 ---

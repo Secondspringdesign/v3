@@ -11,6 +11,9 @@ permalink: /docs/
 All documentation organized by category. Each doc lives directly in `docs/` for simplicity.
 {: .fs-6 .fw-300 }
 
+{: .tip }
+> **Auto-generated**: This index automatically lists all docs based on their `doc_type` front matter. Just add a doc with proper front matter and it appears here.
+
 ## Table of Contents
 {: .no_toc .text-delta }
 
@@ -23,11 +26,17 @@ All documentation organized by category. Each doc lives directly in `docs/` for 
 
 Technical specifications and product requirements defining APIs, protocols, and system contracts.
 
+{% assign specs = site.pages | where: "doc_type", "spec" | sort: "last_updated" | reverse %}
+{% if specs.size > 0 %}
 | Document | Status | Owner | Updated |
 |:---------|:-------|:------|:--------|
-| [Phase 1 Foundation PRD](/secondspring-v3/spec-phase1-foundation/) | Approved | @engineering | 2025-01 |
+{% for doc in specs %}| [{{ doc.title }}]({{ site.baseurl }}{{ doc.url }}) | {{ doc.doc_status | capitalize }} | {{ doc.doc_owner }} | {{ doc.last_updated }} |
+{% endfor %}
+{% else %}
+*No specs yet.*
+{% endif %}
 
-[Spec Template](/secondspring-v3/templates/spec-template/){: .btn .btn-outline .fs-3 }
+[Spec Template]({{ site.baseurl }}/templates/spec-template/){: .btn .btn-outline .fs-3 }
 
 ---
 
@@ -35,11 +44,17 @@ Technical specifications and product requirements defining APIs, protocols, and 
 
 Architectural proposals and system design documents.
 
+{% assign designs = site.pages | where: "doc_type", "design" | sort: "last_updated" | reverse %}
+{% if designs.size > 0 %}
 | Document | Status | Owner | Updated |
 |:---------|:-------|:------|:--------|
-| [Backend Architecture Proposal](/secondspring-v3/design-backend-architecture/) | Approved | @engineering | 2025-01 |
+{% for doc in designs %}| [{{ doc.title }}]({{ site.baseurl }}{{ doc.url }}) | {{ doc.doc_status | capitalize }} | {{ doc.doc_owner }} | {{ doc.last_updated }} |
+{% endfor %}
+{% else %}
+*No design docs yet.*
+{% endif %}
 
-[Design Doc Template](/secondspring-v3/templates/design-doc-template/){: .btn .btn-outline .fs-3 }
+[Design Doc Template]({{ site.baseurl }}/templates/design-doc-template/){: .btn .btn-outline .fs-3 }
 
 ---
 
@@ -47,9 +62,15 @@ Architectural proposals and system design documents.
 
 Implementation plans with tracked tasks and dependencies.
 
-| Document | Status | Epic | Updated |
-|:---------|:-------|:-----|:--------|
-| [Phase 1 Implementation Plan](/secondspring-v3/plan-phase1-implementation/) | Approved | `secondspring-v3-3lq` | 2026-01 |
+{% assign plans = site.pages | where: "doc_type", "plan" | sort: "last_updated" | reverse %}
+{% if plans.size > 0 %}
+| Document | Status | Owner | Updated |
+|:---------|:-------|:------|:--------|
+{% for doc in plans %}| [{{ doc.title }}]({{ site.baseurl }}{{ doc.url }}) | {{ doc.doc_status | capitalize }} | {{ doc.doc_owner }} | {{ doc.last_updated }} |
+{% endfor %}
+{% else %}
+*No plans yet.*
+{% endif %}
 
 ---
 
@@ -57,11 +78,17 @@ Implementation plans with tracked tasks and dependencies.
 
 Lightweight records of significant architectural decisions.
 
+{% assign adrs = site.pages | where: "doc_type", "adr" | sort: "last_updated" | reverse %}
+{% if adrs.size > 0 %}
 | ID | Decision | Status | Date |
 |:---|:---------|:-------|:-----|
-| [ADR-0001](/secondspring-v3/adr-0001-use-supabase-backend/) | Use Supabase for Backend Storage | Accepted | 2026-01-06 |
+{% for doc in adrs %}| [{{ doc.title | split: ": " | first }}]({{ site.baseurl }}{{ doc.url }}) | {{ doc.title | split: ": " | last }} | {{ doc.doc_status | capitalize }} | {{ doc.last_updated }} |
+{% endfor %}
+{% else %}
+*No ADRs yet.*
+{% endif %}
 
-[ADR Template](/secondspring-v3/templates/adr-template/){: .btn .btn-outline .fs-3 }
+[ADR Template]({{ site.baseurl }}/templates/adr-template/){: .btn .btn-outline .fs-3 }
 
 {: .note }
 > ADRs are numbered sequentially. Check existing ADRs before creating a new one to get the next number.
@@ -72,11 +99,17 @@ Lightweight records of significant architectural decisions.
 
 Step-by-step operational procedures for common tasks and incidents.
 
-| Runbook | Category | Owner | Updated |
-|:--------|:---------|:------|:--------|
-| — | No runbooks yet | — | — |
+{% assign runbooks = site.pages | where: "doc_type", "runbook" | sort: "last_updated" | reverse %}
+{% if runbooks.size > 0 %}
+| Runbook | Status | Owner | Updated |
+|:--------|:-------|:------|:--------|
+{% for doc in runbooks %}| [{{ doc.title }}]({{ site.baseurl }}{{ doc.url }}) | {{ doc.doc_status | capitalize }} | {{ doc.doc_owner }} | {{ doc.last_updated }} |
+{% endfor %}
+{% else %}
+*No runbooks yet.*
+{% endif %}
 
-[Runbook Template](/secondspring-v3/templates/runbook-template/){: .btn .btn-outline .fs-3 }
+[Runbook Template]({{ site.baseurl }}/templates/runbook-template/){: .btn .btn-outline .fs-3 }
 
 ---
 
@@ -84,11 +117,17 @@ Step-by-step operational procedures for common tasks and incidents.
 
 Status updates, postmortems, code reviews, and periodic reviews.
 
-| Report | Type | Period | Updated |
-|:-------|:-----|:-------|:--------|
-| [Code Review 2026-01-06](/secondspring-v3/report-code-review-2026-01-06/) | Code Review | 2026-01-06 | 2026-01-06 |
+{% assign reports = site.pages | where: "doc_type", "report" | sort: "last_updated" | reverse %}
+{% if reports.size > 0 %}
+| Report | Status | Owner | Updated |
+|:-------|:-------|:------|:--------|
+{% for doc in reports %}| [{{ doc.title }}]({{ site.baseurl }}{{ doc.url }}) | {{ doc.doc_status | capitalize }} | {{ doc.doc_owner }} | {{ doc.last_updated }} |
+{% endfor %}
+{% else %}
+*No reports yet.*
+{% endif %}
 
-[Report Template](/secondspring-v3/templates/report-template/){: .btn .btn-outline .fs-3 }
+[Report Template]({{ site.baseurl }}/templates/report-template/){: .btn .btn-outline .fs-3 }
 
 ---
 
@@ -97,21 +136,64 @@ Status updates, postmortems, code reviews, and periodic reviews.
 {: .tip }
 > Use the search bar above to find docs by keyword.
 
+{% assign all_docs = site.pages | where_exp: "page", "page.doc_type != nil" | sort: "last_updated" | reverse %}
+
 ### Draft
 Documents in progress, not ready for review.
+
+{% assign drafts = all_docs | where: "doc_status", "draft" %}
+{% if drafts.size > 0 %}
+{% for doc in drafts %}- [{{ doc.title }}]({{ site.baseurl }}{{ doc.url }})
+{% endfor %}
+{% else %}
+*None*
+{% endif %}
 
 ### Proposed
 Ready for team review and feedback.
 
-### Accepted
-Approved and ready for implementation.
-- [ADR-0001: Use Supabase for Backend Storage](/secondspring-v3/adr-0001-use-supabase-backend/)
-- [Backend Architecture Proposal](/secondspring-v3/design-backend-architecture/)
-- [Phase 1 Foundation PRD](/secondspring-v3/spec-phase1-foundation/)
-- [Phase 1 Implementation Plan](/secondspring-v3/plan-phase1-implementation/)
+{% assign proposed = all_docs | where: "doc_status", "proposed" %}
+{% if proposed.size > 0 %}
+{% for doc in proposed %}- [{{ doc.title }}]({{ site.baseurl }}{{ doc.url }})
+{% endfor %}
+{% else %}
+*None*
+{% endif %}
 
-### Implemented
+### Approved / Accepted
+Approved and ready for implementation.
+
+{% assign approved = all_docs | where: "doc_status", "approved" %}
+{% assign accepted = all_docs | where: "doc_status", "accepted" %}
+{% assign ready = all_docs | where: "doc_status", "ready" %}
+{% assign approved_all = approved | concat: accepted | concat: ready %}
+{% if approved_all.size > 0 %}
+{% for doc in approved_all %}- [{{ doc.title }}]({{ site.baseurl }}{{ doc.url }})
+{% endfor %}
+{% else %}
+*None*
+{% endif %}
+
+### Final / Implemented
 Fully implemented and in production.
+
+{% assign final = all_docs | where: "doc_status", "final" %}
+{% assign implemented = all_docs | where: "doc_status", "implemented" %}
+{% assign final_all = final | concat: implemented %}
+{% if final_all.size > 0 %}
+{% for doc in final_all %}- [{{ doc.title }}]({{ site.baseurl }}{{ doc.url }})
+{% endfor %}
+{% else %}
+*None*
+{% endif %}
 
 ### Deprecated
 No longer active; kept for historical reference.
+
+{% assign deprecated = all_docs | where: "doc_status", "deprecated" %}
+{% if deprecated.size > 0 %}
+{% for doc in deprecated %}- [{{ doc.title }}]({{ site.baseurl }}{{ doc.url }})
+{% endfor %}
+{% else %}
+*None*
+{% endif %}
