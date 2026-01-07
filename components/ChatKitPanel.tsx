@@ -19,6 +19,7 @@ export type FactAction = {
   type: "save";
   factId: string;
   factText: string;
+  error?: string;
 };
 
 type ChatKitPanelProps = {
@@ -456,14 +457,91 @@ export function ChatKitPanel({
       if (invocation.name === "record_fact") {
         const id = String(invocation.params.fact_id ?? "");
         const text = String(invocation.params.fact_text ?? "");
+        const sourceWorkflow = invocation.params.source_workflow
+          ? String(invocation.params.source_workflow)
+          : null;
+
         if (!id || processedFacts.current.has(id)) return { success: true };
         processedFacts.current.add(id);
-        void onWidgetAction({
-          type: "save",
-          factId: id,
-          factText: text.replace(/\s+/g, " ").trim(),
-        });
-        return { success: true };
+
+        const cleanedText = text.replace(/\s+/g, " ").trim();
+
+        // Call API to persist the fact
+        try {
+          const outsetaToken = findOutsetaTokenOnClient();
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (outsetaToken) {
+            headers["Authorization"] = `Bearer ${outsetaToken}`;
+          }
+
+          const response = await fetch("/api/facts", {
+            method: "POST",
+            headers,
+            credentials: "include",
+            body: JSON.stringify({
+              fact_id: id,
+              fact_text: cleanedText,
+              source_workflow: sourceWorkflow,
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const errorMsg = (errorData as { error?: string }).error ?? "Failed to save fact";
+            console.error("[ChatKitPanel] record_fact API error:", errorMsg);
+            void onWidgetAction({
+              type: "save",
+              factId: id,
+              factText: cleanedText,
+              error: errorMsg,
+            });
+            return { success: false, error: errorMsg };
+          }
+
+          void onWidgetAction({
+            type: "save",
+            factId: id,
+            factText: cleanedText,
+          });
+          return { success: true };
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : "Failed to save fact";
+          console.error("[ChatKitPanel] record_fact error:", err);
+          void onWidgetAction({
+            type: "save",
+            factId: id,
+            factText: cleanedText,
+            error: errorMsg,
+          });
+          return { success: false, error: errorMsg };
+        }
+      }
+
+      if (invocation.name === "retrieve_memory") {
+        try {
+          const outsetaToken = findOutsetaTokenOnClient();
+          const headers: Record<string, string> = {};
+          if (outsetaToken) {
+            headers["Authorization"] = `Bearer ${outsetaToken}`;
+          }
+
+          const response = await fetch("/api/memory", {
+            method: "GET",
+            headers,
+            credentials: "include",
+          });
+
+          if (!response.ok) {
+            if (isDev) console.warn("[ChatKitPanel] retrieve_memory API error:", response.status);
+            return { success: true, memory_context: "" };
+          }
+
+          const data = (await response.json()) as { memory_context?: string };
+          return { success: true, memory_context: data.memory_context ?? "" };
+        } catch (err) {
+          console.error("[ChatKitPanel] retrieve_memory error:", err);
+          return { success: true, memory_context: "" };
+        }
       }
 
       return { success: false };
