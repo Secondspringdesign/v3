@@ -164,28 +164,88 @@ After adding environment variables:
 
 ## Step 4: Configure ChatKit Tools (Christian)
 
+ChatKit tools have two parts:
+1. **Dashboard configuration** - Registers the tool schema so the AI knows it exists
+2. **Client-side handler** - Already implemented in `ChatKitPanel.tsx` via `onClientTool`
+
 ### 4.1 Add retrieve_memory Tool
-In the ChatKit dashboard, add a new client tool to the workflow(s):
 
-**Tool Name**: `retrieve_memory`
+In the ChatKit dashboard, navigate to the workflow and add a new **client tool**:
 
-**Description**: Retrieves the user's business memory context for personalization
+**Tool Configuration:**
+| Field | Value |
+|:------|:------|
+| Name | `retrieve_memory` |
+| Type | Client Tool |
+| Description | Retrieves the user's stored business facts and context. Call this at the start of a conversation to personalize responses based on what you know about the user's business. |
 
-**Parameters**: None required
+**Parameters Schema:**
+```json
+{
+  "type": "object",
+  "properties": {},
+  "required": []
+}
+```
+(No parameters - the tool uses the user's auth token to identify them)
 
-**Returns**:
+**Expected Return:**
 ```json
 {
   "success": true,
-  "memory_context": "## Business Memory\n\n**Business Name**: ..."
+  "memory_context": "## Business Memory\n\n**Business Name**: Acme Corp\n\n### Known Facts\n- Industry: Software\n- Founded: 2020\n..."
 }
 ```
 
+**System Prompt Addition:**
+Add to the workflow's system prompt so the AI knows when to use it:
+```
+You have access to a retrieve_memory tool. Call it at the start of conversations
+to load any stored facts about the user's business for personalization.
+```
+
 ### 4.2 Verify record_fact Tool
-Ensure the existing `record_fact` tool is configured with:
-- `fact_id` (string, required)
-- `fact_text` (string, required)
-- `source_workflow` (string, optional)
+
+Ensure the `record_fact` client tool is configured:
+
+**Tool Configuration:**
+| Field | Value |
+|:------|:------|
+| Name | `record_fact` |
+| Type | Client Tool |
+| Description | Saves an important fact about the user's business for future reference. Use this when the user shares key information like business name, industry, goals, or preferences. |
+
+**Parameters Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "fact_id": {
+      "type": "string",
+      "description": "Unique identifier for the fact (e.g., 'business_name', 'industry', 'goal_q1')"
+    },
+    "fact_text": {
+      "type": "string",
+      "description": "The fact content to store"
+    },
+    "source_workflow": {
+      "type": "string",
+      "description": "Which workflow captured this fact (optional)"
+    }
+  },
+  "required": ["fact_id", "fact_text"]
+}
+```
+
+### 4.3 How It Works (Reference)
+
+When the AI calls these tools:
+1. ChatKit sends the tool invocation to the client (browser)
+2. `ChatKitPanel.tsx` handles it in `onClientTool`:
+   - `retrieve_memory` → calls `GET /api/memory`
+   - `record_fact` → calls `POST /api/facts`
+3. The API authenticates via Outseta JWT and accesses Supabase
+4. Results return to the AI to continue the conversation
 
 ---
 
