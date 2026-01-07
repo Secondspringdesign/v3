@@ -8,6 +8,21 @@
 import { getSupabaseClient } from '../supabase';
 import type { DbFact, FactInsert, FactUpdate } from '../types/database';
 
+// Feature flag to stub out Supabase for testing
+const STUB_MODE = process.env.SUPABASE_STUB_MODE === 'true';
+
+function createStubFact(data: FactInsert): DbFact {
+  return {
+    id: 'stub-fact-' + data.fact_id,
+    business_id: data.business_id,
+    fact_id: data.fact_id,
+    fact_text: data.fact_text,
+    source_workflow: data.source_workflow,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
 // ============================================
 // QUERIES
 // ============================================
@@ -74,6 +89,10 @@ export async function getByFactId(
  * @returns Array of fact records, ordered by fact_id
  */
 export async function getByBusinessId(businessId: string): Promise<DbFact[]> {
+  if (STUB_MODE) {
+    return []; // No persisted facts in stub mode
+  }
+
   const supabase = getSupabaseClient();
 
   const { data, error } = await supabase
@@ -104,6 +123,10 @@ export async function getByBusinessId(businessId: string): Promise<DbFact[]> {
  * @returns The created or updated fact
  */
 export async function upsert(data: FactInsert): Promise<DbFact> {
+  if (STUB_MODE) {
+    return createStubFact(data);
+  }
+
   const supabase = getSupabaseClient();
 
   const { data: fact, error } = await supabase
@@ -157,6 +180,10 @@ export async function deleteByFactId(
   businessId: string,
   factId: string
 ): Promise<boolean> {
+  if (STUB_MODE) {
+    return true; // Always succeed in stub mode
+  }
+
   const supabase = getSupabaseClient();
 
   const { error, count } = await supabase

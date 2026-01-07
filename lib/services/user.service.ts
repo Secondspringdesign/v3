@@ -8,6 +8,19 @@
 import { getSupabaseClient } from '../supabase';
 import type { DbUser, UserInsert, UserUpdate } from '../types/database';
 
+// Feature flag to stub out Supabase for testing
+const STUB_MODE = process.env.SUPABASE_STUB_MODE === 'true';
+
+function createStubUser(outsetaUid: string, email?: string | null): DbUser {
+  return {
+    id: 'stub-user-' + outsetaUid,
+    outseta_uid: outsetaUid,
+    email: email ?? 'stub@example.com',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
 // ============================================
 // QUERIES
 // ============================================
@@ -19,6 +32,10 @@ import type { DbUser, UserInsert, UserUpdate } from '../types/database';
  * @returns The user record or null if not found
  */
 export async function getByOutsetaUid(outsetaUid: string): Promise<DbUser | null> {
+  if (STUB_MODE) {
+    return createStubUser(outsetaUid);
+  }
+
   const supabase = getSupabaseClient();
 
   const { data, error } = await supabase
@@ -134,6 +151,10 @@ export async function getOrCreate(
   outsetaUid: string,
   email?: string | null
 ): Promise<DbUser> {
+  if (STUB_MODE) {
+    return createStubUser(outsetaUid, email);
+  }
+
   // Try to find existing user first
   const existing = await getByOutsetaUid(outsetaUid);
   if (existing) {

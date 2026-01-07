@@ -42,6 +42,13 @@ function validateEnv(): { url: string; key: string } {
  * @throws Error if environment variables are missing
  */
 export function getSupabaseClient(): SupabaseClient {
+  // Guard: Services should return early in stub mode before calling this
+  if (process.env.SUPABASE_STUB_MODE === 'true') {
+    throw new Error(
+      'getSupabaseClient called in stub mode - services should have returned early'
+    );
+  }
+
   if (supabaseClient) {
     return supabaseClient;
   }

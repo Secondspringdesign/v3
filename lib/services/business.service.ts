@@ -8,6 +8,20 @@
 import { getSupabaseClient } from '../supabase';
 import type { DbBusiness, BusinessInsert, BusinessUpdate, BusinessStatus } from '../types/database';
 
+// Feature flag to stub out Supabase for testing
+const STUB_MODE = process.env.SUPABASE_STUB_MODE === 'true';
+
+function createStubBusiness(userId: string): DbBusiness {
+  return {
+    id: 'stub-business-' + userId,
+    user_id: userId,
+    name: 'Stub Business',
+    status: 'active',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
 // ============================================
 // QUERIES
 // ============================================
@@ -76,6 +90,10 @@ export async function getByUserId(
  * @returns The active business or null if none exists
  */
 export async function getActiveByUserId(userId: string): Promise<DbBusiness | null> {
+  if (STUB_MODE) {
+    return createStubBusiness(userId);
+  }
+
   const businesses = await getByUserId(userId, 'active');
   return businesses[0] ?? null;
 }
@@ -156,6 +174,10 @@ export async function archive(id: string): Promise<DbBusiness> {
  * @returns The existing or newly created active business
  */
 export async function getOrCreateActive(userId: string): Promise<DbBusiness> {
+  if (STUB_MODE) {
+    return createStubBusiness(userId);
+  }
+
   // Try to find existing active business first
   const existing = await getActiveByUserId(userId);
   if (existing) {
