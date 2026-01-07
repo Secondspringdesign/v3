@@ -26,7 +26,7 @@ All documentation organized by category. Each doc lives directly in `docs/` for 
 
 Technical specifications and product requirements defining APIs, protocols, and system contracts.
 
-{% assign specs = site.pages | where: "doc_type", "spec" | sort: "last_updated" | reverse %}
+{% assign specs = site.pages | where: "doc_type", "spec" | sort: "title" | sort: "last_updated" | reverse %}
 {% if specs.size > 0 %}
 | Document | Status | Owner | Updated |
 |:---------|:-------|:------|:--------|
@@ -44,7 +44,7 @@ Technical specifications and product requirements defining APIs, protocols, and 
 
 Architectural proposals and system design documents.
 
-{% assign designs = site.pages | where: "doc_type", "design" | sort: "last_updated" | reverse %}
+{% assign designs = site.pages | where: "doc_type", "design" | sort: "title" | sort: "last_updated" | reverse %}
 {% if designs.size > 0 %}
 | Document | Status | Owner | Updated |
 |:---------|:-------|:------|:--------|
@@ -62,7 +62,7 @@ Architectural proposals and system design documents.
 
 Implementation plans with tracked tasks and dependencies.
 
-{% assign plans = site.pages | where: "doc_type", "plan" | sort: "last_updated" | reverse %}
+{% assign plans = site.pages | where: "doc_type", "plan" | sort: "title" | sort: "last_updated" | reverse %}
 {% if plans.size > 0 %}
 | Document | Status | Owner | Updated |
 |:---------|:-------|:------|:--------|
@@ -78,7 +78,7 @@ Implementation plans with tracked tasks and dependencies.
 
 Lightweight records of significant architectural decisions.
 
-{% assign adrs = site.pages | where: "doc_type", "adr" | sort: "last_updated" | reverse %}
+{% assign adrs = site.pages | where: "doc_type", "adr" | sort: "title" | sort: "last_updated" | reverse %}
 {% if adrs.size > 0 %}
 | ID | Decision | Status | Date |
 |:---|:---------|:-------|:-----|
@@ -99,7 +99,7 @@ Lightweight records of significant architectural decisions.
 
 Step-by-step operational procedures for common tasks and incidents.
 
-{% assign runbooks = site.pages | where: "doc_type", "runbook" | sort: "last_updated" | reverse %}
+{% assign runbooks = site.pages | where: "doc_type", "runbook" | sort: "title" | sort: "last_updated" | reverse %}
 {% if runbooks.size > 0 %}
 | Runbook | Status | Owner | Updated |
 |:--------|:-------|:------|:--------|
@@ -117,7 +117,7 @@ Step-by-step operational procedures for common tasks and incidents.
 
 Status updates, postmortems, code reviews, and periodic reviews.
 
-{% assign reports = site.pages | where: "doc_type", "report" | sort: "last_updated" | reverse %}
+{% assign reports = site.pages | where: "doc_type", "report" | sort: "title" | sort: "last_updated" | reverse %}
 {% if reports.size > 0 %}
 | Report | Status | Owner | Updated |
 |:-------|:-------|:------|:--------|
@@ -136,7 +136,7 @@ Status updates, postmortems, code reviews, and periodic reviews.
 {: .tip }
 > Use the search bar above to find docs by keyword.
 
-{% assign all_docs = site.pages | where_exp: "page", "page.doc_type != nil" | sort: "last_updated" | reverse %}
+{% assign all_docs = site.pages | where_exp: "page", "page.doc_type != nil" | sort: "title" | sort: "last_updated" | reverse %}
 
 ### Draft
 Documents in progress, not ready for review.
