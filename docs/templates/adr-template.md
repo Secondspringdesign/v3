@@ -3,6 +3,7 @@ layout: default
 title: "ADR Template"
 permalink: /templates/adr-template/
 nav_exclude: true
+is_template: true
 
 doc_type: adr
 doc_status: draft

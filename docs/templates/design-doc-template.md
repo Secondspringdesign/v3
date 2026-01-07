@@ -3,6 +3,7 @@ layout: default
 title: "Design Doc Template"
 permalink: /templates/design-doc-template/
 nav_exclude: true
+is_template: true
 
 doc_type: design
 doc_status: draft

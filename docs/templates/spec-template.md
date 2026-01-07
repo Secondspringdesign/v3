@@ -3,6 +3,7 @@ layout: default
 title: "Spec Template"
 permalink: /templates/spec-template/
 nav_exclude: true
+is_template: true
 
 # Template metadata (replace when using)
 doc_type: spec

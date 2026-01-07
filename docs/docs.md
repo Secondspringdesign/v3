@@ -26,7 +26,7 @@ All documentation organized by category. Each doc lives directly in `docs/` for 
 
 Technical specifications and product requirements defining APIs, protocols, and system contracts.
 
-{% assign specs_unsorted = site.pages | where: "doc_type", "spec" %}
+{% assign specs_unsorted = site.pages | where: "doc_type", "spec" | where_exp: "p", "p.is_template != true" | where_exp: "p", "p.is_example != true" %}
 {% assign specs = specs_unsorted | sort_natural: "last_updated" | reverse %}
 {% if specs.size > 0 %}
 | Document | Status | Owner | Updated |
@@ -38,6 +38,7 @@ Technical specifications and product requirements defining APIs, protocols, and 
 {% endif %}
 
 [Spec Template]({{ site.baseurl }}/templates/spec-template/){: .btn .btn-outline .fs-3 }
+[Spec Example]({{ site.baseurl }}/examples/spec-api-versioning/){: .btn .btn-outline .fs-3 }
 
 ---
 
@@ -45,7 +46,7 @@ Technical specifications and product requirements defining APIs, protocols, and 
 
 Architectural proposals and system design documents.
 
-{% assign designs_unsorted = site.pages | where: "doc_type", "design" %}
+{% assign designs_unsorted = site.pages | where: "doc_type", "design" | where_exp: "p", "p.is_template != true" | where_exp: "p", "p.is_example != true" %}
 {% assign designs = designs_unsorted | sort_natural: "last_updated" | reverse %}
 {% if designs.size > 0 %}
 | Document | Status | Owner | Updated |
@@ -57,6 +58,7 @@ Architectural proposals and system design documents.
 {% endif %}
 
 [Design Doc Template]({{ site.baseurl }}/templates/design-doc-template/){: .btn .btn-outline .fs-3 }
+[Design Doc Example]({{ site.baseurl }}/examples/design-notification-system/){: .btn .btn-outline .fs-3 }
 
 ---
 
@@ -64,7 +66,7 @@ Architectural proposals and system design documents.
 
 Implementation plans with tracked tasks and dependencies.
 
-{% assign plans_unsorted = site.pages | where: "doc_type", "plan" %}
+{% assign plans_unsorted = site.pages | where: "doc_type", "plan" | where_exp: "p", "p.is_template != true" | where_exp: "p", "p.is_example != true" %}
 {% assign plans = plans_unsorted | sort_natural: "last_updated" | reverse %}
 {% if plans.size > 0 %}
 | Document | Status | Owner | Updated |
@@ -81,7 +83,7 @@ Implementation plans with tracked tasks and dependencies.
 
 Lightweight records of significant architectural decisions.
 
-{% assign adrs_unsorted = site.pages | where: "doc_type", "adr" %}
+{% assign adrs_unsorted = site.pages | where: "doc_type", "adr" | where_exp: "p", "p.is_template != true" | where_exp: "p", "p.is_example != true" %}
 {% assign adrs = adrs_unsorted | sort_natural: "last_updated" | reverse %}
 {% if adrs.size > 0 %}
 | ID | Decision | Status | Date |
@@ -93,6 +95,7 @@ Lightweight records of significant architectural decisions.
 {% endif %}
 
 [ADR Template]({{ site.baseurl }}/templates/adr-template/){: .btn .btn-outline .fs-3 }
+[ADR Example]({{ site.baseurl }}/examples/adr-0001-use-postgresql/){: .btn .btn-outline .fs-3 }
 
 {: .note }
 > ADRs are numbered sequentially. Check existing ADRs before creating a new one to get the next number.
@@ -103,7 +106,7 @@ Lightweight records of significant architectural decisions.
 
 Step-by-step operational procedures for common tasks and incidents.
 
-{% assign runbooks_unsorted = site.pages | where: "doc_type", "runbook" %}
+{% assign runbooks_unsorted = site.pages | where: "doc_type", "runbook" | where_exp: "p", "p.is_template != true" | where_exp: "p", "p.is_example != true" %}
 {% assign runbooks = runbooks_unsorted | sort_natural: "last_updated" | reverse %}
 {% if runbooks.size > 0 %}
 | Runbook | Status | Owner | Updated |
@@ -115,6 +118,7 @@ Step-by-step operational procedures for common tasks and incidents.
 {% endif %}
 
 [Runbook Template]({{ site.baseurl }}/templates/runbook-template/){: .btn .btn-outline .fs-3 }
+[Runbook Example]({{ site.baseurl }}/examples/runbook-deploy-production/){: .btn .btn-outline .fs-3 }
 
 ---
 
@@ -122,7 +126,7 @@ Step-by-step operational procedures for common tasks and incidents.
 
 Status updates, postmortems, code reviews, and periodic reviews.
 
-{% assign reports_unsorted = site.pages | where: "doc_type", "report" %}
+{% assign reports_unsorted = site.pages | where: "doc_type", "report" | where_exp: "p", "p.is_template != true" | where_exp: "p", "p.is_example != true" %}
 {% assign reports = reports_unsorted | sort_natural: "last_updated" | reverse %}
 {% if reports.size > 0 %}
 | Report | Status | Owner | Updated |
@@ -134,6 +138,7 @@ Status updates, postmortems, code reviews, and periodic reviews.
 {% endif %}
 
 [Report Template]({{ site.baseurl }}/templates/report-template/){: .btn .btn-outline .fs-3 }
+[Report Example]({{ site.baseurl }}/examples/report-q4-system-reliability/){: .btn .btn-outline .fs-3 }
 
 ---
 
@@ -142,7 +147,7 @@ Status updates, postmortems, code reviews, and periodic reviews.
 {: .tip }
 > Use the search bar above to find docs by keyword.
 
-{% assign all_docs_unsorted = site.pages | where_exp: "page", "page.doc_type != nil" %}
+{% assign all_docs_unsorted = site.pages | where_exp: "page", "page.doc_type != nil" | where_exp: "p", "p.is_template != true" | where_exp: "p", "p.is_example != true" %}
 {% assign all_docs = all_docs_unsorted | sort_natural: "last_updated" | reverse %}
 
 ### Draft

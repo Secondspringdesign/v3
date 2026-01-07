@@ -3,6 +3,7 @@ layout: default
 title: "Q4 2024 System Reliability Report"
 permalink: /examples/report-q4-system-reliability/
 nav_exclude: true
+is_example: true
 
 doc_type: report
 doc_status: final

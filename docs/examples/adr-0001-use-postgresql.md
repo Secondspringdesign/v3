@@ -3,6 +3,7 @@ layout: default
 title: "ADR-0001: Use PostgreSQL"
 permalink: /examples/adr-0001-use-postgresql/
 nav_exclude: true
+is_example: true
 
 doc_type: adr
 doc_status: accepted

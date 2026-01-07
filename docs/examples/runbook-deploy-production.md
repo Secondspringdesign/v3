@@ -3,6 +3,7 @@ layout: default
 title: "Production Deploy Runbook"
 permalink: /examples/runbook-deploy-production/
 nav_exclude: true
+is_example: true
 
 doc_type: runbook
 doc_status: implemented

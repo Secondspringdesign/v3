@@ -3,6 +3,7 @@ layout: default
 title: "Notification System Design"
 permalink: /examples/design-notification-system/
 nav_exclude: true
+is_example: true
 
 doc_type: design
 doc_status: proposed

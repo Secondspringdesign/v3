@@ -3,6 +3,7 @@ layout: default
 title: "Runbook Template"
 permalink: /templates/runbook-template/
 nav_exclude: true
+is_template: true
 
 doc_type: runbook
 doc_status: draft

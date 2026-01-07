@@ -3,6 +3,7 @@ layout: default
 title: "API Versioning Specification"
 permalink: /examples/spec-api-versioning/
 nav_exclude: true
+is_example: true
 
 doc_type: spec
 doc_status: accepted
