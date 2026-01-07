@@ -201,3 +201,46 @@ bd close <id>
 # View epic status
 bd show secondspring-v3-3lq
 ```
+
+---
+
+## Appendix: Epic Status
+
+```terminal
+$ bd show secondspring-v3-3lq
+
+secondspring-v3-3lq: Phase 1 Foundation: Persistent Fact Storage
+Status: closed
+Close reason: All 20 subtasks completed. Phase 1 Foundation implementation complete.
+Priority: P1
+Type: epic
+Created: 2026-01-06 14:48
+Created by: jon
+Updated: 2026-01-06 16:50
+
+Description:
+Implement persistent fact storage for Second Spring using Supabase with Service Layer
+Architecture. Includes database schema, services, API routes, ChatKit integration, and tests.
+
+Children (20):
+  ↳ secondspring-v3-ig7: Create Supabase migration (schema + RLS) [P1 - closed]
+  ↳ secondspring-v3-1ia: Create MemoryService (lib/services/memory.service.ts) [P2 - closed]
+  ↳ secondspring-v3-21a: Create memory API route (app/api/memory/route.ts) [P2 - closed]
+  ↳ secondspring-v3-3sc: Add retrieve_memory tool handler (components/ChatKitPanel.tsx) [P2 - closed]
+  ↳ secondspring-v3-6e7: Create database types (lib/types/database.ts) [P2 - closed]
+  ↳ secondspring-v3-815: Create Supabase client (lib/supabase.ts) [P2 - closed]
+  ↳ secondspring-v3-9sp: Create FactService (lib/services/fact.service.ts) [P2 - closed]
+  ↳ secondspring-v3-aqb: Create UserService (lib/services/user.service.ts) [P2 - closed]
+  ↳ secondspring-v3-c7i: Create BusinessService (lib/services/business.service.ts) [P2 - closed]
+  ↳ secondspring-v3-czs: Create auth middleware (lib/auth/middleware.ts) [P2 - closed]
+  ↳ secondspring-v3-dx3: Configure environment variables [P2 - closed]
+  ↳ secondspring-v3-flq: Create facts API route (app/api/facts/route.ts) [P2 - closed]
+  ↳ secondspring-v3-jl6: Update ChatKitPanel for API integration (components/ChatKitPanel.tsx) [P2 - closed]
+  ↳ secondspring-v3-koj: Extract JWT auth module (lib/auth/jwt.ts) [P2 - closed]
+  ↳ secondspring-v3-msb: Create API types (lib/types/api.ts) [P2 - closed]
+  ↳ secondspring-v3-ukj: Create fact delete route (app/api/facts/[factId]/route.ts) [P2 - closed]
+  ↳ secondspring-v3-4rz: Refactor create-session to use shared auth (app/api/create-session/route.ts) [P3 - closed]
+  ↳ secondspring-v3-6xp: Write service unit tests (lib/services/__tests__/) [P3 - closed]
+  ↳ secondspring-v3-82d: Write API integration tests (app/api/__tests__/) [P3 - closed]
+  ↳ secondspring-v3-cwc: Create service exports (lib/services/index.ts) [P3 - closed]
+```
