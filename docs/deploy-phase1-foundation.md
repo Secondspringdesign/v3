@@ -75,17 +75,20 @@ supabase --version
    - Format: `https://<project-ref>.supabase.co`
    - Example: `https://abcdefghijklmnop.supabase.co`
 
-### 1.3 Get SUPABASE_SERVICE_ROLE_KEY
+### 1.3 Get SUPABASE_SECRET_KEY
 1. Go to **Settings** → **API**
-2. Under **Project API keys**, copy the **service_role** key
-   - This is a secret key - never expose client-side
-   - Format: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
+2. Under **Secret keys**, copy (or create) a secret key
+   - Format: `sb_secret_...`
+   - This key bypasses RLS - never expose client-side
+   - You can create multiple secret keys for zero-downtime rotation
+
+> **Note**: Legacy `service_role` JWT keys are deprecated. New projects use `sb_secret_...` keys instead. See [Supabase API Keys Migration](https://github.com/orgs/supabase/discussions/29260) for details.
 
 ### 1.4 Share Credentials Securely
 Share the following with Jon for CLI setup:
 - Project Reference ID
 - SUPABASE_URL
-- SUPABASE_SERVICE_ROLE_KEY
+- SUPABASE_SECRET_KEY
 
 Use a secure channel (1Password, encrypted message, etc.)
 
@@ -149,7 +152,7 @@ Or verify in Supabase Dashboard:
 | Variable | Value | Environments |
 |:---------|:------|:-------------|
 | `SUPABASE_URL` | `https://<ref>.supabase.co` | Production, Preview, Development |
-| `SUPABASE_SERVICE_ROLE_KEY` | `eyJ...` (service_role key) | Production, Preview, Development |
+| `SUPABASE_SECRET_KEY` | `sb_secret_...` (secret key) | Production, Preview, Development |
 
 ### 3.2 Redeploy
 After adding environment variables:
@@ -261,7 +264,7 @@ supabase db push
 ```
 
 ### Remove Environment Variables
-In Vercel dashboard, remove `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
+In Vercel dashboard, remove `SUPABASE_URL` and `SUPABASE_SECRET_KEY`.
 
 ---
 

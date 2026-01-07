@@ -183,7 +183,7 @@ Tasks that can be worked in parallel (no blockers):
 
 ```bash
 SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=eyJ...  # Never expose client-side
+SUPABASE_SECRET_KEY=sb_secret_...  # Never expose client-side
 ```
 
 ## Commands

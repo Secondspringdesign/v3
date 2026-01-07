@@ -1,12 +1,12 @@
 /**
  * Supabase client singleton for Edge runtime
  *
- * Uses service role key for server-side API routes.
+ * Uses secret key for server-side API routes.
  * Never expose this client or credentials to the browser.
  *
  * Required env vars:
  *   SUPABASE_URL - Project URL (e.g., https://xxx.supabase.co)
- *   SUPABASE_SERVICE_ROLE_KEY - Service role secret key (sb_secret_... format preferred)
+ *   SUPABASE_SECRET_KEY - Secret key (sb_secret_... format)
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
@@ -19,23 +19,23 @@ let supabaseClient: SupabaseClient | null = null;
  */
 function validateEnv(): { url: string; key: string } {
   const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = process.env.SUPABASE_SECRET_KEY;
 
   if (!url) {
     throw new Error('Missing SUPABASE_URL environment variable');
   }
 
   if (!key) {
-    throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY environment variable');
+    throw new Error('Missing SUPABASE_SECRET_KEY environment variable');
   }
 
   return { url, key };
 }
 
 /**
- * Returns singleton Supabase client configured with service role key
+ * Returns singleton Supabase client configured with secret key
  *
- * The client uses the service role key which bypasses RLS.
+ * The client uses the secret key which bypasses RLS.
  * Access control is enforced at the application layer.
  *
  * @returns Supabase client instance
