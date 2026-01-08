@@ -7,7 +7,7 @@ nav_order: 15
 doc_type: spec
 doc_status: proposed
 doc_owner: "@jon"
-last_updated: 2025-01-07
+last_updated: 2026-01-08
 related:
   - title: "Phase 1 Deployment Guide"
     url: /secondspring-v3/deploy-phase1-foundation/
@@ -21,7 +21,7 @@ related:
 |:------|:------|
 | **Owner** | @jon |
 | **Status** | Proposed |
-| **Last Updated** | 2025-01-07 |
+| **Last Updated** | 2026-01-08 |
 
 ## Table of Contents
 {: .no_toc .text-delta }
@@ -33,7 +33,7 @@ related:
 
 ## Summary
 
-Add a staging environment using Vercel branch deployments and **two separate Supabase projects** (staging + production) for complete schema isolation. This enables pre-release validation of code and database migrations before production deployment.
+Add a staging environment using Vercel branch deployments and **Supabase native branching** (Pro plan) for complete schema isolation. This enables pre-release validation of code and database migrations before production deployment.
 
 ---
 
@@ -56,14 +56,14 @@ Add a staging environment using Vercel branch deployments and **two separate Sup
 - Validate code changes in a staging environment before production
 - Test database migrations against staging database first
 - Maintain schema isolation between staging and production
-- Keep costs at $0/month (use free tiers)
+- Leverage Supabase Pro branching for native database isolation
 - Automate migration deployment via GitHub Actions
 
 ## Non-Goals
 
 - Multi-region deployment
 - Blue-green deployment or canary releases
-- Database branching (requires Supabase Pro)
+- Ephemeral preview branches per PR (future enhancement)
 
 ---
 
@@ -75,8 +75,8 @@ Add a staging environment using Vercel branch deployments and **two separate Sup
 |:----------|:-----------|:--------|
 | **Git branch** | `main` | `staging` |
 | **Vercel domain** | `secondspring.vercel.app` | `secondspring-staging.vercel.app` |
-| **Supabase project** | `secondspring-prod` | `secondspring-staging` |
-| **GitHub secrets** | `SUPABASE_PROD_*` | `SUPABASE_STAGING_*` |
+| **Supabase branch** | Main (default) | `staging` (persistent) |
+| **GitHub secrets** | `SUPABASE_PROJECT_REF` | (same project) |
 
 **Auth (Outseta):** Shared account for both environments. Add `secondspring-staging.vercel.app` to Outseta's allowed callback URLs.
 
@@ -99,17 +99,20 @@ main (production) ← staging (pre-release) ← feature/* (development)
 | `staging` | Preview (protected) | Staging Supabase | Pre-release testing |
 | `feature/*` | Preview (ephemeral) | Stub mode | Development/review |
 
-### Database Strategy: Two Supabase Projects
+### Database Strategy: Supabase Native Branching (Pro Plan)
 
-| Project | Purpose | Migrations Applied |
-|:--------|:--------|:-------------------|
-| `secondspring-staging` | Pre-release validation | On merge to `staging` |
-| `secondspring-prod` | Production | On merge to `main` |
+| Branch | Type | Purpose | Lifecycle |
+|:-------|:-----|:--------|:----------|
+| Main | Default | Production | Permanent |
+| `staging` | Persistent | Pre-release validation | Long-lived |
+| (Future) | Preview | PR previews | Auto-created/deleted |
 
 **Benefits**:
-- Complete schema isolation (migrations tested before production)
-- Free tier for both projects ($0/month)
-- No risk of staging changes affecting production
+- Single project, unified billing
+- Complete schema isolation between branches
+- Migrations auto-applied to branches
+- Each branch gets its own API credentials
+- Optional GitHub integration for auto preview branches per PR
 
 ### Deployment Flow
 
@@ -129,11 +132,11 @@ main (production) ← staging (pre-release) ← feature/* (development)
 
 ## Implementation Plan
 
-### Phase 1: Supabase Setup (Manual - Christian)
+### Phase 1: Supabase Branching Setup (Manual)
 
-- [ ] Create new Supabase project: `secondspring-staging`
-- [ ] Note staging credentials (URL, secret key)
-- [ ] Apply existing migrations to staging: `supabase db push`
+- [ ] Enable branching in Supabase dashboard (Project Settings → Branching)
+- [ ] Create persistent branch named `staging`
+- [ ] Note staging branch credentials (URL, anon key, service key)
 
 ### Phase 2: Branch Setup (Manual - Jon)
 
@@ -151,14 +154,14 @@ main (production) ← staging (pre-release) ← feature/* (development)
 
 **Production scope** (main branch):
 ```
-SUPABASE_URL=https://<prod-ref>.supabase.co
-SUPABASE_SECRET_KEY=<prod-secret>
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_SECRET_KEY=<main-branch-secret>
 ```
 
-**Preview scope** (staging + feature branches):
+**Preview scope** (staging branch):
 ```
-SUPABASE_URL=https://<staging-ref>.supabase.co
-SUPABASE_SECRET_KEY=<staging-secret>
+SUPABASE_URL=https://<project-ref>-staging.<region>.supabase.co
+SUPABASE_SECRET_KEY=<staging-branch-secret>
 SUPABASE_STUB_MODE=false
 ```
 
@@ -167,22 +170,23 @@ SUPABASE_STUB_MODE=false
 SUPABASE_STUB_MODE=true
 ```
 
+{: .note }
+> With Supabase branching, each branch has its own URL and credentials. The staging branch URL includes the branch name.
+
 ### Phase 4: GitHub Actions Enhancement
 
-- [ ] Update `.github/workflows/ci.yml`:
+- [x] Update `.github/workflows/ci.yml`:
   - Add `npm run test` job
   - Add migration validation (local Supabase)
-- [ ] Create `.github/workflows/staging-deploy.yml`:
+- [x] Create `.github/workflows/staging-deploy.yml`:
   - Trigger: push to `staging`
-  - Action: Apply migrations to staging Supabase
-- [ ] Create `.github/workflows/production-deploy.yml`:
+  - Action: Apply migrations to staging branch
+- [x] Create `.github/workflows/production-deploy.yml`:
   - Trigger: push to `main`
-  - Action: Apply migrations to production Supabase
-- [ ] Add GitHub secrets:
-  - `SUPABASE_STAGING_PROJECT_REF`
-  - `SUPABASE_STAGING_DB_PASSWORD`
-  - `SUPABASE_PROD_PROJECT_REF`
-  - `SUPABASE_PROD_DB_PASSWORD`
+  - Action: Apply migrations to production
+- [ ] Add GitHub secrets (simplified with native branching):
+  - `SUPABASE_PROJECT_REF` (single project for both environments)
+  - `SUPABASE_DB_PASSWORD` (main branch password)
   - `SUPABASE_ACCESS_TOKEN`
 
 ### Phase 5: Outseta Configuration (Manual)
@@ -236,7 +240,7 @@ jobs:
       - run: supabase db push --local
 ```
 
-### GitHub Actions: staging-deploy.yml (New)
+### GitHub Actions: staging-deploy.yml
 
 ```yaml
 name: Staging Deploy
@@ -251,14 +255,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
-      - run: supabase link --project-ref ${{ secrets.SUPABASE_STAGING_PROJECT_REF }}
+      - run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_STAGING_DB_PASSWORD }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      # With Supabase native branching + GitHub integration,
+      # migrations are auto-applied. This is a fallback.
       - run: supabase db push
 ```
 
-### GitHub Actions: production-deploy.yml (New)
+### GitHub Actions: production-deploy.yml
 
 ```yaml
 name: Production Deploy
@@ -273,10 +279,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
-      - run: supabase link --project-ref ${{ secrets.SUPABASE_PROD_PROJECT_REF }}
+      - run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_PROD_DB_PASSWORD }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       - run: supabase db push
 ```
 
@@ -299,12 +305,12 @@ jobs:
 | Service | Current | After |
 |:--------|:--------|:------|
 | Vercel | $0-20/mo | $0-20/mo |
-| Supabase | $0/mo (1 project) | $0/mo (2 projects, free tier) |
+| Supabase | $25/mo (Pro) | $25/mo (Pro with branching) |
 | GitHub Actions | $0/mo | $0/mo |
-| **Total** | **$0-20/mo** | **$0-20/mo** |
+| **Total** | **$25-45/mo** | **$25-45/mo** |
 
 {: .note }
-> Supabase free tier allows 2 projects. Both staging and production fit within this limit.
+> Supabase Pro includes native branching. Branch compute usage within 8GB included in plan.
 
 ---
 
@@ -324,13 +330,19 @@ jobs:
 
 - **Pros**: Simpler setup, one set of credentials
 - **Cons**: Schema changes affect production immediately; no migration testing
-- **Why rejected**: User correctly identified that DDL changes would affect production
+- **Why rejected**: DDL changes would affect production users
 
-### Alternative 2: Supabase Database Branching
+### Alternative 2: Two Separate Supabase Projects (Free Tier)
 
-- **Pros**: Best isolation, automatic schema sync
+- **Pros**: Complete isolation, $0/month
+- **Cons**: Manual migration sync, separate credentials to manage
+- **Why rejected**: Upgraded to Pro plan; native branching is simpler
+
+### Chosen: Supabase Native Branching (Pro Plan)
+
+- **Pros**: Best isolation, automatic schema sync, single project management, integrated with GitHub
 - **Cons**: Requires Pro plan ($25/month)
-- **Why rejected**: Cost; free tier preferred
+- **Why chosen**: Cleaner architecture, fewer secrets, better DX
 
 ---
 
@@ -338,5 +350,6 @@ jobs:
 
 | Date | Author | Change |
 |:-----|:-------|:-------|
+| 2026-01-08 | @jon | Revised for Supabase Pro native branching |
 | 2025-01-08 | @jon | Added naming convention, Outseta config phase |
 | 2025-01-07 | @jon | Initial proposal |
