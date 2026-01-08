@@ -104,6 +104,9 @@ main (production) ← staging (pre-release) ← feature/* (development)
 6. Production deployment
 ```
 
+{: .note }
+> Future optimization: Limit Vercel builds to only `main` and `staging` branches to save build minutes.
+
 ---
 
 ## Implementation Plan
