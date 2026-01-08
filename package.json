@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "echo 'No tests configured yet'"
   },
   "dependencies": {
     "@openai/chatkit-react": ">=1.1.1 <2.0.0",
