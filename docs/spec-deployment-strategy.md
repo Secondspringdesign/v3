@@ -67,6 +67,24 @@ Add a staging environment using Vercel branch deployments and **two separate Sup
 
 ---
 
+## Naming Convention
+
+**Pattern:** `secondspring` + `-{environment}` suffix
+
+| Component | Production | Staging |
+|:----------|:-----------|:--------|
+| **Git branch** | `main` | `staging` |
+| **Vercel domain** | `secondspring.vercel.app` | `secondspring-staging.vercel.app` |
+| **Supabase project** | `secondspring-prod` | `secondspring-staging` |
+| **GitHub secrets** | `SUPABASE_PROD_*` | `SUPABASE_STAGING_*` |
+
+**Auth (Outseta):** Shared account for both environments. Add `secondspring-staging.vercel.app` to Outseta's allowed callback URLs.
+
+{: .note }
+> When a custom domain is added later (e.g., `secondspring.design`), staging would become `staging.secondspring.design`.
+
+---
+
 ## Proposed Design
 
 ### Branch Structure
@@ -126,7 +144,9 @@ main (production) ← staging (pre-release) ← feature/* (development)
 
 ### Phase 3: Vercel Configuration (Manual)
 
-- [ ] Add `staging` as protected preview branch
+- [ ] Configure domains:
+  - Production: `secondspring.vercel.app` → `main` branch
+  - Staging: `secondspring-staging.vercel.app` → `staging` branch
 - [ ] Configure environment variables:
 
 **Production scope** (main branch):
@@ -165,7 +185,12 @@ SUPABASE_STUB_MODE=true
   - `SUPABASE_PROD_DB_PASSWORD`
   - `SUPABASE_ACCESS_TOKEN`
 
-### Phase 5: Documentation
+### Phase 5: Outseta Configuration (Manual)
+
+- [ ] Add `https://secondspring-staging.vercel.app` to Outseta allowed callback URLs
+- [ ] Verify JWT validation works for both domains
+
+### Phase 6: Documentation
 
 - [ ] Update `docs/deploy-phase1-foundation.md` with staging workflow
 - [ ] Update `.env.example` with staging variables
@@ -313,4 +338,5 @@ jobs:
 
 | Date | Author | Change |
 |:-----|:-------|:-------|
+| 2025-01-08 | @jon | Added naming convention, Outseta config phase |
 | 2025-01-07 | @jon | Initial proposal |
