@@ -155,15 +155,18 @@ main (production) ← staging (pre-release) ← feature/* (development)
 **Production scope** (main branch):
 ```
 SUPABASE_URL=https://<project-ref>.supabase.co
-SUPABASE_SECRET_KEY=<main-branch-secret>
+SUPABASE_SECRET_KEY=<main-branch-secret-api-key>
 ```
 
 **Preview scope** (staging branch):
 ```
 SUPABASE_URL=https://<project-ref>-staging.<region>.supabase.co
-SUPABASE_SECRET_KEY=<staging-branch-secret>
+SUPABASE_SECRET_KEY=<staging-branch-secret-api-key>
 SUPABASE_STUB_MODE=false
 ```
+
+{: .important }
+> Use the new Supabase key naming: **Publishable API key** (client-side) and **Secret API key** (server-side). Do not use legacy `anon`/`service_role` keys.
 
 **Override for feature branches** (optional):
 ```
