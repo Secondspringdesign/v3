@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { headers } from "next/headers";
-import { verifyOutsetaToken } from "@/lib/outseta"; // updated import
+import { verifyOutsetaToken } from "@/lib/outseta";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -16,40 +16,50 @@ function getAuthHeader(): string | null {
   return auth ?? null;
 }
 
-async function resolveBusinessId(sub: string, supabase: any) {
-  let { data: userRow, error: userErr } = await supabase
+function createServiceClient(): SupabaseClient {
+  return createClient(supabaseUrl!, serviceRoleKey!, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+async function resolveBusinessId(sub: string, supabase: SupabaseClient) {
+  const { data: userRow, error: userErr } = await supabase
     .from("users")
     .select("id")
     .eq("outseta_uid", sub)
     .maybeSingle();
   if (userErr) throw userErr;
-  if (!userRow) {
+
+  let ensuredUser = userRow;
+  if (!ensuredUser) {
     const { data, error } = await supabase
       .from("users")
       .insert({ outseta_uid: sub })
       .select("id")
       .single();
     if (error) throw error;
-    userRow = data;
+    ensuredUser = data;
   }
 
-  let { data: bizRow, error: bizErr } = await supabase
+  const { data: bizRow, error: bizErr } = await supabase
     .from("businesses")
     .select("id")
-    .eq("user_id", userRow.id)
+    .eq("user_id", ensuredUser.id)
     .maybeSingle();
   if (bizErr) throw bizErr;
-  if (!bizRow) {
+
+  let ensuredBiz = bizRow;
+  if (!ensuredBiz) {
     const { data, error } = await supabase
       .from("businesses")
-      .insert({ user_id: userRow.id, name: "Default" })
+      .insert({ user_id: ensuredUser.id, name: "Default" })
       .select("id")
       .single();
     if (error) throw error;
-    bizRow = data;
+    ensuredBiz = data;
   }
 
-  return bizRow.id as string;
+  return ensuredBiz.id as string;
 }
 
 export async function GET() {
@@ -59,11 +69,11 @@ export async function GET() {
 
     const token = auth.replace(/^Bearer\s+/i, "");
     const payload = await verifyOutsetaToken(token);
-    if (!payload?.payload?.sub || !payload.verified) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    if (!payload?.payload?.sub || !payload.verified) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    }
 
-    const supabase = createClient(supabaseUrl!, serviceRoleKey!, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    const supabase = createServiceClient();
     const businessId = await resolveBusinessId(payload.payload.sub as string, supabase);
 
     const { data, error } = await supabase
@@ -87,17 +97,20 @@ export async function POST(req: Request) {
 
     const token = auth.replace(/^Bearer\s+/i, "");
     const payload = await verifyOutsetaToken(token);
-    if (!payload?.payload?.sub || !payload.verified) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    if (!payload?.payload?.sub || !payload.verified) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    }
 
     const body = await req.json().catch(() => ({}));
     const fact_id = typeof body?.fact_id === "string" ? body.fact_id.trim() : "";
     const fact_text = typeof body?.fact_text === "string" ? body.fact_text.trim() : "";
-    const source_workflow = typeof body?.source_workflow === "string" ? body.source_workflow.trim() : null;
-    if (!fact_id || !fact_text) return NextResponse.json({ error: "fact_id and fact_text are required" }, { status: 400 });
+    const source_workflow =
+      typeof body?.source_workflow === "string" ? body.source_workflow.trim() : null;
+    if (!fact_id || !fact_text) {
+      return NextResponse.json({ error: "fact_id and fact_text are required" }, { status: 400 });
+    }
 
-    const supabase = createClient(supabaseUrl!, serviceRoleKey!, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    const supabase = createServiceClient();
     const businessId = await resolveBusinessId(payload.payload.sub as string, supabase);
 
     const { data, error } = await supabase
