@@ -11,24 +11,35 @@ jobs:
   db-smoke-staging:
     name: Staging DB smoke
     runs-on: ubuntu-latest
+    environment: Preview
     steps:
-      - name: Install psql client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
-      - name: Use pooled (IPv4) URL from secrets
+      - name: Install psql client and dnsutils
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client dnsutils
+      - name: Build pooled IPv4 connection string (staging)
         id: conn
         shell: bash
         run: |
           URL="${{ secrets.STAGING_DATABASE_URL }}"
-          if [ -z "$URL" ]; then
+          if [ -n "$URL" ]; then
+            echo "URL=$URL" >> $GITHUB_OUTPUT
+          else
             REF="${{ secrets.STAGING_SUPABASE_PROJECT_REF }}"
             PASS="${{ secrets.STAGING_DB_PASSWORD }}"
             if [ -z "$REF" ] || [ -z "$PASS" ]; then
-              echo "Missing staging secrets. Set STAGING_DATABASE_URL or both STAGING_SUPABASE_PROJECT_REF and STAGING_DB_PASSWORD." >&2
+              echo "Missing staging secrets. Set STAGING_DATABASE_URL or both STAGING_SUPABASE_PROJECT_REF and STAGING_DB_PASSWORD in the Preview environment." >&2
               exit 1
             fi
-            URL="postgresql://postgres:${PASS}@db.${REF}.supabase.co:6543/postgres?sslmode=require"
+            IPV4=$(dig +short A db.${REF}.supabase.co | head -n1)
+            if [ -z "$IPV4" ]; then
+              echo "Failed to resolve IPv4 for db.${REF}.supabase.co" >&2
+              exit 1
+            fi
+            # Use host and hostaddr to force IPv4
+            URL="postgresql://postgres:${PASS}@db.${REF}.supabase.co:6543/postgres?sslmode=require&hostaddr=${IPV4}"
+            echo "URL=$URL" >> $GITHUB_OUTPUT
           fi
-          echo "URL=$URL" >> $GITHUB_OUTPUT
       - name: Smoke query (SELECT now())
         run: |
           psql "${{ steps.conn.outputs.URL }}" -c "SELECT now();"
@@ -36,27 +47,34 @@ jobs:
   db-smoke-production:
     name: Production DB smoke
     runs-on: ubuntu-latest
+    environment: Production
     steps:
-      - name: Install psql client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
-      - name: Use pooled (IPv4) URL from secrets
+      - name: Install psql client and dnsutils
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client dnsutils
+      - name: Build pooled IPv4 connection string (production)
         id: conn
         shell: bash
         run: |
           URL="${{ secrets.PRODUCTION_DATABASE_URL }}"
-          if [ -z "$URL" ]; then
+          if [ -n "$URL" ]; then
+            echo "URL=$URL" >> $GITHUB_OUTPUT
+          else
             REF="${{ secrets.PRODUCTION_SUPABASE_PROJECT_REF }}"
             PASS="${{ secrets.PRODUCTION_DB_PASSWORD }}"
-            # Fallback to legacy names if you kept them:
-            if [ -z "$REF" ]; then REF="${{ secrets.SUPABASE_PROJECT_REF }}"; fi
-            if [ -z "$PASS" ]; then PASS="${{ secrets.SUPABASE_DB_PASSWORD }}"; fi
             if [ -z "$REF" ] || [ -z "$PASS" ]; then
-              echo "Missing production secrets. Set PRODUCTION_DATABASE_URL or both PRODUCTION_SUPABASE_PROJECT_REF and PRODUCTION_DB_PASSWORD (or legacy SUPABASE_PROJECT_REF/SUPABASE_DB_PASSWORD)." >&2
+              echo "Missing production secrets. Set PRODUCTION_DATABASE_URL or both PRODUCTION_SUPABASE_PROJECT_REF and PRODUCTION_DB_PASSWORD in the Production environment." >&2
               exit 1
             fi
-            URL="postgresql://postgres:${PASS}@db.${REF}.supabase.co:6543/postgres?sslmode=require"
+            IPV4=$(dig +short A db.${REF}.supabase.co | head -n1)
+            if [ -z "$IPV4" ]; then
+              echo "Failed to resolve IPv4 for db.${REF}.supabase.co" >&2
+              exit 1
+            fi
+            URL="postgresql://postgres:${PASS}@db.${REF}.supabase.co:6543/postgres?sslmode=require&hostaddr=${IPV4}"
+            echo "URL=$URL" >> $GITHUB_OUTPUT
           fi
-          echo "URL=$URL" >> $GITHUB_OUTPUT
       - name: Smoke query (SELECT now())
         run: |
           psql "${{ steps.conn.outputs.URL }}" -c "SELECT now();"
