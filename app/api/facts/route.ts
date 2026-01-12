@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { headers } from "next/headers";
-import { verifyOutsetaToken } from "@/lib/verifyOutsetaToken"; // same pattern as create-session
+import { verifyOutsetaToken } from "@/lib/outseta"; // updated import
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -16,14 +16,12 @@ function getAuthHeader(): string | null {
   return auth ?? null;
 }
 
-// Find or create user and business rows based on Outseta sub
 async function resolveBusinessId(sub: string, supabase: any) {
   let { data: userRow, error: userErr } = await supabase
     .from("users")
     .select("id")
     .eq("outseta_uid", sub)
     .maybeSingle();
-
   if (userErr) throw userErr;
   if (!userRow) {
     const { data, error } = await supabase
@@ -61,12 +59,12 @@ export async function GET() {
 
     const token = auth.replace(/^Bearer\s+/i, "");
     const payload = await verifyOutsetaToken(token);
-    if (!payload?.sub) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    if (!payload?.payload?.sub || !payload.verified) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
     const supabase = createClient(supabaseUrl!, serviceRoleKey!, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    const businessId = await resolveBusinessId(payload.sub as string, supabase);
+    const businessId = await resolveBusinessId(payload.payload.sub as string, supabase);
 
     const { data, error } = await supabase
       .from("facts")
@@ -75,7 +73,6 @@ export async function GET() {
       .order("updated_at", { ascending: false });
 
     if (error) throw error;
-
     return NextResponse.json({ success: true, facts: data ?? [] });
   } catch (e) {
     console.error("/api/facts GET error", e);
@@ -90,21 +87,18 @@ export async function POST(req: Request) {
 
     const token = auth.replace(/^Bearer\s+/i, "");
     const payload = await verifyOutsetaToken(token);
-    if (!payload?.sub) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    if (!payload?.payload?.sub || !payload.verified) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));
     const fact_id = typeof body?.fact_id === "string" ? body.fact_id.trim() : "";
     const fact_text = typeof body?.fact_text === "string" ? body.fact_text.trim() : "";
     const source_workflow = typeof body?.source_workflow === "string" ? body.source_workflow.trim() : null;
-
-    if (!fact_id || !fact_text) {
-      return NextResponse.json({ error: "fact_id and fact_text are required" }, { status: 400 });
-    }
+    if (!fact_id || !fact_text) return NextResponse.json({ error: "fact_id and fact_text are required" }, { status: 400 });
 
     const supabase = createClient(supabaseUrl!, serviceRoleKey!, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    const businessId = await resolveBusinessId(payload.sub as string, supabase);
+    const businessId = await resolveBusinessId(payload.payload.sub as string, supabase);
 
     const { data, error } = await supabase
       .from("facts")
@@ -116,7 +110,6 @@ export async function POST(req: Request) {
       .single();
 
     if (error) throw error;
-
     return NextResponse.json({ success: true, fact: data });
   } catch (e) {
     console.error("/api/facts POST error", e);
