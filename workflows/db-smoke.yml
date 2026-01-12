@@ -1,0 +1,64 @@
+name: Database Smoke Test
+
+on:
+  push:
+    branches:
+      - staging
+      - main
+  workflow_dispatch:
+
+jobs:
+  db-smoke-staging:
+    name: Staging DB smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Build pooled connection string (staging)
+        id: conn
+        shell: bash
+        run: |
+          # Expected staging secrets:
+          #   STAGING_SUPABASE_PROJECT_REF
+          #   STAGING_DB_PASSWORD
+          REF="${{ secrets.STAGING_SUPABASE_PROJECT_REF }}"
+          PASS="${{ secrets.STAGING_DB_PASSWORD }}"
+          if [ -z "$REF" ] || [ -z "$PASS" ]; then
+            echo "Missing staging secrets. Please set STAGING_SUPABASE_PROJECT_REF and STAGING_DB_PASSWORD." >&2
+            exit 1
+          fi
+          URL="postgresql://postgres:${PASS}@db.${REF}.supabase.co:6543/postgres?sslmode=require"
+          echo "URL=$URL" >> $GITHUB_OUTPUT
+      - name: Smoke query (SELECT now())
+        run: |
+          psql "${{ steps.conn.outputs.URL }}" -c "SELECT now();"
+
+  db-smoke-production:
+    name: Production DB smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Build pooled connection string (production with fallback)
+        id: conn
+        shell: bash
+        run: |
+          # Preferred production secrets:
+          #   PRODUCTION_SUPABASE_PROJECT_REF
+          #   PRODUCTION_DB_PASSWORD
+          # Fallback to legacy names if not set:
+          REF="${{ secrets.PRODUCTION_SUPABASE_PROJECT_REF }}"
+          PASS="${{ secrets.PRODUCTION_DB_PASSWORD }}"
+          if [ -z "$REF" ]; then REF="${{ secrets.SUPABASE_PROJECT_REF }}"; fi
+          if [ -z "$PASS" ]; then PASS="${{ secrets.SUPABASE_DB_PASSWORD }}"; fi
+
+          if [ -z "$REF" ] || [ -z "$PASS" ]; then
+            echo "Missing production secrets. Set PRODUCTION_SUPABASE_PROJECT_REF and PRODUCTION_DB_PASSWORD (or legacy SUPABASE_PROJECT_REF/SUPABASE_DB_PASSWORD)." >&2
+            exit 1
+          fi
+
+          URL="postgresql://postgres:${PASS}@db.${REF}.supabase.co:6543/postgres?sslmode=require"
+          echo "URL=$URL" >> $GITHUB_OUTPUT
+      - name: Smoke query (SELECT now())
+        run: |
+          psql "${{ steps.conn.outputs.URL }}" -c "SELECT now();"
