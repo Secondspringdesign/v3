@@ -1,0 +1,29 @@
+name: Staging Deploy
+
+on:
+  push:
+    branches: [staging]
+
+jobs:
+  apply-migrations:
+    name: Apply Migrations to Staging
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+
+      - name: Link to project
+        run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      # Note: With Supabase native branching + GitHub integration enabled,
+      # migrations are auto-applied to the staging branch. This step is
+      # a fallback for manual migration management.
+      - name: Apply migrations
+        run: supabase db push
