@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { headers } from "next/headers";
 import { verifyOutsetaToken } from "@/lib/outseta";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -10,9 +9,9 @@ if (!supabaseUrl || !serviceRoleKey) {
   throw new Error("Missing Supabase env vars");
 }
 
-function getAuthHeader(): string | null {
-  const h = headers();
-  const auth = h.get("authorization") || h.get("Authorization");
+function getAuthHeaderFromRequest(request: Request): string | null {
+  const auth =
+    request.headers.get("authorization") || request.headers.get("Authorization");
   return auth ?? null;
 }
 
@@ -62,9 +61,9 @@ async function resolveBusinessId(sub: string, supabase: SupabaseClient) {
   return ensuredBiz.id as string;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const auth = getAuthHeader();
+    const auth = getAuthHeaderFromRequest(request);
     if (!auth) return NextResponse.json({ error: "Missing Authorization" }, { status: 401 });
 
     const token = auth.replace(/^Bearer\s+/i, "");
@@ -90,9 +89,9 @@ export async function GET() {
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   try {
-    const auth = getAuthHeader();
+    const auth = getAuthHeaderFromRequest(request);
     if (!auth) return NextResponse.json({ error: "Missing Authorization" }, { status: 401 });
 
     const token = auth.replace(/^Bearer\s+/i, "");
@@ -101,7 +100,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
-    const body = await req.json().catch(() => ({}));
+    const body = await request.json().catch(() => ({}));
     const fact_id = typeof body?.fact_id === "string" ? body.fact_id.trim() : "";
     const fact_text = typeof body?.fact_text === "string" ? body.fact_text.trim() : "";
     const source_workflow =
