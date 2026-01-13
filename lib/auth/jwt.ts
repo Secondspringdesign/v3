@@ -18,9 +18,14 @@ const JWKS_TTL = 24 * 60 * 60 * 1000; // 24 hours
 // JWKS CACHE
 // ============================================
 
+// Extended JsonWebKey with kid (key ID) property from JWKS
+interface JwkWithKid extends JsonWebKey {
+  kid?: string;
+}
+
 interface JwksCache {
   fetchedAt: number;
-  jwks: { keys: JsonWebKey[] };
+  jwks: { keys: JwkWithKid[] };
 }
 
 let jwksCache: JwksCache | null = null;
@@ -114,7 +119,7 @@ export function parseJwt(token: string): ParsedJwt {
 // JWKS FETCHING
 // ============================================
 
-async function getJwkForKid(kid?: string): Promise<JsonWebKey | null> {
+async function getJwkForKid(kid?: string): Promise<JwkWithKid | null> {
   try {
     const now = Date.now();
     if (!jwksCache || now - jwksCache.fetchedAt > JWKS_TTL) {
@@ -173,10 +178,11 @@ export async function verifyOutsetaToken(token: string): Promise<VerificationRes
       ['verify']
     );
 
+    // TypeScript strict mode requires casting Uint8Array for crypto.subtle.verify
     const signatureValid = await crypto.subtle.verify(
       'RSASSA-PKCS1-v1_5',
       cryptoKey,
-      sigArray,
+      sigArray as unknown as ArrayBuffer,
       new TextEncoder().encode(signingInput)
     );
 

@@ -17,7 +17,7 @@ function createStubFact(data: FactInsert): DbFact {
     business_id: data.business_id,
     fact_id: data.fact_id,
     fact_text: data.fact_text,
-    source_workflow: data.source_workflow,
+    source_workflow: data.source_workflow ?? null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
