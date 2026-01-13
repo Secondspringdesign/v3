@@ -56,6 +56,9 @@ type OutsetaClientSurface = {
   auth?: { accessToken?: string | null } | null;
 };
 
+// In-memory fallback so token survives even if storage/cookies are blocked in iframe
+let inMemoryOutsetaToken: string | null = null;
+
 function setOutsetaCookie(token: string) {
   if (!isBrowser) return;
   document.cookie = `${OUTSETA_COOKIE_NAME}=${encodeURIComponent(
@@ -64,6 +67,9 @@ function setOutsetaCookie(token: string) {
 }
 
 function stashTokenLocally(token: string) {
+  // keep an in-memory copy (works when localStorage/cookies are blocked)
+  inMemoryOutsetaToken = token;
+
   try {
     for (const k of OUTSETA_LS_KEYS) {
       window.localStorage.setItem(k, token);
@@ -94,6 +100,9 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 
 function findOutsetaTokenOnClient(): string | null {
   if (!isBrowser) return null;
+
+  // prefer in-memory first (bypasses storage/cookie restrictions)
+  if (inMemoryOutsetaToken) return inMemoryOutsetaToken;
 
   const w = window as unknown as {
     Outseta?: OutsetaClientSurface;
@@ -190,7 +199,6 @@ export function ChatKitPanel({
     const tokenFromUrl = url.searchParams.get("outseta_token");
     if (tokenFromUrl) {
       if (isDev) console.log("[ChatKitPanel] using outseta_token from URL");
-      // persist and also write debug keys so we can verify which token was used
       try {
         stashTokenLocally(tokenFromUrl);
         localStorage.setItem("debug_last_received_token", tokenFromUrl);
@@ -208,9 +216,7 @@ export function ChatKitPanel({
       if (data.type === PARENT_MESSAGE_TYPE && typeof data.token === "string") {
         if (isDev) console.log("[ChatKitPanel] received token via postMessage from parent");
 
-        // Always overwrite/persist the token we received and write debug values.
         try {
-          // debug storage for verification
           try {
             localStorage.setItem("debug_last_received_token", data.token);
             const payload = decodeJwtPayload(data.token);
@@ -220,15 +226,13 @@ export function ChatKitPanel({
             console.warn("[ChatKitPanel] unable to write debug token values", err);
           }
 
-          // persist for ChatKit to use
+          // persist (also sets in-memory now)
           stashTokenLocally(data.token);
 
-          // If the token represents a different user (different `sub`), force the widget to remount
           try {
             const payload = decodeJwtPayload(data.token);
             const newSub = payload?.sub ? String(payload.sub) : null;
 
-            // Read previous sub from debug storage (if present)
             let prevSub: string | null = null;
             try {
               prevSub = localStorage.getItem("debug_last_received_sub");
@@ -236,7 +240,6 @@ export function ChatKitPanel({
               prevSub = null;
             }
 
-            // Store new sub for future comparisons
             if (newSub) {
               try {
                 localStorage.setItem("debug_last_received_sub", newSub);
@@ -245,7 +248,6 @@ export function ChatKitPanel({
               }
             }
 
-            // If different user, reinitialize widget
             if (newSub && newSub !== prevSub) {
               if (isDev) console.log("[ChatKitPanel] detected user change (sub), reinitializing widget");
               setWidgetInstanceKey((k) => k + 1);
@@ -280,7 +282,6 @@ export function ChatKitPanel({
       setScriptStatus("ready");
       setErrorState({ script: null });
 
-      // Announce readiness to parent so the parent can safely send the token.
       try {
         window.parent?.postMessage?.({ type: "chatkit-ready" }, "*");
         if (isDev) console.log("[ChatKitPanel] posted chatkit-ready to parent");
@@ -337,7 +338,6 @@ export function ChatKitPanel({
         }
       } catch (err) {
         // don't break the app if something goes wrong
-        // eslint-disable-next-line no-console
         console.warn("[ChatKitPanel] click-to-parent handler error", err);
       }
     };
