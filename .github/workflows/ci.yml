@@ -28,8 +28,6 @@ jobs:
 
       - name: Run tests
         run: npm run test
-        env:
-          SUPABASE_STUB_MODE: "true"
 
       - name: Run build
         run: npm run build
