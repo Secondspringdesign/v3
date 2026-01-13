@@ -28,8 +28,6 @@ jobs:
 
       - name: Run tests
         run: npm run test
-        env:
-          SUPABASE_STUB_MODE: "true"
 
       - name: Run build
         run: npm run build
@@ -45,6 +43,8 @@ jobs:
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
+        with:
+          version: latest
 
       - name: Start local Supabase
         run: supabase start

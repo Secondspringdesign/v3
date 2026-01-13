@@ -1,249 +1,114 @@
-import { NextResponse } from "next/server";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+/**
+ * Facts API route
+ *
+ * POST /api/facts - Create or update a fact (upsert)
+ * GET /api/facts - List all facts for the user's active business
+ */
 
-type Jwk = {
-  kty: string;
-  use?: string;
-  kid?: string;
-  n?: string;
-  e?: string;
-  alg?: string;
-  [key: string]: unknown;
-};
-type JwtHeader = { kid?: string; [key: string]: unknown };
-type JwtPayload = {
-  sub?: string;
-  iss?: string;
-  exp?: number;
-  nbf?: number;
-  [key: string]: unknown;
-};
-type VerifyResult = { verified: boolean; payload?: JwtPayload };
+import { authenticateRequest, errorResponse, jsonResponse } from '@/lib/auth/middleware';
+import { UserService, BusinessService, FactService } from '@/lib/services';
+import { toFactResponse } from '@/lib/types/api';
+import type { CreateFactRequest, CreateFactResponse, FactsListResponse } from '@/lib/types/api';
 
-// ---------- Outseta verify (RS256 via JWKS) ----------
-const OUTSETA_ISSUER =
-  process.env.OUTSETA_ISSUER || "https://second-spring-design.outseta.com";
-const OUTSETA_JWKS_URL =
-  process.env.OUTSETA_JWKS_URL ||
-  "https://second-spring-design.outseta.com/.well-known/jwks";
-const CLOCK_SKEW_SECONDS = 60;
-const JWKS_TTL = 24 * 60 * 60 * 1000;
-let jwksCache: { fetchedAt: number; jwks: Jwk[] } | null = null;
+export const runtime = 'edge';
 
-function base64UrlDecode(input: string): string {
-  const normalized = input.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (input.length % 4)) % 4);
-  if (typeof Buffer !== "undefined") return Buffer.from(normalized, "base64").toString("utf-8");
-  const binary = atob(normalized);
-  return binary;
-}
-
-function base64UrlToUint8Array(base64Url: string): Uint8Array {
-  const decoded = base64UrlDecode(base64Url);
-  const arr = new Uint8Array(decoded.length);
-  for (let i = 0; i < decoded.length; i++) arr[i] = decoded.charCodeAt(i);
-  return arr;
-}
-
-function parseJwt(token: string): {
-  header: JwtHeader;
-  payload: JwtPayload;
-  signatureB64: string;
-  signingInput: string;
-} {
-  const [headerB64, payloadB64, signatureB64] = token.split(".");
-  if (!headerB64 || !payloadB64 || !signatureB64) throw new Error("Invalid JWT");
-  return {
-    header: JSON.parse(base64UrlDecode(headerB64)) as JwtHeader,
-    payload: JSON.parse(base64UrlDecode(payloadB64)) as JwtPayload,
-    signatureB64,
-    signingInput: `${headerB64}.${payloadB64}`,
-  };
-}
-
-async function fetchJwks(jwksUrl: string): Promise<Jwk[]> {
-  if (jwksCache && Date.now() - jwksCache.fetchedAt < JWKS_TTL) return jwksCache.jwks;
-  const res = await fetch(jwksUrl);
-  if (!res.ok) throw new Error(`Failed to fetch JWKS: ${res.status}`);
-  const json = (await res.json()) as { keys?: Jwk[] };
-  const keys = Array.isArray(json.keys) ? json.keys : [];
-  jwksCache = { fetchedAt: Date.now(), jwks: keys };
-  return keys;
-}
-
-async function getJwkForKid(jwksUrl: string, kid?: string): Promise<Jwk | null> {
-  const jwks = await fetchJwks(jwksUrl);
-  if (kid) return jwks.find((k) => k.kid === kid) ?? null;
-  return jwks[0] ?? null;
-}
-
-async function verifyOutsetaToken(token: string): Promise<VerifyResult> {
-  const { header, payload, signatureB64, signingInput } = parseJwt(token);
-  const jwk = await getJwkForKid(
-    OUTSETA_JWKS_URL,
-    typeof header.kid === "string" ? header.kid : undefined,
-  );
-  if (!jwk) return { verified: false, payload };
-  const sigArray = base64UrlToUint8Array(signatureB64);
-  const cryptoKey = await crypto.subtle.importKey(
-    "jwk",
-    jwk as JsonWebKey,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["verify"],
-  );
-  const ok = await crypto.subtle.verify(
-    "RSASSA-PKCS1-v1_5",
-    cryptoKey,
-    sigArray as BufferSource,
-    new TextEncoder().encode(signingInput) as BufferSource,
-  );
-
-  const now = Math.floor(Date.now() / 1000);
-  const exp = payload.exp;
-  const nbf = payload.nbf;
-  const iss = payload.iss;
-  if (typeof exp === "number" && exp < now - CLOCK_SKEW_SECONDS) return { verified: false, payload };
-  if (typeof nbf === "number" && nbf > now + CLOCK_SKEW_SECONDS) return { verified: false, payload };
-  if (iss && iss !== OUTSETA_ISSUER) return { verified: false, payload };
-
-  return { verified: ok, payload };
-}
-
-// ---------- Supabase ----------
-const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceRoleKeyEnv = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!supabaseUrlEnv || !serviceRoleKeyEnv) throw new Error("Missing Supabase env vars");
-const supabaseUrl: string = supabaseUrlEnv;
-const serviceRoleKey: string = serviceRoleKeyEnv;
-
-function createServiceClient(): SupabaseClient {
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
-
-async function resolveBusinessId(sub: string, supabase: SupabaseClient): Promise<string> {
-  const { data: userRow, error: userErr } = await supabase
-    .from("users")
-    .select("id")
-    .eq("outseta_uid", sub)
-    .maybeSingle();
-  if (userErr) throw userErr;
-
-  let ensuredUser = userRow;
-  if (!ensuredUser) {
-    const { data, error } = await supabase
-      .from("users")
-      .insert({ outseta_uid: sub })
-      .select("id")
-      .single();
-    if (error) throw error;
-    ensuredUser = data;
+/**
+ * POST /api/facts
+ *
+ * Create or update a fact for the user's active business.
+ * Auto-creates user and business if they don't exist.
+ */
+export async function POST(request: Request): Promise<Response> {
+  // Authenticate
+  const auth = await authenticateRequest(request);
+  if (!auth.success) {
+    return errorResponse(auth.error, auth.status, 'UNAUTHORIZED');
   }
 
-  const { data: bizRow, error: bizErr } = await supabase
-    .from("businesses")
-    .select("id")
-    .eq("user_id", ensuredUser.id)
-    .maybeSingle();
-  if (bizErr) throw bizErr;
-
-  let ensuredBiz = bizRow;
-  if (!ensuredBiz) {
-    const { data, error } = await supabase
-      .from("businesses")
-      .insert({ user_id: ensuredUser.id, name: "Default" })
-      .select("id")
-      .single();
-    if (error) throw error;
-    ensuredBiz = data;
-  }
-
-  return ensuredBiz.id as string;
-}
-
-function extractBearer(request: Request): string | null {
-  const h = request.headers.get("authorization") || request.headers.get("Authorization");
-  if (!h) return null;
-  const m = h.match(/^Bearer\s+(.+)$/i);
-  return m ? m[1] : null;
-}
-
-// ---------- Handlers ----------
-export async function GET(request: Request) {
+  // Parse and validate body
+  let body: CreateFactRequest;
   try {
-    const token = extractBearer(request);
-    if (!token) return NextResponse.json({ error: "Missing Authorization" }, { status: 401 });
-
-    const verified = await verifyOutsetaToken(token);
-    if (!verified?.verified || !verified.payload?.sub) {
-      console.error("verifyOutsetaToken failed (GET)", {
-        verified: verified?.verified,
-        payload: verified?.payload,
-      });
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    }
-
-    const supabase = createServiceClient();
-    const businessId = await resolveBusinessId(verified.payload.sub, supabase);
-
-    const { data, error } = await supabase
-      .from("facts")
-      .select("id, fact_id, fact_text, source_workflow, created_at, updated_at")
-      .eq("business_id", businessId)
-      .order("updated_at", { ascending: false });
-
-    if (error) throw error;
-    return NextResponse.json({ success: true, facts: data ?? [] });
-  } catch (e) {
-    console.error("/api/facts GET error", e);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    body = await request.json();
+  } catch {
+    return errorResponse('Invalid JSON body', 400, 'INVALID_BODY');
   }
-}
 
-export async function POST(request: Request) {
+  if (!body.fact_id || typeof body.fact_id !== 'string') {
+    return errorResponse('Missing required field: fact_id', 400, 'MISSING_FIELDS');
+  }
+
+  if (!body.fact_text || typeof body.fact_text !== 'string') {
+    return errorResponse('Missing required field: fact_text', 400, 'MISSING_FIELDS');
+  }
+
   try {
-    const token = extractBearer(request);
-    if (!token) return NextResponse.json({ error: "Missing Authorization" }, { status: 401 });
+    // Get or create user
+    const user = await UserService.getOrCreate(auth.context.outsetaUid, auth.context.email);
 
-    const verified = await verifyOutsetaToken(token);
-    if (!verified?.verified || !verified.payload?.sub) {
-      console.error("verifyOutsetaToken failed (POST)", {
-        verified: verified?.verified,
-        payload: verified?.payload,
-      });
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    }
+    // Get or create active business
+    const business = await BusinessService.getOrCreateActive(user.id);
 
-    const body = (await request.json().catch(() => ({}))) as {
-      fact_id?: unknown;
-      fact_text?: unknown;
-      source_workflow?: unknown;
+    // Upsert the fact
+    const fact = await FactService.upsert({
+      business_id: business.id,
+      fact_id: body.fact_id,
+      fact_text: body.fact_text,
+      source_workflow: body.source_workflow ?? null,
+    });
+
+    const response: CreateFactResponse = {
+      success: true,
+      fact: toFactResponse(fact),
     };
-    const fact_id = typeof body.fact_id === "string" ? body.fact_id.trim() : "";
-    const fact_text = typeof body.fact_text === "string" ? body.fact_text.trim() : "";
-    const source_workflow = typeof body.source_workflow === "string" ? body.source_workflow.trim() : null;
 
-    if (!fact_id || !fact_text) {
-      return NextResponse.json({ error: "fact_id and fact_text are required" }, { status: 400 });
+    return jsonResponse(response, 201);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error('Failed to upsert fact:', message);
+    return errorResponse('Failed to save fact', 500, 'DATABASE_ERROR');
+  }
+}
+
+/**
+ * GET /api/facts
+ *
+ * List all facts for the user's active business.
+ */
+export async function GET(request: Request): Promise<Response> {
+  // Authenticate
+  const auth = await authenticateRequest(request);
+  if (!auth.success) {
+    return errorResponse(auth.error, auth.status, 'UNAUTHORIZED');
+  }
+
+  try {
+    // Get user (don't auto-create for GET)
+    const user = await UserService.getByOutsetaUid(auth.context.outsetaUid);
+    if (!user) {
+      // User doesn't exist yet, return empty list
+      const response: FactsListResponse = { facts: [] };
+      return jsonResponse(response);
     }
 
-    const supabase = createServiceClient();
-    const businessId = await resolveBusinessId(verified.payload.sub, supabase);
+    // Get active business
+    const business = await BusinessService.getActiveByUserId(user.id);
+    if (!business) {
+      // No business yet, return empty list
+      const response: FactsListResponse = { facts: [] };
+      return jsonResponse(response);
+    }
 
-    const { data, error } = await supabase
-      .from("facts")
-      .upsert(
-        { business_id: businessId, fact_id, fact_text, source_workflow },
-        { onConflict: "business_id,fact_id" },
-      )
-      .select("id, fact_id, fact_text, source_workflow, created_at, updated_at")
-      .single();
+    // Get facts
+    const facts = await FactService.getByBusinessId(business.id);
 
-    if (error) throw error;
-    return NextResponse.json({ success: true, fact: data });
-  } catch (e) {
-    console.error("/api/facts POST error", e);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    const response: FactsListResponse = {
+      facts: facts.map(toFactResponse),
+    };
+
+    return jsonResponse(response);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error('Failed to fetch facts:', message);
+    return errorResponse('Failed to fetch facts', 500, 'DATABASE_ERROR');
   }
 }
