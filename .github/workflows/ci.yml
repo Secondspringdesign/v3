@@ -2,12 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main, staging]
   pull_request:
 
 jobs:
-  build:
-    name: Install, Lint, and Build
+  lint-and-build:
+    name: Lint, Test, and Build
     runs-on: ubuntu-latest
 
     steps:
@@ -18,7 +18,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: "npm"
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
@@ -26,6 +26,29 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
+      - name: Run tests
+        run: npm run test
+        env:
+          SUPABASE_STUB_MODE: "true"
+
       - name: Run build
         run: npm run build
+
+  migration-check:
+    name: Validate Migrations
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+
+      - name: Start local Supabase
+        run: supabase start
+
+      - name: Validate migrations
+        run: supabase db push --local
   
