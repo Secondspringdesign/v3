@@ -24,7 +24,8 @@ type VerifyResult = { verified: boolean; payload?: JwtPayload };
 const OUTSETA_ISSUER =
   process.env.OUTSETA_ISSUER || "https://second-spring-design.outseta.com";
 const OUTSETA_JWKS_URL =
-  process.env.OUTSETA_JWKS_URL || "https://second-spring-design.outseta.com/.well-known/jwks";
+  process.env.OUTSETA_JWKS_URL ||
+  "https://second-spring-design.outseta.com/.well-known/jwks";
 const CLOCK_SKEW_SECONDS = 60;
 const JWKS_TTL = 24 * 60 * 60 * 1000;
 let jwksCache: { fetchedAt: number; jwks: Jwk[] } | null = null;
@@ -77,7 +78,10 @@ async function getJwkForKid(jwksUrl: string, kid?: string): Promise<Jwk | null> 
 
 async function verifyOutsetaToken(token: string): Promise<VerifyResult> {
   const { header, payload, signatureB64, signingInput } = parseJwt(token);
-  const jwk = await getJwkForKid(OUTSETA_JWKS_URL, typeof header.kid === "string" ? header.kid : undefined);
+  const jwk = await getJwkForKid(
+    OUTSETA_JWKS_URL,
+    typeof header.kid === "string" ? header.kid : undefined,
+  );
   if (!jwk) return { verified: false, payload };
   const sigArray = base64UrlToUint8Array(signatureB64);
   const cryptoKey = await crypto.subtle.importKey(
@@ -106,9 +110,11 @@ async function verifyOutsetaToken(token: string): Promise<VerifyResult> {
 }
 
 // ---------- Supabase ----------
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!supabaseUrl || !serviceRoleKey) throw new Error("Missing Supabase env vars");
+const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const serviceRoleKeyEnv = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!supabaseUrlEnv || !serviceRoleKeyEnv) throw new Error("Missing Supabase env vars");
+const supabaseUrl: string = supabaseUrlEnv;
+const serviceRoleKey: string = serviceRoleKeyEnv;
 
 function createServiceClient(): SupabaseClient {
   return createClient(supabaseUrl, serviceRoleKey, {
