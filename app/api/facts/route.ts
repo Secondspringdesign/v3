@@ -61,19 +61,29 @@ async function resolveBusinessId(sub: string, supabase: SupabaseClient) {
   return ensuredBiz.id as string;
 }
 
+async function verifyOrFail(token: string) {
+  const payload = await verifyOutsetaToken(token);
+  if (!payload?.payload?.sub || !payload.verified) {
+    console.error("verifyOutsetaToken failed", {
+      verified: payload?.verified,
+      payload: payload?.payload,
+    });
+    return null;
+  }
+  return payload.payload.sub as string;
+}
+
 export async function GET(request: Request) {
   try {
     const auth = getAuthHeaderFromRequest(request);
     if (!auth) return NextResponse.json({ error: "Missing Authorization" }, { status: 401 });
 
     const token = auth.replace(/^Bearer\s+/i, "");
-    const payload = await verifyOutsetaToken(token);
-    if (!payload?.payload?.sub || !payload.verified) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    }
+    const sub = await verifyOrFail(token);
+    if (!sub) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
     const supabase = createServiceClient();
-    const businessId = await resolveBusinessId(payload.payload.sub as string, supabase);
+    const businessId = await resolveBusinessId(sub, supabase);
 
     const { data, error } = await supabase
       .from("facts")
@@ -95,22 +105,21 @@ export async function POST(request: Request) {
     if (!auth) return NextResponse.json({ error: "Missing Authorization" }, { status: 401 });
 
     const token = auth.replace(/^Bearer\s+/i, "");
-    const payload = await verifyOutsetaToken(token);
-    if (!payload?.payload?.sub || !payload.verified) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    }
+    const sub = await verifyOrFail(token);
+    if (!sub) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
     const body = await request.json().catch(() => ({}));
     const fact_id = typeof body?.fact_id === "string" ? body.fact_id.trim() : "";
     const fact_text = typeof body?.fact_text === "string" ? body.fact_text.trim() : "";
     const source_workflow =
       typeof body?.source_workflow === "string" ? body.source_workflow.trim() : null;
+
     if (!fact_id || !fact_text) {
       return NextResponse.json({ error: "fact_id and fact_text are required" }, { status: 400 });
     }
 
     const supabase = createServiceClient();
-    const businessId = await resolveBusinessId(payload.payload.sub as string, supabase);
+    const businessId = await resolveBusinessId(sub, supabase);
 
     const { data, error } = await supabase
       .from("facts")
