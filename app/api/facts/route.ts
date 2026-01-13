@@ -1,12 +1,33 @@
 import { NextResponse } from "next/server";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
+type Jwk = {
+  kty: string;
+  use?: string;
+  kid?: string;
+  n?: string;
+  e?: string;
+  alg?: string;
+  [key: string]: unknown;
+};
+type JwtHeader = { kid?: string; [key: string]: unknown };
+type JwtPayload = {
+  sub?: string;
+  iss?: string;
+  exp?: number;
+  nbf?: number;
+  [key: string]: unknown;
+};
+type VerifyResult = { verified: boolean; payload?: JwtPayload };
+
 // ---------- Outseta verify (RS256 via JWKS) ----------
-const OUTSETA_ISSUER = process.env.OUTSETA_ISSUER || "https://second-spring-design.outseta.com";
-const OUTSETA_JWKS_URL = process.env.OUTSETA_JWKS_URL || "https://second-spring-design.outseta.com/.well-known/jwks";
+const OUTSETA_ISSUER =
+  process.env.OUTSETA_ISSUER || "https://second-spring-design.outseta.com";
+const OUTSETA_JWKS_URL =
+  process.env.OUTSETA_JWKS_URL || "https://second-spring-design.outseta.com/.well-known/jwks";
 const CLOCK_SKEW_SECONDS = 60;
 const JWKS_TTL = 24 * 60 * 60 * 1000;
-let jwksCache: { fetchedAt: number; jwks: any[] } | null = null;
+let jwksCache: { fetchedAt: number; jwks: Jwk[] } | null = null;
 
 function base64UrlDecode(input: string): string {
   const normalized = input.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (input.length % 4)) % 4);
@@ -22,34 +43,39 @@ function base64UrlToUint8Array(base64Url: string): Uint8Array {
   return arr;
 }
 
-function parseJwt(token: string) {
+function parseJwt(token: string): {
+  header: JwtHeader;
+  payload: JwtPayload;
+  signatureB64: string;
+  signingInput: string;
+} {
   const [headerB64, payloadB64, signatureB64] = token.split(".");
   if (!headerB64 || !payloadB64 || !signatureB64) throw new Error("Invalid JWT");
   return {
-    header: JSON.parse(base64UrlDecode(headerB64)),
-    payload: JSON.parse(base64UrlDecode(payloadB64)),
+    header: JSON.parse(base64UrlDecode(headerB64)) as JwtHeader,
+    payload: JSON.parse(base64UrlDecode(payloadB64)) as JwtPayload,
     signatureB64,
     signingInput: `${headerB64}.${payloadB64}`,
   };
 }
 
-async function fetchJwks(jwksUrl: string) {
+async function fetchJwks(jwksUrl: string): Promise<Jwk[]> {
   if (jwksCache && Date.now() - jwksCache.fetchedAt < JWKS_TTL) return jwksCache.jwks;
   const res = await fetch(jwksUrl);
   if (!res.ok) throw new Error(`Failed to fetch JWKS: ${res.status}`);
-  const json = (await res.json()) as { keys: any[] };
-  if (!json.keys || !Array.isArray(json.keys)) throw new Error("Invalid JWKS payload");
-  jwksCache = { fetchedAt: Date.now(), jwks: json.keys };
-  return jwksCache.jwks;
+  const json = (await res.json()) as { keys?: Jwk[] };
+  const keys = Array.isArray(json.keys) ? json.keys : [];
+  jwksCache = { fetchedAt: Date.now(), jwks: keys };
+  return keys;
 }
 
-async function getJwkForKid(jwksUrl: string, kid?: string): Promise<any | null> {
+async function getJwkForKid(jwksUrl: string, kid?: string): Promise<Jwk | null> {
   const jwks = await fetchJwks(jwksUrl);
   if (kid) return jwks.find((k) => k.kid === kid) ?? null;
   return jwks[0] ?? null;
 }
 
-async function verifyOutsetaToken(token: string): Promise<{ verified: boolean; payload?: any }> {
+async function verifyOutsetaToken(token: string): Promise<VerifyResult> {
   const { header, payload, signatureB64, signingInput } = parseJwt(token);
   const jwk = await getJwkForKid(OUTSETA_JWKS_URL, typeof header.kid === "string" ? header.kid : undefined);
   if (!jwk) return { verified: false, payload };
@@ -69,9 +95,9 @@ async function verifyOutsetaToken(token: string): Promise<{ verified: boolean; p
   );
 
   const now = Math.floor(Date.now() / 1000);
-  const exp = payload.exp as number | undefined;
-  const nbf = payload.nbf as number | undefined;
-  const iss = payload.iss as string | undefined;
+  const exp = payload.exp;
+  const nbf = payload.nbf;
+  const iss = payload.iss;
   if (typeof exp === "number" && exp < now - CLOCK_SKEW_SECONDS) return { verified: false, payload };
   if (typeof nbf === "number" && nbf > now + CLOCK_SKEW_SECONDS) return { verified: false, payload };
   if (iss && iss !== OUTSETA_ISSUER) return { verified: false, payload };
@@ -85,28 +111,48 @@ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!supabaseUrl || !serviceRoleKey) throw new Error("Missing Supabase env vars");
 
 function createServiceClient(): SupabaseClient {
-  return createClient(supabaseUrl!, serviceRoleKey!, {
+  return createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }
 
-async function resolveBusinessId(sub: string, supabase: SupabaseClient) {
-  const { data: userRow, error: userErr } = await supabase.from("users").select("id").eq("outseta_uid", sub).maybeSingle();
+async function resolveBusinessId(sub: string, supabase: SupabaseClient): Promise<string> {
+  const { data: userRow, error: userErr } = await supabase
+    .from("users")
+    .select("id")
+    .eq("outseta_uid", sub)
+    .maybeSingle();
   if (userErr) throw userErr;
+
   let ensuredUser = userRow;
   if (!ensuredUser) {
-    const { data, error } = await supabase.from("users").insert({ outseta_uid: sub }).select("id").single();
+    const { data, error } = await supabase
+      .from("users")
+      .insert({ outseta_uid: sub })
+      .select("id")
+      .single();
     if (error) throw error;
     ensuredUser = data;
   }
-  const { data: bizRow, error: bizErr } = await supabase.from("businesses").select("id").eq("user_id", ensuredUser.id).maybeSingle();
+
+  const { data: bizRow, error: bizErr } = await supabase
+    .from("businesses")
+    .select("id")
+    .eq("user_id", ensuredUser.id)
+    .maybeSingle();
   if (bizErr) throw bizErr;
+
   let ensuredBiz = bizRow;
   if (!ensuredBiz) {
-    const { data, error } = await supabase.from("businesses").insert({ user_id: ensuredUser.id, name: "Default" }).select("id").single();
+    const { data, error } = await supabase
+      .from("businesses")
+      .insert({ user_id: ensuredUser.id, name: "Default" })
+      .select("id")
+      .single();
     if (error) throw error;
     ensuredBiz = data;
   }
+
   return ensuredBiz.id as string;
 }
 
@@ -125,7 +171,10 @@ export async function GET(request: Request) {
 
     const verified = await verifyOutsetaToken(token);
     if (!verified?.verified || !verified.payload?.sub) {
-      console.error("verifyOutsetaToken failed (GET)", { verified: verified?.verified, payload: verified?.payload });
+      console.error("verifyOutsetaToken failed (GET)", {
+        verified: verified?.verified,
+        payload: verified?.payload,
+      });
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
@@ -153,22 +202,35 @@ export async function POST(request: Request) {
 
     const verified = await verifyOutsetaToken(token);
     if (!verified?.verified || !verified.payload?.sub) {
-      console.error("verifyOutsetaToken failed (POST)", { verified: verified?.verified, payload: verified?.payload });
+      console.error("verifyOutsetaToken failed (POST)", {
+        verified: verified?.verified,
+        payload: verified?.payload,
+      });
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
-    const body = await request.json().catch(() => ({}));
-    const fact_id = typeof body?.fact_id === "string" ? body.fact_id.trim() : "";
-    const fact_text = typeof body?.fact_text === "string" ? body.fact_text.trim() : "";
-    const source_workflow = typeof body?.source_workflow === "string" ? body.source_workflow.trim() : null;
-    if (!fact_id || !fact_text) return NextResponse.json({ error: "fact_id and fact_text are required" }, { status: 400 });
+    const body = (await request.json().catch(() => ({}))) as {
+      fact_id?: unknown;
+      fact_text?: unknown;
+      source_workflow?: unknown;
+    };
+    const fact_id = typeof body.fact_id === "string" ? body.fact_id.trim() : "";
+    const fact_text = typeof body.fact_text === "string" ? body.fact_text.trim() : "";
+    const source_workflow = typeof body.source_workflow === "string" ? body.source_workflow.trim() : null;
+
+    if (!fact_id || !fact_text) {
+      return NextResponse.json({ error: "fact_id and fact_text are required" }, { status: 400 });
+    }
 
     const supabase = createServiceClient();
     const businessId = await resolveBusinessId(verified.payload.sub, supabase);
 
     const { data, error } = await supabase
       .from("facts")
-      .upsert({ business_id: businessId, fact_id, fact_text, source_workflow }, { onConflict: "business_id,fact_id" })
+      .upsert(
+        { business_id: businessId, fact_id, fact_text, source_workflow },
+        { onConflict: "business_id,fact_id" },
+      )
       .select("id, fact_id, fact_text, source_workflow, created_at, updated_at")
       .single();
 
