@@ -56,6 +56,9 @@ type OutsetaClientSurface = {
   auth?: { accessToken?: string | null } | null;
 };
 
+// In-memory fallback so token survives even if storage/cookies are blocked in iframe
+let inMemoryOutsetaToken: string | null = null;
+
 function setOutsetaCookie(token: string) {
   if (!isBrowser) return;
   document.cookie = `${OUTSETA_COOKIE_NAME}=${encodeURIComponent(
@@ -64,6 +67,9 @@ function setOutsetaCookie(token: string) {
 }
 
 function stashTokenLocally(token: string) {
+  // keep an in-memory copy (works when localStorage/cookies are blocked)
+  inMemoryOutsetaToken = token;
+
   try {
     for (const k of OUTSETA_LS_KEYS) {
       window.localStorage.setItem(k, token);
@@ -94,6 +100,9 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 
 function findOutsetaTokenOnClient(): string | null {
   if (!isBrowser) return null;
+
+  // prefer in-memory first (bypasses storage/cookie restrictions)
+  if (inMemoryOutsetaToken) return inMemoryOutsetaToken;
 
   const w = window as unknown as {
     Outseta?: OutsetaClientSurface;
@@ -196,8 +205,8 @@ export function ChatKitPanel({
         const payload = decodeJwtPayload(tokenFromUrl);
         if (payload?.sub) localStorage.setItem("debug_last_received_sub", String(payload.sub));
         if (isDev) console.log("[ChatKitPanel] stored token from URL and debug keys");
-      } catch (err) {
-        console.warn("[ChatKitPanel] error storing token from URL", err);
+      } catch (e) {
+        console.warn("[ChatKitPanel] error storing token from URL", e);
       }
     }
 
@@ -206,6 +215,7 @@ export function ChatKitPanel({
       if (!data || typeof data !== "object") return;
       if (data.type === PARENT_MESSAGE_TYPE && typeof data.token === "string") {
         if (isDev) console.log("[ChatKitPanel] received token via postMessage from parent");
+
         try {
           try {
             localStorage.setItem("debug_last_received_token", data.token);
@@ -215,16 +225,21 @@ export function ChatKitPanel({
           } catch (err) {
             console.warn("[ChatKitPanel] unable to write debug token values", err);
           }
+
+          // persist (also sets in-memory now)
           stashTokenLocally(data.token);
+
           try {
             const payload = decodeJwtPayload(data.token);
             const newSub = payload?.sub ? String(payload.sub) : null;
+
             let prevSub: string | null = null;
             try {
               prevSub = localStorage.getItem("debug_last_received_sub");
             } catch (e) {
               prevSub = null;
             }
+
             if (newSub) {
               try {
                 localStorage.setItem("debug_last_received_sub", newSub);
@@ -232,13 +247,15 @@ export function ChatKitPanel({
                 // ignore storage errors
               }
             }
+
             if (newSub && newSub !== prevSub) {
               if (isDev) console.log("[ChatKitPanel] detected user change (sub), reinitializing widget");
               setWidgetInstanceKey((k) => k + 1);
             }
-          } catch (err) {
-            console.warn("[ChatKitPanel] error checking token sub for reinit", err);
+          } catch (e) {
+            console.warn("[ChatKitPanel] error checking token sub for reinit", e);
           }
+
           if (isDev) {
             console.log(
               "[ChatKitPanel] outseta-token persisted (snippet):",
@@ -268,8 +285,8 @@ export function ChatKitPanel({
       try {
         window.parent?.postMessage?.({ type: "chatkit-ready" }, "*");
         if (isDev) console.log("[ChatKitPanel] posted chatkit-ready to parent");
-      } catch (err) {
-        console.warn("[ChatKitPanel] postMessage(chatkit-ready) failed", err);
+      } catch (e) {
+        console.warn("[ChatKitPanel] postMessage(chatkit-ready) failed", e);
       }
     };
 
@@ -301,9 +318,10 @@ export function ChatKitPanel({
     };
   }, [scriptStatus, setErrorState]);
 
+  // --- click-to-parent handler for opening links on mobile/parent context ---
   useEffect(() => {
     if (!isBrowser) return;
-    if (window.parent === window) return;
+    if (window.parent === window) return; // not inside an iframe
 
     const handleClick = (ev: MouseEvent) => {
       try {
@@ -311,6 +329,7 @@ export function ChatKitPanel({
         let el = me.target as Element | null;
         while (el && el !== document.body) {
           if (el instanceof HTMLAnchorElement && el.href) {
+            // Prevent iframe navigation and request parent to open the link
             ev.preventDefault();
             window.parent.postMessage({ type: "open_link", url: el.href }, "*");
             return;
@@ -318,6 +337,7 @@ export function ChatKitPanel({
           el = el.parentElement;
         }
       } catch (err) {
+        // don't break the app if something goes wrong
         console.warn("[ChatKitPanel] click-to-parent handler error", err);
       }
     };
@@ -325,6 +345,7 @@ export function ChatKitPanel({
     document.addEventListener("click", handleClick, { passive: false });
     return () => document.removeEventListener("click", handleClick);
   }, []);
+  // -------------------------------------------------------------------------
 
   const handleResetChat = useCallback(() => {
     processedFacts.current.clear();
@@ -432,48 +453,17 @@ export function ChatKitPanel({
         return { success: false };
       }
 
-      if (invocation.name === "get_facts") {
-        try {
-          const outsetaToken = findOutsetaTokenOnClient();
-          const headers: Record<string, string> = { "Content-Type": "application/json" };
-          if (outsetaToken) headers["Authorization"] = `Bearer ${outsetaToken}`;
-          const res = await fetch("/api/facts", { method: "GET", headers });
-          const json = await res.json();
-          if (!res.ok) throw new Error(json?.error || "Failed to fetch facts");
-          return { success: true, facts: json.facts ?? [] };
-        } catch (err) {
-          console.error("get_facts error", err);
-          return { success: false, error: String(err) };
-        }
-      }
-
       if (invocation.name === "record_fact") {
-        try {
-          const outsetaToken = findOutsetaTokenOnClient();
-          const headers: Record<string, string> = { "Content-Type": "application/json" };
-          if (outsetaToken) headers["Authorization"] = `Bearer ${outsetaToken}`;
-
-          const fact_id = String(invocation.params.fact_id ?? "").trim();
-          const fact_text = String(invocation.params.fact_text ?? "").trim();
-          const source_workflow =
-            typeof invocation.params.source_workflow === "string"
-              ? invocation.params.source_workflow
-              : undefined;
-
-          if (!fact_id || !fact_text) return { success: false, error: "Missing fact_id or fact_text" };
-
-          const res = await fetch("/api/facts", {
-            method: "POST",
-            headers,
-            body: JSON.stringify({ fact_id, fact_text, source_workflow }),
-          });
-          const json = await res.json();
-          if (!res.ok) throw new Error(json?.error || "Failed to record fact");
-          return { success: true, fact: json.fact };
-        } catch (err) {
-          console.error("record_fact error", err);
-          return { success: false, error: String(err) };
-        }
+        const id = String(invocation.params.fact_id ?? "");
+        const text = String(invocation.params.fact_text ?? "");
+        if (!id || processedFacts.current.has(id)) return { success: true };
+        processedFacts.current.add(id);
+        void onWidgetAction({
+          type: "save",
+          factId: id,
+          factText: text.replace(/\s+/g, " ").trim(),
+        });
+        return { success: true };
       }
 
       return { success: false };
