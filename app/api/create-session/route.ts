@@ -158,12 +158,16 @@ async function resolveUserId(request: Request) {
 
   if (token) {
     try {
-      const result = await verifyOutsetaToken(token);
-      if (result.verified && result.payload) {
-        const accountUid = extractOutsetaUid(result.payload);
-        if (accountUid) {
-          return { userId: accountUid, sessionCookie: serializeSessionCookie(accountUid) };
-        }
+      const verified = await verifyOutsetaToken(token);
+      if (verified?.verified && verified.payload) {
+        const payload = verified.payload as Record<string, unknown>;
+        const userSub =
+          (payload['sub'] as string) ||
+          (payload['user_id'] as string) ||
+          (payload['uid'] as string) ||
+          undefined;
+
+        if (userSub) return { userId: userSub, sessionCookie: serializeSessionCookie(userSub) };
       }
     } catch (err) {
       console.warn('Outseta token verification failed:', err);
