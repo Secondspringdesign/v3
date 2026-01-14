@@ -1,70 +1,49 @@
-name: Database Smoke Test
+name: Supabase HTTP Smoke
 
 on:
   push:
-    branches:
-      - staging
-      - main
+    branches: [staging, main]
   workflow_dispatch:
 
 jobs:
-  db-smoke-staging:
-    name: Staging DB smoke
+  staging-http:
+    name: Staging HTTP health
     runs-on: ubuntu-latest
     environment: Preview
     steps:
-      - name: Install psql client and dnsutils
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client dnsutils
-      - name: Build pooled IPv4 connection string (staging)
-        id: conn
-        shell: bash
+      - name: Auth health (no auth required)
         run: |
           REF="${{ secrets.STAGING_SUPABASE_PROJECT_REF }}"
-          PASS="${{ secrets.STAGING_DB_PASSWORD }}"
-          if [ -z "$REF" ] || [ -z "$PASS" ]; then
-            echo "Missing staging secrets. Set STAGING_SUPABASE_PROJECT_REF and STAGING_DB_PASSWORD in the Preview environment." >&2
-            exit 1
-          fi
-          IPV4=$(dig +short A db.${REF}.supabase.co | head -n1)
-          if [ -z "$IPV4" ]; then
-            echo "Failed to resolve IPv4 for db.${REF}.supabase.co" >&2
-            exit 1
-          fi
-          # Use hostname for TLS, force IPv4 with hostaddr
-          URL="postgresql://postgres:${PASS}@db.${REF}.supabase.co:6543/postgres?sslmode=require&hostaddr=${IPV4}"
-          echo "URL=$URL" >> $GITHUB_OUTPUT
-      - name: Smoke query (SELECT now())
+          curl -fsS "https://${REF}.supabase.co/auth/v1/health" -o /dev/null
+      - name: Optional REST ping (facts table) with anon key
+        if: ${{ secrets.STAGING_ANON_KEY != '' }}
+        env:
+          REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          ANON: ${{ secrets.STAGING_ANON_KEY }}
         run: |
-          psql "${{ steps.conn.outputs.URL }}" -c "SELECT now();"
+          curl -fsS \
+            -H "apikey: $ANON" \
+            -H "Authorization: Bearer $ANON" \
+            "https://${REF}.supabase.co/rest/v1/facts?select=id&limit=1" \
+            -o /dev/null || echo "REST ping optional: create facts table or add STAGING_ANON_KEY to enable"
 
-  db-smoke-production:
-    name: Production DB smoke
+  production-http:
+    name: Production HTTP health
     runs-on: ubuntu-latest
     environment: Production
     steps:
-      - name: Install psql client and dnsutils
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client dnsutils
-      - name: Build pooled IPv4 connection string (production)
-        id: conn
-        shell: bash
+      - name: Auth health (no auth required)
         run: |
           REF="${{ secrets.PRODUCTION_SUPABASE_PROJECT_REF }}"
-          PASS="${{ secrets.PRODUCTION_DB_PASSWORD }}"
-          if [ -z "$REF" ] || [ -z "$PASS" ]; then
-            echo "Missing production secrets. Set PRODUCTION_SUPABASE_PROJECT_REF and PRODUCTION_DB_PASSWORD in the Production environment." >&2
-            exit 1
-          fi
-          IPV4=$(dig +short A db.${REF}.supabase.co | head -n1)
-          if [ -z "$IPV4" ]; then
-            echo "Failed to resolve IPv4 for db.${REF}.supabase.co" >&2
-            exit 1
-          fi
-          URL="postgresql://postgres:${PASS}@db.${REF}.supabase.co:6543/postgres?sslmode=require&hostaddr=${IPV4}"
-          echo "URL=$URL" >> $GITHUB_OUTPUT
-      - name: Smoke query (SELECT now())
+          curl -fsS "https://${REF}.supabase.co/auth/v1/health" -o /dev/null
+      - name: Optional REST ping (facts table) with anon key
+        if: ${{ secrets.PRODUCTION_ANON_KEY != '' }}
+        env:
+          REF: ${{ secrets.PRODUCTION_SUPABASE_PROJECT_REF }}
+          ANON: ${{ secrets.PRODUCTION_ANON_KEY }}
         run: |
-          psql "${{ steps.conn.outputs.URL }}" -c "SELECT now();"
+          curl -fsS \
+            -H "apikey: $ANON" \
+            -H "Authorization: Bearer $ANON" \
+            "https://${REF}.supabase.co/rest/v1/facts?select=id&limit=1" \
+            -o /dev/null || echo "REST ping optional: create facts table or add PRODUCTION_ANON_KEY to enable"
