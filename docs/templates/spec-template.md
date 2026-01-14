@@ -28,7 +28,7 @@ Update front matter with your doc's metadata.
 | **Owner** | @author |
 | **Status** | Draft |
 | **Last Updated** | YYYY-MM-DD |
-| **Related** | [Link](/secondspring-v3/path/) |
+| **Related** | [Link](/v3/path/) |
 
 ## Table of Contents
 {: .no_toc .text-delta }
