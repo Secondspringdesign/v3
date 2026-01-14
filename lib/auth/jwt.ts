@@ -1,24 +1,28 @@
 /**
  * JWT verification for Outseta tokens
- *
- * Extracted from app/api/create-session/route.ts for reuse across API routes.
  * Uses RS256 with JWKS for signature verification.
  */
 
 // ============================================
-// CONSTANTS
+// CONSTANTS (allowlist + env overrides)
 // ============================================
 
-const OUTSETA_ISSUER = 'https://second-spring-design.outseta.com';
-const OUTSETA_JWKS_URL = 'https://second-spring-design.outseta.com/.well-known/jwks';
+const DEFAULT_ISSUER = 'https://second-spring-design.outseta.com';
+const RESOURCE_OWNER_ISSUER = 'https://second-spring-design.outseta.com.resource-owner';
+
+const OUTSETA_ISSUER = process.env.OUTSETA_ISSUER || RESOURCE_OWNER_ISSUER;
+const OUTSETA_JWKS_URL =
+  process.env.OUTSETA_JWKS_URL || 'https://second-spring-design.outseta.com/.well-known/jwks';
+
+const ALLOWED_ISSUERS = [OUTSETA_ISSUER, DEFAULT_ISSUER, RESOURCE_OWNER_ISSUER];
+
 const CLOCK_SKEW_SECONDS = 60;
 const JWKS_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
 // ============================================
-// JWKS CACHE
+// TYPES / STATE
 // ============================================
 
-// Extended JsonWebKey with kid (key ID) property from JWKS
 interface JwkWithKid extends JsonWebKey {
   kid?: string;
 }
@@ -26,6 +30,46 @@ interface JwkWithKid extends JsonWebKey {
 interface JwksCache {
   fetchedAt: number;
   jwks: { keys: JwkWithKid[] };
+}
+
+export interface JwtHeader {
+  alg: string;
+  typ?: string;
+  kid?: string;
+}
+
+export interface JwtPayload {
+  iss?: string;
+  sub?: string;
+  aud?: string | string[];
+  exp?: number;
+  nbf?: number;
+  iat?: number;
+  jti?: string;
+  // Outseta-specific claims
+  'outseta:accountUid'?: string;
+  'outseta:accountuid'?: string;
+  account_uid?: string;
+  accountUid?: string;
+  accountId?: string;
+  account_id?: string;
+  user_id?: string;
+  uid?: string;
+  email?: string;
+  [key: string]: unknown;
+}
+
+interface ParsedJwt {
+  header: JwtHeader;
+  payload: JwtPayload;
+  signatureB64: string;
+  signingInput: string;
+}
+
+export interface VerificationResult {
+  verified: boolean;
+  payload?: JwtPayload;
+  error?: string;
 }
 
 let jwksCache: JwksCache | null = null;
@@ -67,40 +111,6 @@ function base64UrlDecode(input: string): string {
 // JWT PARSING
 // ============================================
 
-export interface JwtHeader {
-  alg: string;
-  typ?: string;
-  kid?: string;
-}
-
-export interface JwtPayload {
-  iss?: string;
-  sub?: string;
-  aud?: string | string[];
-  exp?: number;
-  nbf?: number;
-  iat?: number;
-  jti?: string;
-  // Outseta-specific claims
-  'outseta:accountUid'?: string;
-  'outseta:accountuid'?: string;
-  account_uid?: string;
-  accountUid?: string;
-  accountId?: string;
-  account_id?: string;
-  user_id?: string;
-  uid?: string;
-  email?: string;
-  [key: string]: unknown;
-}
-
-interface ParsedJwt {
-  header: JwtHeader;
-  payload: JwtPayload;
-  signatureB64: string;
-  signingInput: string;
-}
-
 export function parseJwt(token: string): ParsedJwt {
   const parts = token.split('.');
   if (parts.length !== 3) {
@@ -127,8 +137,8 @@ async function getJwkForKid(kid?: string): Promise<JwkWithKid | null> {
       if (!res.ok) {
         throw new Error(`Failed to fetch JWKS (${res.status})`);
       }
-      const jwks = await res.json();
-      jwksCache = { fetchedAt: now, jwks };
+      const jwks = (await res.json()) as { keys?: JwkWithKid[] };
+      jwksCache = { fetchedAt: now, jwks: { keys: jwks.keys ?? [] } };
     }
 
     const keys = jwksCache.jwks.keys ?? [];
@@ -146,18 +156,6 @@ async function getJwkForKid(kid?: string): Promise<JwkWithKid | null> {
 // TOKEN VERIFICATION
 // ============================================
 
-export interface VerificationResult {
-  verified: boolean;
-  payload?: JwtPayload;
-  error?: string;
-}
-
-/**
- * Verify an Outseta JWT token using RS256 and JWKS
- *
- * @param token - The JWT token string
- * @returns Verification result with payload if successful
- */
 export async function verifyOutsetaToken(token: string): Promise<VerificationResult> {
   try {
     const { header, payload, signatureB64, signingInput } = parseJwt(token);
@@ -178,7 +176,6 @@ export async function verifyOutsetaToken(token: string): Promise<VerificationRes
       ['verify']
     );
 
-    // TypeScript strict mode requires casting Uint8Array for crypto.subtle.verify
     const signatureValid = await crypto.subtle.verify(
       'RSASSA-PKCS1-v1_5',
       cryptoKey,
@@ -201,7 +198,7 @@ export async function verifyOutsetaToken(token: string): Promise<VerificationRes
       return { verified: false, payload, error: 'Token not yet valid' };
     }
 
-    if (payload.iss && payload.iss !== OUTSETA_ISSUER) {
+    if (payload.iss && !ALLOWED_ISSUERS.includes(payload.iss)) {
       return { verified: false, payload, error: 'Invalid issuer' };
     }
 
@@ -215,16 +212,7 @@ export async function verifyOutsetaToken(token: string): Promise<VerificationRes
 // UTILITY HELPERS
 // ============================================
 
-/**
- * Extract the Outseta user ID from a verified JWT payload
- *
- * Checks multiple possible claim names used by Outseta.
- *
- * @param payload - The verified JWT payload
- * @returns The user ID or null if not found
- */
 export function extractOutsetaUid(payload: JwtPayload): string | null {
-  // Check all possible Outseta claim names
   const uid =
     payload['outseta:accountUid'] ||
     payload['outseta:accountuid'] ||
@@ -239,25 +227,11 @@ export function extractOutsetaUid(payload: JwtPayload): string | null {
   return typeof uid === 'string' ? uid : null;
 }
 
-/**
- * Extract email from a verified JWT payload
- *
- * @param payload - The verified JWT payload
- * @returns The email or null if not found
- */
 export function extractEmail(payload: JwtPayload): string | null {
   const email = payload.email;
   return typeof email === 'string' ? email : null;
 }
 
-/**
- * Extract a token from Authorization header
- *
- * Supports "Bearer <token>" format or raw token.
- *
- * @param headerValue - The Authorization header value
- * @returns The token or null
- */
 export function extractTokenFromHeader(headerValue: string | null): string | null {
   if (!headerValue) return null;
   const parts = headerValue.trim().split(/\s+/);
@@ -266,13 +240,6 @@ export function extractTokenFromHeader(headerValue: string | null): string | nul
   return null;
 }
 
-/**
- * Get a cookie value by name
- *
- * @param cookieHeader - The Cookie header string
- * @param name - The cookie name
- * @returns The cookie value or null
- */
 export function getCookieValue(cookieHeader: string | null, name: string): string | null {
   if (!cookieHeader) return null;
   const cookies = cookieHeader.split(';');
