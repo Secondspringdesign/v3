@@ -213,16 +213,12 @@ export async function verifyOutsetaToken(token: string): Promise<VerificationRes
 // ============================================
 
 export function extractOutsetaUid(payload: JwtPayload): string | null {
+  // Use `sub` as the stable user identifier (Outseta recommended).
   const uid =
-    payload['outseta:accountUid'] ||
-    payload['outseta:accountuid'] ||
-    payload.account_uid ||
-    payload.accountUid ||
-    payload.accountId ||
-    payload.account_id ||
     payload.sub ||
     payload.user_id ||
-    payload.uid;
+    payload.uid ||
+    null;
 
   return typeof uid === 'string' ? uid : null;
 }
