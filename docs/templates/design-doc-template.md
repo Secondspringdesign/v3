@@ -26,7 +26,7 @@ This template is for system/feature design proposals.
 | **Owner** | @author |
 | **Status** | Draft |
 | **Last Updated** | YYYY-MM-DD |
-| **Related** | [Spec](/secondspring-v3/path/) |
+| **Related** | [Spec](/v3/path/) |
 
 ## Table of Contents
 {: .no_toc .text-delta }
