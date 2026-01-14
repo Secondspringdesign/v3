@@ -1,7 +1,7 @@
 title: Second Spring Docs
 description: Engineering documentation, specs, design docs, ADRs, and runbooks
-baseurl: "/secondspring-v3"
-url: "https://gorgeguy.github.io"
+baseurl: "/v3"
+url: "https://secondspringdesign.github.io"
 
 remote_theme: just-the-docs/just-the-docs@v0.10.0
 
@@ -11,7 +11,7 @@ color_scheme: light
 # Aux links (top right)
 aux_links:
   "GitHub":
-    - "https://github.com/gorgeguy/secondspring-v3"
+    - "https://github.com/Secondspringdesign/v3"
 
 aux_links_new_tab: true
 
@@ -21,8 +21,8 @@ heading_anchors: true
 # Footer
 gh_edit_link: true
 gh_edit_link_text: "Edit this page on GitHub"
-gh_edit_repository: "https://github.com/gorgeguy/secondspring-v3"
-gh_edit_branch: "main"
+gh_edit_repository: "https://github.com/Secondspringdesign/v3"
+gh_edit_branch: "staging"
 gh_edit_source: docs
 gh_edit_view_mode: "edit"
 
