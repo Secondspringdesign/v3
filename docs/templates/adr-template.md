@@ -27,7 +27,7 @@ ADRs are immutable once accepted—add superseding ADRs instead of editing.
 | **Owner** | @author |
 | **Status** | Proposed |
 | **Date** | YYYY-MM-DD |
-| **Supersedes** | [ADR-XXXX](/secondspring-v3/adr-xxxx/) (if applicable) |
+| **Supersedes** | [ADR-XXXX](/v3/adr-xxxx/) (if applicable) |
 | **Superseded by** | None |
 
 ---
@@ -115,7 +115,7 @@ Description of the alternative.
 
 ## References
 
-- [Link to relevant doc](/secondspring-v3/path/)
+- [Link to relevant doc](/v3/path/)
 - [External reference](https://example.com)
 
 ---
