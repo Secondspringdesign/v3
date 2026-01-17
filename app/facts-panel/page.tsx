@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 type Fact = {
   id: string;
@@ -14,6 +15,7 @@ export default function FactsPanel() {
   const [facts, setFacts] = useState<Fact[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [lastStatus, setLastStatus] = useState<string>("idle");
+  const [outsetaToken, setOutsetaToken] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchFacts = async (token: string | null, label: string) => {
@@ -47,6 +49,7 @@ export default function FactsPanel() {
       if (!data || typeof data !== "object") return;
       if (data.type === "outseta-token" && typeof data.token === "string") {
         console.log("[facts-panel] received outseta-token via postMessage; length:", data.token.length);
+        setOutsetaToken(data.token);
         fetchFacts(data.token, "postMessage");
       }
     };
@@ -55,6 +58,7 @@ export default function FactsPanel() {
 
     if (urlToken) {
       console.log("[facts-panel] using outseta_token from URL param; length:", urlToken.length);
+      setOutsetaToken(urlToken);
       fetchFacts(urlToken, "url-param");
     } else {
       fetchFacts(null, "no-token");
@@ -62,6 +66,39 @@ export default function FactsPanel() {
 
     return () => window.removeEventListener("message", handleMessage);
   }, []);
+
+  useEffect(() => {
+    if (!outsetaToken) return;
+
+    const supabase = getSupabaseBrowserClient();
+
+    // Attach Outseta JWT to Realtime so RLS can filter by business_id
+    supabase.realtime.setAuth(outsetaToken);
+
+    const channel = supabase
+      .channel("facts-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "facts" },
+        () => {
+          // Re-fetch with same auth when facts change
+          fetch("/api/facts", {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${outsetaToken}`,
+            },
+          })
+            .then((res) => res.json())
+            .then((json) => setFacts(json.facts ?? []))
+            .catch((e) => setError(String(e)));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [outsetaToken]);
 
   return (
     <main style={{ padding: "1rem", fontFamily: "Inter, sans-serif", color: "#111", background: "#f7f7f7", minHeight: "100vh" }}>
