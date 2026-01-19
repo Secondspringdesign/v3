@@ -16,6 +16,7 @@ export default function FactsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [lastStatus, setLastStatus] = useState<string>("idle");
   const [outsetaToken, setOutsetaToken] = useState<string | null>(null);
+  const [supabaseToken, setSupabaseToken] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchFacts = async (token: string | null, label: string) => {
@@ -49,9 +50,7 @@ export default function FactsPanel() {
       if (!data || typeof data !== "object") return;
       if (data.type === "outseta-token" && typeof data.token === "string") {
         console.log("[facts-panel] received outseta-token via postMessage; length:", data.token.length);
-        console.log("[facts-panel] token:", data.token); // <-- add this
         setOutsetaToken(data.token);
-        fetchFacts(data.token, "postMessage");
       }
     };
 
@@ -60,7 +59,6 @@ export default function FactsPanel() {
     if (urlToken) {
       console.log("[facts-panel] using outseta_token from URL param; length:", urlToken.length);
       setOutsetaToken(urlToken);
-      fetchFacts(urlToken, "url-param");
     } else {
       fetchFacts(null, "no-token");
     }
@@ -71,37 +69,68 @@ export default function FactsPanel() {
   useEffect(() => {
     if (!outsetaToken) return;
 
+    const exchangeToken = async () => {
+      try {
+        setLastStatus("exchanging");
+        const res = await fetch("/api/auth/supabase-exchange", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: outsetaToken }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error || `Exchange failed (status ${res.status})`);
+        if (!json?.access_token) throw new Error("Exchange missing access_token");
+        setSupabaseToken(json.access_token);
+        setLastStatus("exchanged");
+      } catch (e) {
+        setError(String(e));
+        setLastStatus("exchange error");
+      }
+    };
+
+    exchangeToken();
+  }, [outsetaToken]);
+
+  useEffect(() => {
+    if (!supabaseToken) return;
+
     const supabase = getSupabaseBrowserClient();
 
-    // Attach Outseta JWT to Realtime so RLS can filter by business_id
-    supabase.realtime.setAuth(outsetaToken);
+    // Attach Supabase JWT to Realtime so RLS works
+    supabase.realtime.setAuth(supabaseToken);
+
+    // Initial load with Supabase JWT
+    fetch("/api/facts", {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${supabaseToken}`,
+      },
+    })
+      .then((res) => res.json())
+      .then((json) => setFacts(json.facts ?? []))
+      .catch((e) => setError(String(e)));
 
     const channel = supabase
       .channel("facts-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "facts" },
-        () => {
-          // Re-fetch with same auth when facts change
-          fetch("/api/facts", {
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${outsetaToken}`,
-            },
-          })
-            .then((res) => res.json())
-            .then((json) => setFacts(json.facts ?? []))
-            .catch((e) => setError(String(e)));
-        }
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "facts" }, () => {
+        fetch("/api/facts", {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${supabaseToken}`,
+          },
+        })
+          .then((res) => res.json())
+          .then((json) => setFacts(json.facts ?? []))
+          .catch((e) => setError(String(e)));
+      })
       .subscribe((status) => {
-        console.log("[facts-panel] realtime status:", status); // <-- add this
+        console.log("[facts-panel] realtime status:", status);
       });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [outsetaToken]);
+  }, [supabaseToken]);
 
   return (
     <main style={{ padding: "1rem", fontFamily: "Inter, sans-serif", color: "#111", background: "#f7f7f7", minHeight: "100vh" }}>
