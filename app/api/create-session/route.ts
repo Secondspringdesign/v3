@@ -27,6 +27,7 @@ const WORKFLOWS: Record<string, string | undefined> = {
   business_task4: process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS_TASK4,
   product: process.env.CHATKIT_WORKFLOW_PRODUCT ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_PRODUCT,
   marketing: process.env.CHATKIT_WORKFLOW_MARKETING ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_MARKETING,
+  // Money tab (formerly "finance") — use the env var names you have in Vercel (CHATKIT_WORKFLOW_MONEY / NEXT_PUBLIC_CHATKIT_WORKFLOW_MONEY)
   money: process.env.CHATKIT_WORKFLOW_MONEY ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_MONEY,
 };
 
@@ -72,10 +73,10 @@ export async function POST(request: Request): Promise<Response> {
     // Session cookie for stability
     sessionCookie = serializeSessionCookie(namespacedUserId);
 
-    // Fetch facts summary for this user (server-side, service role + RPC filtered by outseta_sub)
+    // Fetch facts summary for this user (RPC filters by outseta_sub)
     const factsSummary = await fetchFactsSummary(outsetaSub);
 
-    // Call ChatKit Sessions API with inputs (includes facts_summary)
+    // Call ChatKit Sessions API (working shape) with inputs
     const apiUrl = `${DEFAULT_CHATKIT_BASE}/v1/chatkit/sessions`;
     const upstreamResponse = await fetch(apiUrl, {
       method: "POST",
@@ -316,7 +317,6 @@ async function fetchFactsSummary(outsetaSub: string): Promise<string> {
 
     if (!rows?.length) return "";
 
-    // Simple summary; trim to keep within token budget
     const parts = rows.slice(0, 30).map((r) => {
       const src = r.source_workflow ? ` (source: ${r.source_workflow})` : "";
       return `- ${r.fact_id}: ${r.fact_text}${src}`;
