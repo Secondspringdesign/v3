@@ -102,45 +102,69 @@ export default function FactsPanel() {
   useEffect(() => {
     if (!supabaseToken) return;
 
+    let cancelled = false;
     const { url, key } = requireEnv();
-    // Fresh client per token to avoid stale anon realtime sockets
-    const supabase = createClient(url, key, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
-      },
-    });
 
-    supabase.realtime.setAuth(supabaseToken);
-    supabase.realtime.connect();
-
-    console.log("[facts-panel] setAuth token snippet", supabaseToken.slice(0, 12));
-
-    const fetchWithToken = () =>
-      fetch("/api/facts", {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${supabaseToken}`,
+    const init = async () => {
+      // Fresh client per token
+      const supabase = createClient(url, key, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+          detectSessionInUrl: false,
         },
-      })
-        .then((res) => res.json())
-        .then((json) => setFacts(json.facts ?? []))
-        .catch((e) => setError(String(e)));
-
-    // Initial load with Supabase JWT
-    fetchWithToken();
-
-    const channel = supabase
-      .channel("facts-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "facts" }, fetchWithToken)
-      .subscribe((status) => {
-        console.log("[facts-panel] realtime status:", status);
       });
 
+      // Set a session so supabase-js uses this JWT for realtime (and any RPC/fetch if we wanted)
+      await supabase.auth.setSession({
+        access_token: supabaseToken,
+        refresh_token: "",
+      });
+
+      supabase.realtime.setAuth(supabaseToken);
+      supabase.realtime.connect();
+
+      console.log("[facts-panel] setAuth token snippet", supabaseToken.slice(0, 12));
+
+      const fetchWithToken = () =>
+        fetch("/api/facts", {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${supabaseToken}`,
+          },
+        })
+          .then((res) => res.json())
+          .then((json) => {
+            if (!cancelled) setFacts(json.facts ?? []);
+          })
+          .catch((e) => {
+            if (!cancelled) setError(String(e));
+          });
+
+      // Initial load with Supabase JWT
+      await fetchWithToken();
+
+      const channel = supabase
+        .channel("facts-realtime")
+        .on("postgres_changes", { event: "*", schema: "public", table: "facts" }, fetchWithToken)
+        .subscribe((status) => {
+          console.log("[facts-panel] realtime status:", status);
+        });
+
+      return () => {
+        supabase.removeChannel(channel);
+        supabase.realtime.disconnect();
+      };
+    };
+
+    let cleanup: (() => void) | undefined;
+    init().then((fn) => {
+      cleanup = fn;
+    });
+
     return () => {
-      supabase.removeChannel(channel);
-      supabase.realtime.disconnect();
+      cancelled = true;
+      cleanup?.();
     };
   }, [supabaseToken]);
 
