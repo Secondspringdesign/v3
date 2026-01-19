@@ -7,6 +7,7 @@
 
 import {
   verifyOutsetaToken,
+  verifySupabaseToken,
   extractOutsetaUid,
   extractEmail,
   extractTokenFromHeader,
@@ -63,8 +64,14 @@ export async function authenticateRequest(request: Request): Promise<AuthResult>
     };
   }
 
-  // Verify the token
-  const result = await verifyOutsetaToken(token);
+  // Verify Outseta token first, then fallback to Supabase token
+  let result = await verifyOutsetaToken(token);
+  if (!result.verified) {
+    const supabaseResult = await verifySupabaseToken(token);
+    if (supabaseResult.verified) {
+      result = supabaseResult;
+    }
+  }
 
   if (!result.verified || !result.payload) {
     return {
