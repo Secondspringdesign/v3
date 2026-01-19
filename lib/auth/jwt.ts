@@ -3,6 +3,8 @@
  * Uses RS256 with JWKS for signature verification.
  */
 
+import { jwtVerify } from 'jose';
+
 // ============================================
 // CONSTANTS (allowlist + env overrides)
 // ============================================
@@ -18,6 +20,10 @@ const ALLOWED_ISSUERS = [OUTSETA_ISSUER, DEFAULT_ISSUER, RESOURCE_OWNER_ISSUER];
 
 const CLOCK_SKEW_SECONDS = 60;
 const JWKS_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+// Supabase defaults must match the token creation logic
+const SUPABASE_DEFAULT_ISSUER = 'supabase';
+const SUPABASE_DEFAULT_AUDIENCE = 'authenticated';
 
 // ============================================
 // TYPES / STATE
@@ -56,6 +62,9 @@ export interface JwtPayload {
   user_id?: string;
   uid?: string;
   email?: string;
+  // Supabase custom claims
+  outseta_sub?: string;
+  role?: string;
   [key: string]: unknown;
 }
 
@@ -208,6 +217,28 @@ export async function verifyOutsetaToken(token: string): Promise<VerificationRes
   }
 }
 
+export async function verifySupabaseToken(token: string): Promise<VerificationResult> {
+  try {
+    const secret = process.env.SUPABASE_JWT_SECRET;
+    if (!secret) {
+      return { verified: false, error: 'Missing SUPABASE_JWT_SECRET' };
+    }
+
+    const issuer = process.env.SUPABASE_JWT_ISSUER ?? SUPABASE_DEFAULT_ISSUER;
+    const audience = process.env.SUPABASE_JWT_AUDIENCE ?? SUPABASE_DEFAULT_AUDIENCE;
+
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret), {
+      issuer,
+      audience,
+      clockTolerance: CLOCK_SKEW_SECONDS,
+    });
+
+    return { verified: true, payload: payload as JwtPayload };
+  } catch (err) {
+    return { verified: false, error: String(err) };
+  }
+}
+
 // ============================================
 // UTILITY HELPERS
 // ============================================
@@ -216,6 +247,7 @@ export function extractOutsetaUid(payload: JwtPayload): string | null {
   // Use `sub` as the stable user identifier (Outseta recommended).
   const uid =
     payload.sub ||
+    payload.outseta_sub ||
     payload.user_id ||
     payload.uid ||
     null;
