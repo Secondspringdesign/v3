@@ -72,10 +72,10 @@ export async function POST(request: Request): Promise<Response> {
     // Session cookie for stability
     sessionCookie = serializeSessionCookie(namespacedUserId);
 
-    // Fetch facts summary for this user (server-side, service role + RPC filtered by outseta_sub)
-    const factsSummary = await fetchFactsSummary(outsetaSub);
+    // Fetch facts summary for this user (not sent to ChatKit because 'inputs' is unsupported)
+    await fetchFactsSummary(outsetaSub);
 
-    // Call ChatKit Sessions API with inputs (includes facts_summary)
+    // Call ChatKit Sessions API (original shape)
     const apiUrl = `${DEFAULT_CHATKIT_BASE}/v1/chatkit/sessions`;
     const upstreamResponse = await fetch(apiUrl, {
       method: "POST",
@@ -87,9 +87,6 @@ export async function POST(request: Request): Promise<Response> {
       body: JSON.stringify({
         workflow: { id: workflowId },
         user: namespacedUserId,
-        inputs: {
-          facts_summary: factsSummary || "No facts found yet.",
-        },
         chatkit_configuration: {
           file_upload: { enabled: true },
         },
@@ -111,7 +108,6 @@ export async function POST(request: Request): Promise<Response> {
       client_secret: upstreamJson.client_secret,
       expires_after: upstreamJson.expires_after,
       user_sent_to_chatkit: namespacedUserId,
-      injected_facts: Boolean(factsSummary),
     };
 
     return buildJsonResponse(payload, 200, {}, sessionCookie);
@@ -316,7 +312,6 @@ async function fetchFactsSummary(outsetaSub: string): Promise<string> {
 
     if (!rows?.length) return "";
 
-    // Simple summary; trim to keep within token budget
     const parts = rows.slice(0, 30).map((r) => {
       const src = r.source_workflow ? ` (source: ${r.source_workflow})` : "";
       return `- ${r.fact_id}: ${r.fact_text}${src}`;
