@@ -49,6 +49,7 @@ export default function FactsPanel() {
       if (!data || typeof data !== "object") return;
       if (data.type === "outseta-token" && typeof data.token === "string") {
         console.log("[facts-panel] received outseta-token via postMessage; length:", data.token.length);
+        console.log("[facts-panel] token:", data.token); // <-- add this
         setOutsetaToken(data.token);
         fetchFacts(data.token, "postMessage");
       }
@@ -93,7 +94,9 @@ export default function FactsPanel() {
             .catch((e) => setError(String(e)));
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("[facts-panel] realtime status:", status); // <-- add this
+      });
 
     return () => {
       supabase.removeChannel(channel);
