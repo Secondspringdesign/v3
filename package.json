@@ -13,6 +13,7 @@
   "dependencies": {
     "@openai/chatkit-react": ">=1.1.1 <2.0.0",
     "@supabase/supabase-js": "^2.89.0",
+    "jose": "^5.9.3",
     "next": "^15.5.7",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
