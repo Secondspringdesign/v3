@@ -27,7 +27,6 @@ const WORKFLOWS: Record<string, string | undefined> = {
   business_task4: process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS_TASK4,
   product: process.env.CHATKIT_WORKFLOW_PRODUCT ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_PRODUCT,
   marketing: process.env.CHATKIT_WORKFLOW_MARKETING ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_MARKETING,
-  // Money tab (formerly "finance") — use the env var names you have in Vercel (CHATKIT_WORKFLOW_MONEY / NEXT_PUBLIC_CHATKIT_WORKFLOW_MONEY)
   money: process.env.CHATKIT_WORKFLOW_MONEY ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_MONEY,
 };
 
@@ -60,7 +59,7 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     // Resolve user id (Outseta only)
-    const { userId: rawUserId } = await resolveUserId(request);
+    const { userId: rawUserId, outsetaSub } = await resolveUserId(request);
 
     // Strip prior agent suffixes and append current agent
     const agentList = Object.keys(WORKFLOWS)
@@ -73,7 +72,10 @@ export async function POST(request: Request): Promise<Response> {
     // Session cookie for stability
     sessionCookie = serializeSessionCookie(namespacedUserId);
 
-    // Call ChatKit Sessions API (old, working shape)
+    // Fetch facts summary for this user (server-side, service role + RPC filtered by outseta_sub)
+    const factsSummary = await fetchFactsSummary(outsetaSub);
+
+    // Call ChatKit Sessions API with inputs (includes facts_summary)
     const apiUrl = `${DEFAULT_CHATKIT_BASE}/v1/chatkit/sessions`;
     const upstreamResponse = await fetch(apiUrl, {
       method: "POST",
@@ -85,6 +87,9 @@ export async function POST(request: Request): Promise<Response> {
       body: JSON.stringify({
         workflow: { id: workflowId },
         user: namespacedUserId,
+        inputs: {
+          facts_summary: factsSummary || "No facts found yet.",
+        },
         chatkit_configuration: {
           file_upload: { enabled: true },
         },
@@ -106,6 +111,7 @@ export async function POST(request: Request): Promise<Response> {
       client_secret: upstreamJson.client_secret,
       expires_after: upstreamJson.expires_after,
       user_sent_to_chatkit: namespacedUserId,
+      injected_facts: Boolean(factsSummary),
     };
 
     return buildJsonResponse(payload, 200, {}, sessionCookie);
@@ -267,11 +273,57 @@ async function resolveUserId(request: Request) {
         (payload["uid"] as string) ||
         undefined;
 
-      if (userSub) return { userId: userSub, sessionCookie: serializeSessionCookie(userSub) };
+      if (userSub) return { userId: userSub, sessionCookie: serializeSessionCookie(userSub), outsetaSub: userSub };
     }
   } catch (err) {
     console.warn("Outseta token verification failed:", err);
   }
 
   throw new Error("Invalid authentication token");
+}
+
+/* ---------- Facts fetch + summary (user-scoped via RPC) ---------- */
+async function fetchFactsSummary(outsetaSub: string): Promise<string> {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceRole) {
+    console.warn("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY; skipping facts injection");
+    return "";
+  }
+
+  try {
+    const res = await fetch(`${url}/rest/v1/rpc/user_facts`, {
+      method: "POST",
+      headers: {
+        apikey: serviceRole,
+        Authorization: `Bearer ${serviceRole}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ p_sub: outsetaSub }),
+    });
+
+    if (!res.ok) {
+      console.warn("Failed to fetch user_facts:", res.status, await res.text());
+      return "";
+    }
+    const rows = (await res.json()) as Array<{
+      fact_id: string;
+      fact_text: string;
+      source_workflow?: string | null;
+      updated_at?: string | null;
+    }>;
+
+    if (!rows?.length) return "";
+
+    // Simple summary; trim to keep within token budget
+    const parts = rows.slice(0, 30).map((r) => {
+      const src = r.source_workflow ? ` (source: ${r.source_workflow})` : "";
+      return `- ${r.fact_id}: ${r.fact_text}${src}`;
+    });
+    return parts.join("\n");
+  } catch (err) {
+    console.warn("Error fetching user_facts:", err);
+    return "";
+  }
 }
