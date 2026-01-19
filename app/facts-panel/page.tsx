@@ -96,8 +96,12 @@ export default function FactsPanel() {
 
     const supabase = getSupabaseBrowserClient();
 
-    // Attach Supabase JWT to Realtime so RLS works
+    // Force the realtime socket to pick up the Supabase JWT (not just the anon key)
+    supabase.realtime.disconnect();
     supabase.realtime.setAuth(supabaseToken);
+    supabase.realtime.connect();
+
+    console.log("[facts-panel] setAuth token snippet", supabaseToken.slice(0, 12));
 
     // Initial load with Supabase JWT
     fetch("/api/facts", {
@@ -129,18 +133,36 @@ export default function FactsPanel() {
 
     return () => {
       supabase.removeChannel(channel);
+      supabase.realtime.disconnect();
     };
   }, [supabaseToken]);
 
   return (
-    <main style={{ padding: "1rem", fontFamily: "Inter, sans-serif", color: "#111", background: "#f7f7f7", minHeight: "100vh" }}>
+    <main
+      style={{
+        padding: "1rem",
+        fontFamily: "Inter, sans-serif",
+        color: "#111",
+        background: "#f7f7f7",
+        minHeight: "100vh",
+      }}
+    >
       <h1 style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>Context Panel</h1>
       {error && <div style={{ color: "red", marginBottom: "0.5rem" }}>Error: {error}</div>}
       <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.5rem" }}>Status: {lastStatus}</div>
       {facts.length === 0 && !error && <div>No facts yet.</div>}
       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
         {facts.map((f) => (
-          <li key={f.id} style={{ marginBottom: "0.75rem", padding: "0.75rem", background: "#fff", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+          <li
+            key={f.id}
+            style={{
+              marginBottom: "0.75rem",
+              padding: "0.75rem",
+              background: "#fff",
+              borderRadius: "8px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+            }}
+          >
             <div style={{ fontWeight: 600 }}>{f.fact_id}</div>
             <div style={{ marginTop: "0.25rem" }}>{f.fact_text}</div>
             <div style={{ marginTop: "0.25rem", fontSize: "0.8rem", color: "#666" }}>
