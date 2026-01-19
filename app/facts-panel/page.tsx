@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { createClient } from "@supabase/supabase-js";
 
 type Fact = {
   id: string;
@@ -10,6 +10,14 @@ type Fact = {
   source_workflow?: string | null;
   updated_at?: string | null;
 };
+
+function requireEnv(): { url: string; key: string } {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url) throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL environment variable");
+  if (!key) throw new Error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable");
+  return { url, key };
+}
 
 export default function FactsPanel() {
   const [facts, setFacts] = useState<Fact[]>([]);
@@ -94,39 +102,38 @@ export default function FactsPanel() {
   useEffect(() => {
     if (!supabaseToken) return;
 
-    const supabase = getSupabaseBrowserClient();
+    const { url, key } = requireEnv();
+    // Fresh client per token to avoid stale anon realtime sockets
+    const supabase = createClient(url, key, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
+    });
 
-    // Force the realtime socket to pick up the Supabase JWT (not just the anon key)
-    supabase.realtime.disconnect();
     supabase.realtime.setAuth(supabaseToken);
     supabase.realtime.connect();
 
     console.log("[facts-panel] setAuth token snippet", supabaseToken.slice(0, 12));
 
+    const fetchWithToken = () =>
+      fetch("/api/facts", {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${supabaseToken}`,
+        },
+      })
+        .then((res) => res.json())
+        .then((json) => setFacts(json.facts ?? []))
+        .catch((e) => setError(String(e)));
+
     // Initial load with Supabase JWT
-    fetch("/api/facts", {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${supabaseToken}`,
-      },
-    })
-      .then((res) => res.json())
-      .then((json) => setFacts(json.facts ?? []))
-      .catch((e) => setError(String(e)));
+    fetchWithToken();
 
     const channel = supabase
       .channel("facts-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "facts" }, () => {
-        fetch("/api/facts", {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${supabaseToken}`,
-          },
-        })
-          .then((res) => res.json())
-          .then((json) => setFacts(json.facts ?? []))
-          .catch((e) => setError(String(e)));
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "facts" }, fetchWithToken)
       .subscribe((status) => {
         console.log("[facts-panel] realtime status:", status);
       });
