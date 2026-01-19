@@ -2,7 +2,8 @@ import { SignJWT } from "jose";
 
 const DEFAULT_ISSUER = "supabase";
 const DEFAULT_AUDIENCE = "authenticated";
-const DEFAULT_EXPIRES_IN_SECONDS = 60 * 60; // 1 hour
+// Was 1 hour; use 4 hours to reduce mid-session drops.
+const DEFAULT_EXPIRES_IN_SECONDS = 60 * 60 * 4;
 
 function getJwtSecret() {
   const secret = process.env.SUPABASE_JWT_SECRET;
