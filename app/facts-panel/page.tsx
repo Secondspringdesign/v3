@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 type Fact = {
@@ -25,6 +25,7 @@ export default function FactsPanel() {
   const [lastStatus, setLastStatus] = useState<string>("idle");
   const [outsetaToken, setOutsetaToken] = useState<string | null>(null);
   const [supabaseToken, setSupabaseToken] = useState<string | null>(null);
+  const reconnectingRef = useRef(false);
 
   useEffect(() => {
     const fetchFacts = async (token: string | null, label: string) => {
@@ -105,7 +106,7 @@ export default function FactsPanel() {
     let cancelled = false;
     const { url, key } = requireEnv();
 
-    const init = async () => {
+    const connect = async (token: string) => {
       // Fresh client per token
       const supabase = createClient(url, key, {
         auth: {
@@ -115,40 +116,73 @@ export default function FactsPanel() {
         },
       });
 
-      // Set a session so supabase-js uses this JWT for realtime (and any RPC/fetch if we wanted)
       await supabase.auth.setSession({
-        access_token: supabaseToken,
+        access_token: token,
         refresh_token: "",
       });
 
-      supabase.realtime.setAuth(supabaseToken);
+      supabase.realtime.setAuth(token);
       supabase.realtime.connect();
 
-      console.log("[facts-panel] setAuth token snippet", supabaseToken.slice(0, 12));
+      console.log("[facts-panel] setAuth token snippet", token.slice(0, 12));
 
       const fetchWithToken = () =>
         fetch("/api/facts", {
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${supabaseToken}`,
+            Authorization: `Bearer ${token}`,
           },
         })
-          .then((res) => res.json())
-          .then((json) => {
+          .then(async (res) => {
+            if (res.status === 401) throw new Error("unauthorized");
+            const json = await res.json();
             if (!cancelled) setFacts(json.facts ?? []);
           })
           .catch((e) => {
             if (!cancelled) setError(String(e));
+            throw e;
           });
 
-      // Initial load with Supabase JWT
-      await fetchWithToken();
+      // Initial load
+      try {
+        await fetchWithToken();
+      } catch {
+        // handled above
+      }
+
+      const reauthAndReconnect = async () => {
+        if (reconnectingRef.current) return;
+        reconnectingRef.current = true;
+        try {
+          const res = await fetch("/api/auth/supabase-exchange", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: outsetaToken }),
+          });
+          const json = await res.json();
+          if (!res.ok || !json?.access_token) throw new Error("re-exchange failed");
+          if (!cancelled) setSupabaseToken(json.access_token); // triggers new effect connect
+        } catch (err) {
+          if (!cancelled) setError(String(err));
+        } finally {
+          reconnectingRef.current = false;
+        }
+      };
 
       const channel = supabase
         .channel("facts-realtime")
-        .on("postgres_changes", { event: "*", schema: "public", table: "facts" }, fetchWithToken)
+        .on("postgres_changes", { event: "*", schema: "public", table: "facts" }, () => {
+          fetchWithToken().catch((e) => {
+            if (String(e).includes("unauthorized")) {
+              reauthAndReconnect();
+            }
+          });
+        })
         .subscribe((status) => {
           console.log("[facts-panel] realtime status:", status);
+          if (status === "CLOSED" || status === "TIMED_OUT" || status === "CHANNEL_ERROR") {
+            reauthAndReconnect();
+          }
         });
 
       return () => {
@@ -158,7 +192,7 @@ export default function FactsPanel() {
     };
 
     let cleanup: (() => void) | undefined;
-    init().then((fn) => {
+    connect(supabaseToken).then((fn) => {
       cleanup = fn;
     });
 
@@ -166,7 +200,7 @@ export default function FactsPanel() {
       cancelled = true;
       cleanup?.();
     };
-  }, [supabaseToken]);
+  }, [supabaseToken, outsetaToken]);
 
   return (
     <main
