@@ -64,6 +64,7 @@ export default function FactsPanel() {
       if (data.type === "outseta-token" && typeof data.token === "string") {
         console.log("[facts-panel] received outseta-token via postMessage; length:", data.token.length);
         setOutsetaToken(data.token);
+        setLastStatus("auth token received");
       }
     };
 
@@ -82,10 +83,9 @@ export default function FactsPanel() {
     if (urlToken) {
       console.log("[facts-panel] using outseta_token from URL param; length:", urlToken.length);
       setOutsetaToken(urlToken);
+      setLastStatus("auth token (url) received");
     } else {
-      // Ask parent if we don't have a token
       requestTokenFromParent();
-      // Also fetch anon so we render something even before token arrives
       fetchFacts(null, "no-token");
     }
 
@@ -111,7 +111,7 @@ export default function FactsPanel() {
         if (!res.ok) throw new Error(json?.error || `Exchange failed (status ${res.status})`);
         if (!json?.access_token) throw new Error("Exchange missing access_token");
         setSupabaseToken(json.access_token);
-        setLastStatus("exchanged");
+        setLastStatus("exchanged (token)");
       } catch (e) {
         setError(String(e));
         setLastStatus("exchange error");
@@ -157,7 +157,10 @@ export default function FactsPanel() {
           .then(async (res) => {
             if (res.status === 401) throw new Error("unauthorized");
             const json = await res.json();
-            if (!cancelled) setFacts(json.facts ?? []);
+            if (!cancelled) {
+              setFacts(json.facts ?? []);
+              setLastStatus("ok (token)");
+            }
           })
           .catch((e) => {
             if (!cancelled) setError(String(e));
