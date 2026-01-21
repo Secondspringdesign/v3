@@ -54,6 +54,10 @@ export default function FactsPanel() {
       }
     })();
 
+    const requestTokenFromParent = () => {
+      window.parent?.postMessage({ type: "request-token" }, "*");
+    };
+
     const handleMessage = (event: MessageEvent) => {
       const data = event.data;
       if (!data || typeof data !== "object") return;
@@ -63,17 +67,34 @@ export default function FactsPanel() {
       }
     };
 
+    const onFocus = () => {
+      if (!outsetaToken) requestTokenFromParent();
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible" && !outsetaToken) requestTokenFromParent();
+    };
+
     window.addEventListener("message", handleMessage);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
 
     if (urlToken) {
       console.log("[facts-panel] using outseta_token from URL param; length:", urlToken.length);
       setOutsetaToken(urlToken);
     } else {
+      // Ask parent if we don't have a token
+      requestTokenFromParent();
+      // Also fetch anon so we render something even before token arrives
       fetchFacts(null, "no-token");
     }
 
-    return () => window.removeEventListener("message", handleMessage);
-  }, []);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [outsetaToken]);
 
   useEffect(() => {
     if (!outsetaToken) return;
