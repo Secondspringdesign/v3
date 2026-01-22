@@ -27,24 +27,13 @@ export default function FactsPanel() {
   const [supabaseToken, setSupabaseToken] = useState<string | null>(null);
   const reconnectingRef = useRef(false);
 
-  useEffect(() => {
-    const fetchFacts = async (token: string | null, label: string) => {
-      try {
-        setLastStatus(`fetching (${label})`);
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (token) headers["Authorization"] = `Bearer ${token}`;
-        const res = await fetch("/api/facts", { headers });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json?.error || `Failed to fetch facts (status ${res.status})`);
-        setFacts(json.facts ?? []);
-        setError(null);
-        setLastStatus(`ok (${label})`);
-      } catch (e) {
-        setError(String(e));
-        setLastStatus(`error (${label})`);
-      }
-    };
+  // --- utils ---
+  const requestTokenFromParent = () => {
+    window.parent?.postMessage({ type: "request-token" }, "*");
+  };
 
+  // --- first effect: get outseta token, base fetch without token ---
+  useEffect(() => {
     const urlToken = (() => {
       try {
         const u = new URL(window.location.href);
@@ -53,10 +42,6 @@ export default function FactsPanel() {
         return null;
       }
     })();
-
-    const requestTokenFromParent = () => {
-      window.parent?.postMessage({ type: "request-token" }, "*");
-    };
 
     const handleMessage = (event: MessageEvent) => {
       const data = event.data;
@@ -69,11 +54,14 @@ export default function FactsPanel() {
     };
 
     const onFocus = () => {
-      if (!outsetaToken) requestTokenFromParent();
+      // Always re-request on focus (tab wake)
+      requestTokenFromParent();
     };
 
     const onVisibility = () => {
-      if (document.visibilityState === "visible" && !outsetaToken) requestTokenFromParent();
+      if (document.visibilityState === "visible") {
+        requestTokenFromParent();
+      }
     };
 
     window.addEventListener("message", handleMessage);
@@ -86,7 +74,18 @@ export default function FactsPanel() {
       setLastStatus("auth token (url) received");
     } else {
       requestTokenFromParent();
-      fetchFacts(null, "no-token");
+      // initial anonymous fetch to populate if possible
+      fetch("/api/facts")
+        .then((r) => r.json())
+        .then((json) => {
+          setFacts(json.facts ?? []);
+          setError(null);
+          setLastStatus("ok (no-token)");
+        })
+        .catch((e) => {
+          setError(String(e));
+          setLastStatus("error (no-token)");
+        });
     }
 
     return () => {
@@ -94,8 +93,9 @@ export default function FactsPanel() {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [outsetaToken]);
+  }, []);
 
+  // --- exchange outseta -> supabase ---
   useEffect(() => {
     if (!outsetaToken) return;
 
@@ -108,19 +108,24 @@ export default function FactsPanel() {
           body: JSON.stringify({ token: outsetaToken }),
         });
         const json = await res.json();
-        if (!res.ok) throw new Error(json?.error || `Exchange failed (status ${res.status})`);
-        if (!json?.access_token) throw new Error("Exchange missing access_token");
+        if (!res.ok || !json?.access_token) {
+          throw new Error(json?.error || `Exchange failed (status ${res.status})`);
+        }
         setSupabaseToken(json.access_token);
         setLastStatus("exchanged (token)");
+        setError(null);
       } catch (e) {
         setError(String(e));
-        setLastStatus("exchange error");
+        setLastStatus("exchange error; retrying");
+        // Ask parent for a fresh token and let effect rerun
+        requestTokenFromParent();
       }
     };
 
     exchangeToken();
   }, [outsetaToken]);
 
+  // --- supabase connection + realtime + guarded re-exchange ---
   useEffect(() => {
     if (!supabaseToken) return;
 
@@ -128,20 +133,11 @@ export default function FactsPanel() {
     const { url, key } = requireEnv();
 
     const connect = async (token: string) => {
-      // Fresh client per token
       const supabase = createClient(url, key, {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-          detectSessionInUrl: false,
-        },
+        auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
       });
 
-      await supabase.auth.setSession({
-        access_token: token,
-        refresh_token: "",
-      });
-
+      await supabase.auth.setSession({ access_token: token, refresh_token: "" });
       supabase.realtime.setAuth(token);
       supabase.realtime.connect();
 
@@ -160,6 +156,7 @@ export default function FactsPanel() {
             if (!cancelled) {
               setFacts(json.facts ?? []);
               setLastStatus("ok (token)");
+              setError(null);
             }
           })
           .catch((e) => {
@@ -168,26 +165,17 @@ export default function FactsPanel() {
           });
 
       // Initial load
-      try {
-        await fetchWithToken();
-      } catch {
-        // handled above
-      }
+      fetchWithToken().catch((e) => {
+        if (String(e).includes("unauthorized")) {
+          requestTokenFromParent(); // trigger fresh outseta token
+        }
+      });
 
       const reauthAndReconnect = async () => {
         if (reconnectingRef.current) return;
         reconnectingRef.current = true;
         try {
-          const res = await fetch("/api/auth/supabase-exchange", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token: outsetaToken }),
-          });
-          const json = await res.json();
-          if (!res.ok || !json?.access_token) throw new Error("re-exchange failed");
-          if (!cancelled) setSupabaseToken(json.access_token); // triggers new effect connect
-        } catch (err) {
-          if (!cancelled) setError(String(err));
+          requestTokenFromParent(); // ask parent for a fresh token; exchange effect will run
         } finally {
           reconnectingRef.current = false;
         }
@@ -197,9 +185,7 @@ export default function FactsPanel() {
         .channel("facts-realtime")
         .on("postgres_changes", { event: "*", schema: "public", table: "facts" }, () => {
           fetchWithToken().catch((e) => {
-            if (String(e).includes("unauthorized")) {
-              reauthAndReconnect();
-            }
+            if (String(e).includes("unauthorized")) reauthAndReconnect();
           });
         })
         .subscribe((status) => {
@@ -224,7 +210,7 @@ export default function FactsPanel() {
       cancelled = true;
       cleanup?.();
     };
-  }, [supabaseToken, outsetaToken]);
+  }, [supabaseToken]);
 
   return (
     <main
