@@ -287,31 +287,7 @@ Decisions seem to need:
 
 ---
 
-### 4. Scope for v1
-
-Do we implement all 9 categories now, or start with a subset?
-
-**Suggested v1 - Facts:**
-- ESSENTIALS category containing:
-  - A. Venture Identity (essential)
-  - B. Founder Constraints (SSD differentiator)
-  - C. Customer & Problem (core to planning)
-- OFFER category containing:
-  - D. Offer Facts (needed for feasibility)
-- GO-TO-MARKET category containing:
-  - E. Business Model (revenue, acquisition)
-
-**Suggested v1 - Planner:**
-- Separate `tasks` table (see schema above)
-- Time-based grouping (today, this_week, next)
-- Workflow tags
-
-**Defer to v2:**
-- F. Decision Facts (needs extra structure - maybe a decisions table?)
-- H. Hypothesis (may need separate table with validation criteria)
-- I. Risk Signals (agent-facing, may not need UI)
-
-### 5. Naming Convention
+### 4. Naming Convention
 
 Should we use Eric's semantic names (A-I) or the wireframe's user-friendly names?
 
