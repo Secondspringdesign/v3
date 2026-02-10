@@ -10,9 +10,9 @@ doc_owner: "@jon"
 last_updated: 2026-01-08
 related:
   - title: "Phase 1 Deployment Guide"
-    url: /secondspring-v3/deploy-phase1-foundation/
+    url: /v3/deploy-phase1-foundation/
   - title: "Backend Architecture"
-    url: /secondspring-v3/design-backend-architecture/
+    url: /v3/design-backend-architecture/
 ---
 
 # Deployment Strategy: Pre-Release Testing Environment
@@ -199,9 +199,9 @@ SUPABASE_STUB_MODE=true
 
 ### Phase 6: Documentation
 
-- [ ] Update `docs/deploy-phase1-foundation.md` with staging workflow
-- [ ] Update `.env.example` with staging variables
-- [ ] Create staging verification checklist
+- [x] Update `docs/deploy-phase1-foundation.md` with staging workflow
+- [x] Update `.env.example` with staging variables
+- [x] Create staging verification checklist (see Verification Checklist section)
 
 ---
 

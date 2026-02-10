@@ -10,9 +10,9 @@ doc_owner: "@engineering"
 last_updated: 2026-01-06
 related:
   - title: "Plan: Phase 1 Implementation"
-    url: /secondspring-v3/plan-phase1-implementation/
+    url: /v3/plan-phase1-implementation/
   - title: "PRD: Phase 1 Foundation"
-    url: /secondspring-v3/spec-phase1-foundation/
+    url: /v3/spec-phase1-foundation/
 ---
 
 # Phase 1 Foundation: Deployment Guide
