@@ -33,6 +33,7 @@ CREATE TABLE tasks (
     business_id     UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
     title           TEXT NOT NULL,
     description     TEXT,
+    due_date        DATE,
     due_period      TEXT NOT NULL CHECK (due_period IN ('today', 'this_week', 'next_week')),
     pillar_id       TEXT REFERENCES pillars(id),
     completed       BOOLEAN DEFAULT false,
@@ -45,6 +46,7 @@ CREATE TABLE tasks (
 
 CREATE INDEX idx_tasks_business ON tasks(business_id);
 CREATE INDEX idx_tasks_business_period ON tasks(business_id, due_period) WHERE completed = false;
+CREATE INDEX idx_tasks_business_due_date ON tasks(business_id, due_date) WHERE completed = false;
 
 -- ============================================
 -- GOALS
