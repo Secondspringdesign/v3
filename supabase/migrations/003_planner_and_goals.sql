@@ -1,5 +1,5 @@
 -- ============================================
--- Second Spring - Planner (Tasks) and Goals
+-- Second Spring - Planner and Goals
 -- ============================================
 -- Adds tables for the Planner and Goals sections
 -- of the Business Hub UI (Figma Make v47).
@@ -7,7 +7,7 @@
 
 -- ============================================
 -- PILLARS
--- Shared workflow/domain tags for tasks and goals
+-- Shared workflow/domain tags for planner and goals
 -- ============================================
 CREATE TABLE pillars (
     id            TEXT PRIMARY KEY,
@@ -25,10 +25,10 @@ INSERT INTO pillars (id, name, color, icon, display_order) VALUES
     ('money',     'Money',     'yellow', 'dollar',    4);
 
 -- ============================================
--- TASKS (Planner)
+-- PLANNER
 -- Actionable items grouped by time period
 -- ============================================
-CREATE TABLE tasks (
+CREATE TABLE planner (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     business_id     UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
     title           TEXT NOT NULL,
@@ -44,9 +44,9 @@ CREATE TABLE tasks (
     updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_tasks_business ON tasks(business_id);
-CREATE INDEX idx_tasks_business_period ON tasks(business_id, due_period) WHERE completed = false;
-CREATE INDEX idx_tasks_business_due_date ON tasks(business_id, due_date) WHERE completed = false;
+CREATE INDEX idx_planner_business ON planner(business_id);
+CREATE INDEX idx_planner_business_period ON planner(business_id, due_period) WHERE completed = false;
+CREATE INDEX idx_planner_business_due_date ON planner(business_id, due_date) WHERE completed = false;
 
 -- ============================================
 -- GOALS
@@ -82,12 +82,12 @@ CREATE POLICY "Anyone can read pillars"
     ON pillars FOR SELECT
     USING (true);
 
--- Tasks: users access tasks via their business
-ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tasks FORCE ROW LEVEL SECURITY;
+-- Planner: users access planner items via their business
+ALTER TABLE planner ENABLE ROW LEVEL SECURITY;
+ALTER TABLE planner FORCE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users access own tasks"
-    ON tasks FOR ALL
+CREATE POLICY "Users access own planner items"
+    ON planner FOR ALL
     USING (
         business_id IN (
             SELECT b.id FROM businesses b
@@ -113,8 +113,8 @@ CREATE POLICY "Users access own goals"
 -- ============================================
 -- UPDATED_AT TRIGGERS
 -- ============================================
-CREATE TRIGGER tasks_updated_at
-    BEFORE UPDATE ON tasks
+CREATE TRIGGER planner_updated_at
+    BEFORE UPDATE ON planner
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 CREATE TRIGGER goals_updated_at
