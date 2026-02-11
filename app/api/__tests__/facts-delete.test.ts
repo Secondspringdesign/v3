@@ -37,6 +37,7 @@ import { DELETE } from '../facts/[factId]/route';
 const mockUser = {
   id: 'user-123',
   outseta_uid: 'outseta-abc',
+  account_uid: null,
   email: 'test@example.com',
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',

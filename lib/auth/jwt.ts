@@ -260,6 +260,19 @@ export function extractEmail(payload: JwtPayload): string | null {
   return typeof email === 'string' ? email : null;
 }
 
+export function extractAccountUid(payload: JwtPayload): string | null {
+  const uid =
+    payload['outseta:accountUid'] ||
+    payload['outseta:accountuid'] ||
+    payload.account_uid ||
+    payload.accountUid ||
+    payload.accountId ||
+    payload.account_id ||
+    null;
+
+  return typeof uid === 'string' ? uid : null;
+}
+
 export function extractTokenFromHeader(headerValue: string | null): string | null {
   if (!headerValue) return null;
   const parts = headerValue.trim().split(/\s+/);

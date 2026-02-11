@@ -43,7 +43,11 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     // Get or create user
-    const user = await UserService.getOrCreate(auth.context.outsetaUid, auth.context.email);
+    const user = await UserService.getOrCreate(
+      auth.context.outsetaUid,
+      auth.context.email,
+      auth.context.accountUid
+    );
 
     // Get or create active business
     const business = await BusinessService.getOrCreateActive(user.id);

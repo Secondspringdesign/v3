@@ -10,6 +10,7 @@
 export interface DbUser {
   id: string;
   outseta_uid: string;
+  account_uid: string | null;
   email: string | null;
   created_at: string;
   updated_at: string;
@@ -17,10 +18,12 @@ export interface DbUser {
 
 export interface UserInsert {
   outseta_uid: string;
+  account_uid?: string | null;
   email?: string | null;
 }
 
 export interface UserUpdate {
+  account_uid?: string | null;
   email?: string | null;
 }
 

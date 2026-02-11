@@ -10,6 +10,7 @@ import {
   verifySupabaseToken,
   extractOutsetaUid,
   extractEmail,
+  extractAccountUid,
   extractTokenFromHeader,
   getCookieValue,
   OUTSETA_COOKIE_NAME,
@@ -92,12 +93,14 @@ export async function authenticateRequest(request: Request): Promise<AuthResult>
   }
 
   const email = extractEmail(result.payload) ?? undefined;
+  const accountUid = extractAccountUid(result.payload) ?? undefined;
 
   return {
     success: true,
     context: {
       outsetaUid,
       email,
+      accountUid,
     },
   };
 }

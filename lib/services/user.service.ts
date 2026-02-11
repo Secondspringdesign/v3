@@ -11,10 +11,15 @@ import type { DbUser, UserInsert, UserUpdate } from '../types/database';
 // Feature flag to stub out Supabase for testing
 const STUB_MODE = process.env.SUPABASE_STUB_MODE === 'true';
 
-function createStubUser(outsetaUid: string, email?: string | null): DbUser {
+function createStubUser(
+  outsetaUid: string,
+  email?: string | null,
+  accountUid?: string | null
+): DbUser {
   return {
     id: 'stub-user-' + outsetaUid,
     outseta_uid: outsetaUid,
+    account_uid: accountUid ?? null,
     email: email ?? 'stub@example.com',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -33,7 +38,7 @@ function createStubUser(outsetaUid: string, email?: string | null): DbUser {
  */
 export async function getByOutsetaUid(outsetaUid: string): Promise<DbUser | null> {
   if (STUB_MODE) {
-    return createStubUser(outsetaUid);
+    return createStubUser(outsetaUid, null, null);
   }
 
   const supabase = getSupabaseClient();
@@ -145,22 +150,34 @@ export async function update(id: string, data: UserUpdate): Promise<DbUser> {
  *
  * @param outsetaUid - The Outseta user identifier
  * @param email - Optional email address
+ * @param accountUid - Optional Outseta account UID (organization/team)
  * @returns The existing or newly created user
  */
 export async function getOrCreate(
   outsetaUid: string,
-  email?: string | null
+  email?: string | null,
+  accountUid?: string | null
 ): Promise<DbUser> {
   if (STUB_MODE) {
-    return createStubUser(outsetaUid, email);
+    return createStubUser(outsetaUid, email, accountUid);
   }
 
   // Try to find existing user first
   const existing = await getByOutsetaUid(outsetaUid);
   if (existing) {
-    // Optionally update email if provided and different
-    if (email && email !== existing.email) {
-      return update(existing.id, { email });
+    // Check if we need to update email or account_uid
+    const needsEmailUpdate = email && email !== existing.email;
+    const needsAccountUpdate = accountUid && !existing.account_uid;
+
+    if (needsEmailUpdate || needsAccountUpdate) {
+      const updateData: UserUpdate = {};
+      if (needsEmailUpdate) {
+        updateData.email = email;
+      }
+      if (needsAccountUpdate) {
+        updateData.account_uid = accountUid;
+      }
+      return update(existing.id, updateData);
     }
     return existing;
   }
@@ -169,6 +186,7 @@ export async function getOrCreate(
   try {
     return await create({
       outseta_uid: outsetaUid,
+      account_uid: accountUid ?? null,
       email: email ?? null,
     });
   } catch (err) {
