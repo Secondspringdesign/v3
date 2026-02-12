@@ -30,13 +30,13 @@ function supabaseAdmin() {
 async function getOrCreateUserAndBusiness(outsetaUid: string, email?: string | null, accountUid?: string | null) {
   const supabase = supabaseAdmin();
 
-  // 1) user
-  let { data: user, error: userErr } = await supabase
+  const { data: userRow, error: userErr } = await supabase
     .from('users')
     .select('id')
     .eq('outseta_uid', outsetaUid)
     .maybeSingle();
   if (userErr) throw userErr;
+  let user = userRow;
 
   if (!user) {
     const { data: insertedUser, error } = await supabase
@@ -52,8 +52,7 @@ async function getOrCreateUserAndBusiness(outsetaUid: string, email?: string | n
     user = insertedUser;
   }
 
-  // 2) active business
-  let { data: biz, error: bizErr } = await supabase
+  const { data: bizRow, error: bizErr } = await supabase
     .from('businesses')
     .select('id')
     .eq('user_id', user.id)
@@ -61,6 +60,7 @@ async function getOrCreateUserAndBusiness(outsetaUid: string, email?: string | n
     .order('created_at', { ascending: true })
     .maybeSingle();
   if (bizErr) throw bizErr;
+  let biz = bizRow;
 
   if (!biz) {
     const { data: insertedBiz, error } = await supabase
@@ -77,25 +77,25 @@ async function getOrCreateUserAndBusiness(outsetaUid: string, email?: string | n
 
 async function getUserBusiness(outsetaUid: string) {
   const supabase = supabaseAdmin();
-  const { data: user, error: userErr } = await supabase
+  const { data: userRow, error: userErr } = await supabase
     .from('users')
     .select('id')
     .eq('outseta_uid', outsetaUid)
     .maybeSingle();
   if (userErr) throw userErr;
-  if (!user) return null;
+  if (!userRow) return null;
 
-  const { data: biz, error: bizErr } = await supabase
+  const { data: bizRow, error: bizErr } = await supabase
     .from('businesses')
     .select('id')
-    .eq('user_id', user.id)
+    .eq('user_id', userRow.id)
     .eq('status', 'active')
     .order('created_at', { ascending: true })
     .maybeSingle();
   if (bizErr) throw bizErr;
-  if (!biz) return null;
+  if (!bizRow) return null;
 
-  return { userId: user.id, businessId: biz.id };
+  return { userId: userRow.id, businessId: bizRow.id };
 }
 
 // GET /api/planner -> list tasks for active business
