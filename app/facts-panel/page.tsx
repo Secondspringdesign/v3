@@ -67,6 +67,7 @@ export default function BusinessHubPanel() {
   const [supabaseToken, setSupabaseToken] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [panelError, setPanelError] = useState<string | null>(null);
 
   const [planner, setPlanner] = useState<PlannerItem[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -74,6 +75,9 @@ export default function BusinessHubPanel() {
   const [documents, setDocuments] = useState<Document[]>([]);
 
   const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskDuePeriod, setNewTaskDuePeriod] = useState<"today" | "this_week" | "next_week">("today");
+  const [newTaskDueDate, setNewTaskDueDate] = useState("");
+
   const reconnectingRef = useRef(false);
   const exchangeAttemptsRef = useRef(0);
 
@@ -92,7 +96,7 @@ export default function BusinessHubPanel() {
     window.parent?.postMessage({ type: "request-token" }, "*");
   };
 
-  // Initial: listen for outseta token; fallback fetch facts without token
+  // Initial: listen for outseta token; baseline facts fetch without token
   useEffect(() => {
     const urlToken = (() => {
       try {
@@ -136,6 +140,7 @@ export default function BusinessHubPanel() {
         .catch((e) => {
           setError(String(e));
           setStatus("error (no-token)");
+          setPanelError("Business data is temporarily unavailable. We'll retry automatically.");
         });
     }
 
@@ -199,28 +204,45 @@ export default function BusinessHubPanel() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${supabaseToken}`,
       };
-      const [plannerRes, goalsRes, factsRes, docsRes] = await Promise.all([
+
+      const fetchDocs = async () => {
+        const res = await fetch("/api/documents", { headers });
+        if (res.status === 401) throw new Error("unauthorized");
+        if (!res.ok) return { documents: [] }; // swallow 404/500 -> empty
+        return res.json();
+      };
+
+      const responses = await Promise.all([
         fetch("/api/planner", { headers }),
         fetch("/api/goals", { headers }),
         fetch("/api/facts", { headers }),
-        fetch("/api/documents", { headers }),
+        fetchDocs(),
       ]);
-      if (plannerRes.status === 401 || goalsRes.status === 401 || factsRes.status === 401 || docsRes.status === 401) {
+
+      const [plannerRes, goalsRes, factsRes] = responses as [Response, Response, Response, unknown];
+
+      const any5xx =
+        plannerRes.status >= 500 || goalsRes.status >= 500 || factsRes.status >= 500 || false;
+
+      if (plannerRes.status === 401 || goalsRes.status === 401 || factsRes.status === 401) {
         throw new Error("unauthorized");
       }
+
       const [plannerJson, goalsJson, factsJson, docsJson] = await Promise.all([
-        plannerRes.json(),
-        goalsRes.json(),
-        factsRes.json(),
-        docsRes.json(),
+        (responses[0] as Response).json(),
+        (responses[1] as Response).json(),
+        (responses[2] as Response).json(),
+        responses[3],
       ]);
+
       if (!cancelled) {
         setPlanner(plannerJson.planner ?? []);
         setGoals(goalsJson.goals ?? []);
         setFacts(factsJson.facts ?? []);
-        setDocuments(docsJson.documents ?? []);
+        setDocuments((docsJson as { documents?: Document[] }).documents ?? []);
         setStatus("ok (token)");
         setError(null);
+        setPanelError(any5xx ? "Business data is temporarily unavailable. We'll retry automatically." : null);
       }
     };
 
@@ -230,7 +252,10 @@ export default function BusinessHubPanel() {
       supabase.realtime.connect();
       await fetchWithToken().catch((e) => {
         if (String(e).includes("unauthorized")) requestTokenFromParent();
-        else setError(String(e));
+        else {
+          setError(String(e));
+          setPanelError("Business data is temporarily unavailable. We'll retry automatically.");
+        }
       });
 
       const subscribeTable = (table: string, onChange: () => void) => {
@@ -252,7 +277,10 @@ export default function BusinessHubPanel() {
         try {
           requestTokenFromParent();
           await sleep(400);
-          fetchWithToken().catch((e) => setError(String(e)));
+          fetchWithToken().catch((e) => {
+            setError(String(e));
+            setPanelError("Business data is temporarily unavailable. We'll retry automatically.");
+          });
         } finally {
           reconnectingRef.current = false;
         }
@@ -298,7 +326,11 @@ export default function BusinessHubPanel() {
     const res = await fetch("/api/planner", {
       method: "POST",
       headers,
-      body: JSON.stringify({ title, due_period: "today" }),
+      body: JSON.stringify({
+        title,
+        due_period: newTaskDuePeriod,
+        due_date: newTaskDueDate || null,
+      }),
     });
     const json = await res.json();
     if (!res.ok) {
@@ -307,6 +339,8 @@ export default function BusinessHubPanel() {
     }
     setPlanner((prev) => [json.planner, ...prev]);
     setNewTaskTitle("");
+    setNewTaskDueDate("");
+    setNewTaskDuePeriod("today");
   };
 
   const togglePlannerTask = async (item: PlannerItem) => {
@@ -332,10 +366,13 @@ export default function BusinessHubPanel() {
     setPlanner((prev) => prev.map((p) => (p.id === item.id ? json.planner : p)));
   };
 
+  const pendingPlanner = planner.filter((p) => !p.completed);
+  const completedPlanner = planner.filter((p) => p.completed);
+
   const groupedPlanner = {
-    today: planner.filter((p) => p.due_period === "today"),
-    this_week: planner.filter((p) => p.due_period === "this_week"),
-    next_week: planner.filter((p) => p.due_period === "next_week"),
+    today: pendingPlanner.filter((p) => p.due_period === "today"),
+    this_week: pendingPlanner.filter((p) => p.due_period === "this_week"),
+    next_week: pendingPlanner.filter((p) => p.due_period === "next_week"),
   };
 
   const groupedGoals = {
@@ -359,19 +396,51 @@ export default function BusinessHubPanel() {
         Status: {status} {error ? `• Error: ${error}` : ""}
       </div>
 
+      {panelError && (
+        <div
+          style={{
+            background: "#fff4e5",
+            color: "#8a4b00",
+            border: "1px solid #f3d19c",
+            borderRadius: 8,
+            padding: "0.75rem",
+            marginBottom: "0.75rem",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+          }}
+        >
+          {panelError}
+        </div>
+      )}
+
       {/* Planner */}
       <Section title="Planner" open={sections.planner.open} onToggle={() => toggleSection("planner")}>
-        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
+        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
           <input
             placeholder="Add a task..."
             value={newTaskTitle}
             onChange={(e) => setNewTaskTitle(e.target.value)}
-            style={{ flex: 1, padding: "0.5rem" }}
+            style={{ flex: "1 1 180px", padding: "0.5rem" }}
+          />
+          <select
+            value={newTaskDuePeriod}
+            onChange={(e) => setNewTaskDuePeriod(e.target.value as PlannerItem["due_period"])}
+            style={{ padding: "0.5rem" }}
+          >
+            <option value="today">Today</option>
+            <option value="this_week">This Week</option>
+            <option value="next_week">Next Week</option>
+          </select>
+          <input
+            type="date"
+            value={newTaskDueDate}
+            onChange={(e) => setNewTaskDueDate(e.target.value)}
+            style={{ padding: "0.5rem" }}
           />
           <button onClick={addPlannerTask} style={{ padding: "0.5rem 0.75rem" }}>
             Add
           </button>
         </div>
+
         {["today", "this_week", "next_week"].map((bucket) => (
           <div key={bucket} style={{ marginBottom: "0.5rem" }}>
             <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
@@ -399,6 +468,9 @@ export default function BusinessHubPanel() {
                   <div style={{ fontWeight: 600, textDecoration: item.completed ? "line-through" : "none" }}>
                     {item.title}
                   </div>
+                  <div style={{ color: "#666", fontSize: "0.9rem" }}>
+                    {item.due_date ? `Due: ${item.due_date}` : ""}
+                  </div>
                   {item.description && (
                     <div style={{ color: "#666", fontSize: "0.9rem" }}>{item.description}</div>
                   )}
@@ -407,6 +479,35 @@ export default function BusinessHubPanel() {
             ))}
           </div>
         ))}
+
+        <div style={{ marginTop: "0.75rem" }}>
+          <div style={{ fontWeight: 700, marginBottom: "0.25rem" }}>Completed</div>
+          {completedPlanner.length === 0 && <div style={{ color: "#777", fontSize: "0.9rem" }}>No completed tasks</div>}
+          {completedPlanner.map((item) => (
+            <div
+              key={item.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                padding: "0.5rem",
+                background: "#f3f3f3",
+                borderRadius: 8,
+                marginBottom: 4,
+                boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+              }}
+            >
+              <input type="checkbox" checked onChange={() => togglePlannerTask(item)} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, textDecoration: "line-through" }}>{item.title}</div>
+                <div style={{ color: "#666", fontSize: "0.9rem" }}>
+                  {item.due_date ? `Due: ${item.due_date}` : ""}
+                  {item.completed_at ? ` • completed: ${new Date(item.completed_at).toLocaleString()}` : ""}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </Section>
 
       {/* Goals */}
@@ -489,7 +590,6 @@ export default function BusinessHubPanel() {
             <div style={{ color: "#888", fontSize: "0.85rem", marginTop: 4 }}>
               Updated: {new Date(d.updated_at).toLocaleString()}
             </div>
-            {/* Copy/view placeholder; download can be added later */}
           </div>
         ))}
       </Section>
