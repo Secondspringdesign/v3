@@ -10,6 +10,7 @@
 export interface DbUser {
   id: string;
   outseta_uid: string;
+  account_uid: string | null;
   email: string | null;
   created_at: string;
   updated_at: string;
@@ -17,10 +18,12 @@ export interface DbUser {
 
 export interface UserInsert {
   outseta_uid: string;
+  account_uid?: string | null;
   email?: string | null;
 }
 
 export interface UserUpdate {
+  account_uid?: string | null;
   email?: string | null;
 }
 
@@ -106,4 +109,107 @@ export interface DocumentUpdate {
   title?: string | null;
   content?: Record<string, unknown> | null;
   version?: number;
+}
+
+// ============================================
+// PILLARS (read-only lookup)
+// ============================================
+
+export type PillarId = 'business' | 'product' | 'marketing' | 'money';
+
+export interface DbPillar {
+  id: PillarId;
+  name: string;
+  color: string | null;
+  icon: string | null;
+  display_order: number;
+  created_at: string;
+}
+
+// ============================================
+// PLANNER
+// ============================================
+
+export type DuePeriod = 'today' | 'this_week' | 'next_week';
+
+export interface DbPlannerItem {
+  id: string;
+  business_id: string;
+  title: string;
+  description: string | null;
+  due_date: string | null; // DATE as ISO string
+  due_period: DuePeriod;
+  pillar_id: PillarId | null;
+  completed: boolean;
+  completed_at: string | null;
+  sort_order: number;
+  source_workflow: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlannerItemInsert {
+  business_id: string;
+  title: string;
+  description?: string | null;
+  due_date?: string | null;
+  due_period: DuePeriod;
+  pillar_id?: PillarId | null;
+  completed?: boolean;
+  sort_order?: number;
+  source_workflow?: string | null;
+}
+
+export interface PlannerItemUpdate {
+  title?: string;
+  description?: string | null;
+  due_date?: string | null;
+  due_period?: DuePeriod;
+  pillar_id?: PillarId | null;
+  completed?: boolean;
+  completed_at?: string | null;
+  sort_order?: number;
+}
+
+// ============================================
+// GOALS
+// ============================================
+
+export type TimeHorizon = 'this_week' | 'this_month' | 'this_quarter';
+export type GoalStatus = 'active' | 'achieved' | 'archived';
+
+export interface DbGoal {
+  id: string;
+  business_id: string;
+  title: string;
+  description: string | null;
+  time_horizon: TimeHorizon;
+  pillar_id: PillarId | null;
+  status: GoalStatus;
+  achieved_at: string | null;
+  sort_order: number;
+  source_workflow: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GoalInsert {
+  business_id: string;
+  title: string;
+  description?: string | null;
+  time_horizon: TimeHorizon;
+  pillar_id?: PillarId | null;
+  status?: GoalStatus;
+  sort_order?: number;
+  source_workflow?: string | null;
+}
+
+export interface GoalUpdate {
+  title?: string;
+  description?: string | null;
+  time_horizon?: TimeHorizon;
+  pillar_id?: PillarId | null;
+  status?: GoalStatus;
+  achieved_at?: string | null;
+  sort_order?: number;
 }

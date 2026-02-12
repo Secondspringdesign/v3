@@ -13,6 +13,7 @@ import type { DbFact } from './database';
 export interface AuthContext {
   outsetaUid: string;
   email?: string;
+  accountUid?: string;
 }
 
 // ============================================
