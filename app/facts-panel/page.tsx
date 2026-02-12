@@ -19,6 +19,8 @@ function requireEnv(): { url: string; key: string } {
   return { url, key };
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export default function FactsPanel() {
   const [facts, setFacts] = useState<Fact[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +28,7 @@ export default function FactsPanel() {
   const [outsetaToken, setOutsetaToken] = useState<string | null>(null);
   const [supabaseToken, setSupabaseToken] = useState<string | null>(null);
   const reconnectingRef = useRef(false);
+  const exchangeAttemptsRef = useRef(0);
 
   // --- utils ---
   const requestTokenFromParent = () => {
@@ -54,7 +57,6 @@ export default function FactsPanel() {
     };
 
     const onFocus = () => {
-      // Always re-request on focus (tab wake)
       requestTokenFromParent();
     };
 
@@ -74,7 +76,6 @@ export default function FactsPanel() {
       setLastStatus("auth token (url) received");
     } else {
       requestTokenFromParent();
-      // initial anonymous fetch to populate if possible
       fetch("/api/facts")
         .then((r) => r.json())
         .then((json) => {
@@ -95,7 +96,7 @@ export default function FactsPanel() {
     };
   }, []);
 
-  // --- exchange outseta -> supabase ---
+  // --- exchange outseta -> supabase (with retry + correct header) ---
   useEffect(() => {
     if (!outsetaToken) return;
 
@@ -104,28 +105,37 @@ export default function FactsPanel() {
         setLastStatus("exchanging");
         const res = await fetch("/api/auth/supabase-exchange", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: outsetaToken }),
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${outsetaToken}`, // ✅ REQUIRED
+          },
         });
         const json = await res.json();
         if (!res.ok || !json?.access_token) {
           throw new Error(json?.error || `Exchange failed (status ${res.status})`);
         }
+        exchangeAttemptsRef.current = 0;
         setSupabaseToken(json.access_token);
         setLastStatus("exchanged (token)");
         setError(null);
       } catch (e) {
+        exchangeAttemptsRef.current += 1;
         setError(String(e));
         setLastStatus("exchange error; retrying");
-        // Ask parent for a fresh token and let effect rerun
         requestTokenFromParent();
+
+        // retry once with short backoff
+        if (exchangeAttemptsRef.current <= 2) {
+          await sleep(400);
+          exchangeToken();
+        }
       }
     };
 
     exchangeToken();
   }, [outsetaToken]);
 
-  // --- supabase connection + realtime + guarded re-exchange ---
+  // --- supabase connection + realtime + retry ---
   useEffect(() => {
     if (!supabaseToken) return;
 
@@ -167,33 +177,43 @@ export default function FactsPanel() {
       // Initial load
       fetchWithToken().catch((e) => {
         if (String(e).includes("unauthorized")) {
-          requestTokenFromParent(); // trigger fresh outseta token
+          requestTokenFromParent();
         }
       });
+
+      let channel = supabase.channel("facts-realtime");
+
+      const subscribe = () => {
+        channel = supabase
+          .channel("facts-realtime")
+          .on("postgres_changes", { event: "*", schema: "public", table: "facts" }, () => {
+            fetchWithToken().catch((e) => {
+              if (String(e).includes("unauthorized")) reauthAndReconnect();
+            });
+          })
+          .subscribe((status) => {
+            console.log("[facts-panel] realtime status:", status);
+            if (status === "CLOSED" || status === "TIMED_OUT" || status === "CHANNEL_ERROR") {
+              reauthAndReconnect();
+            }
+          });
+      };
 
       const reauthAndReconnect = async () => {
         if (reconnectingRef.current) return;
         reconnectingRef.current = true;
         try {
-          requestTokenFromParent(); // ask parent for a fresh token; exchange effect will run
+          // re-request token, then resubscribe after short delay
+          requestTokenFromParent();
+          await sleep(400);
+          supabase.removeChannel(channel);
+          subscribe();
         } finally {
           reconnectingRef.current = false;
         }
       };
 
-      const channel = supabase
-        .channel("facts-realtime")
-        .on("postgres_changes", { event: "*", schema: "public", table: "facts" }, () => {
-          fetchWithToken().catch((e) => {
-            if (String(e).includes("unauthorized")) reauthAndReconnect();
-          });
-        })
-        .subscribe((status) => {
-          console.log("[facts-panel] realtime status:", status);
-          if (status === "CLOSED" || status === "TIMED_OUT" || status === "CHANNEL_ERROR") {
-            reauthAndReconnect();
-          }
-        });
+      subscribe();
 
       return () => {
         supabase.removeChannel(channel);
@@ -224,7 +244,9 @@ export default function FactsPanel() {
     >
       <h1 style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>Context Panel</h1>
       {error && <div style={{ color: "red", marginBottom: "0.5rem" }}>Error: {error}</div>}
-      <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.5rem" }}>Status: {lastStatus}</div>
+      <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.5rem" }}>
+        Status: {lastStatus}
+      </div>
       {facts.length === 0 && !error && <div>No facts yet.</div>}
       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
         {facts.map((f) => (
