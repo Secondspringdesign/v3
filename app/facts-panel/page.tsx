@@ -62,6 +62,22 @@ function requireEnv() {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+function computeDuePeriod(dateStr: string | null): "today" | "this_week" | "next_week" {
+  if (!dateStr) return "today";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const target = new Date(dateStr);
+  target.setHours(0, 0, 0, 0);
+
+  const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
+
+  if (diffDays <= 0) return "today";
+  if (diffDays <= 6) return "this_week";
+  if (diffDays <= 13) return "next_week";
+  return "next_week";
+}
+
 export default function BusinessHubPanel() {
   const [outsetaToken, setOutsetaToken] = useState<string | null>(null);
   const [supabaseToken, setSupabaseToken] = useState<string | null>(null);
@@ -75,7 +91,6 @@ export default function BusinessHubPanel() {
   const [documents, setDocuments] = useState<Document[]>([]);
 
   const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [newTaskDuePeriod, setNewTaskDuePeriod] = useState<"today" | "this_week" | "next_week">("today");
   const [newTaskDueDate, setNewTaskDueDate] = useState("");
 
   const reconnectingRef = useRef(false);
@@ -140,7 +155,9 @@ export default function BusinessHubPanel() {
         .catch((e) => {
           setError(String(e));
           setStatus("error (no-token)");
-          setPanelError("Business data is temporarily unavailable. We'll retry automatically.");
+          setPanelError(
+            "Business data is temporarily unavailable. Our team is working diligently to resolve the issue as quickly as possible.",
+          );
         });
     }
 
@@ -208,7 +225,7 @@ export default function BusinessHubPanel() {
       const fetchDocs = async () => {
         const res = await fetch("/api/documents", { headers });
         if (res.status === 401) throw new Error("unauthorized");
-        if (!res.ok) return { documents: [] }; // swallow 404/500 -> empty
+        if (!res.ok) return { documents: [] }; // swallow non-OK -> empty
         return res.json();
       };
 
@@ -242,7 +259,11 @@ export default function BusinessHubPanel() {
         setDocuments((docsJson as { documents?: Document[] }).documents ?? []);
         setStatus("ok (token)");
         setError(null);
-        setPanelError(any5xx ? "Business data is temporarily unavailable. We'll retry automatically." : null);
+        setPanelError(
+          any5xx
+            ? "Business data is temporarily unavailable. Our team is working diligently to resolve the issue as quickly as possible."
+            : null,
+        );
       }
     };
 
@@ -254,7 +275,9 @@ export default function BusinessHubPanel() {
         if (String(e).includes("unauthorized")) requestTokenFromParent();
         else {
           setError(String(e));
-          setPanelError("Business data is temporarily unavailable. We'll retry automatically.");
+          setPanelError(
+            "Business data is temporarily unavailable. Our team is working diligently to resolve the issue as quickly as possible.",
+          );
         }
       });
 
@@ -279,7 +302,9 @@ export default function BusinessHubPanel() {
           await sleep(400);
           fetchWithToken().catch((e) => {
             setError(String(e));
-            setPanelError("Business data is temporarily unavailable. We'll retry automatically.");
+            setPanelError(
+              "Business data is temporarily unavailable. Our team is working diligently to resolve the issue as quickly as possible.",
+            );
           });
         } finally {
           reconnectingRef.current = false;
@@ -319,6 +344,7 @@ export default function BusinessHubPanel() {
       requestTokenFromParent();
       return;
     }
+    const due_period = computeDuePeriod(newTaskDueDate || null);
     const headers = {
       "Content-Type": "application/json",
       Authorization: `Bearer ${supabaseToken}`,
@@ -328,7 +354,7 @@ export default function BusinessHubPanel() {
       headers,
       body: JSON.stringify({
         title,
-        due_period: newTaskDuePeriod,
+        due_period,
         due_date: newTaskDueDate || null,
       }),
     });
@@ -340,7 +366,6 @@ export default function BusinessHubPanel() {
     setPlanner((prev) => [json.planner, ...prev]);
     setNewTaskTitle("");
     setNewTaskDueDate("");
-    setNewTaskDuePeriod("today");
   };
 
   const togglePlannerTask = async (item: PlannerItem) => {
@@ -408,7 +433,8 @@ export default function BusinessHubPanel() {
             boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
           }}
         >
-          {panelError}
+          Business data is temporarily unavailable. Our team is working diligently to resolve the issue as quickly as
+          possible.
         </div>
       )}
 
@@ -421,15 +447,6 @@ export default function BusinessHubPanel() {
             onChange={(e) => setNewTaskTitle(e.target.value)}
             style={{ flex: "1 1 180px", padding: "0.5rem" }}
           />
-          <select
-            value={newTaskDuePeriod}
-            onChange={(e) => setNewTaskDuePeriod(e.target.value as PlannerItem["due_period"])}
-            style={{ padding: "0.5rem" }}
-          >
-            <option value="today">Today</option>
-            <option value="this_week">This Week</option>
-            <option value="next_week">Next Week</option>
-          </select>
           <input
             type="date"
             value={newTaskDueDate}
