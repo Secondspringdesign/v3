@@ -59,7 +59,7 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     // Resolve user id (Outseta only)
-    const { userId: rawUserId, outsetaSub } = await resolveUserId(request);
+    const { userId: rawUserId } = await resolveUserId(request);
 
     // Strip prior agent suffixes and append current agent
     const agentList = Object.keys(WORKFLOWS)
@@ -71,9 +71,6 @@ export async function POST(request: Request): Promise<Response> {
 
     // Session cookie for stability
     sessionCookie = serializeSessionCookie(namespacedUserId);
-
-    // Fetch facts summary for this user (not sent to ChatKit because 'inputs' is unsupported)
-    await fetchFactsSummary(outsetaSub);
 
     // Call ChatKit Sessions API (original shape)
     const apiUrl = `${DEFAULT_CHATKIT_BASE}/v1/chatkit/sessions`;
@@ -276,49 +273,4 @@ async function resolveUserId(request: Request) {
   }
 
   throw new Error("Invalid authentication token");
-}
-
-/* ---------- Facts fetch + summary (user-scoped via RPC) ---------- */
-async function fetchFactsSummary(outsetaSub: string): Promise<string> {
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceRole) {
-    console.warn("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY; skipping facts injection");
-    return "";
-  }
-
-  try {
-    const res = await fetch(`${url}/rest/v1/rpc/user_facts`, {
-      method: "POST",
-      headers: {
-        apikey: serviceRole,
-        Authorization: `Bearer ${serviceRole}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({ p_sub: outsetaSub }),
-    });
-
-    if (!res.ok) {
-      console.warn("Failed to fetch user_facts:", res.status, await res.text());
-      return "";
-    }
-    const rows = (await res.json()) as Array<{
-      fact_id: string;
-      fact_text: string;
-      source_workflow?: string | null;
-      updated_at?: string | null;
-    }>;
-
-    if (!rows?.length) return "";
-
-    const parts = rows.slice(0, 30).map((r) => {
-      const src = r.source_workflow ? ` (source: ${r.source_workflow})` : "";
-      return `- ${r.fact_id}: ${r.fact_text}${src}`;
-    });
-    return parts.join("\n");
-  } catch (err) {
-    console.warn("Error fetching user_facts:", err);
-    return "";
-  }
 }
