@@ -11,13 +11,28 @@ import type { DbFact, FactInsert, FactUpdate } from "../types/database";
 // Feature flag to stub out Supabase for testing
 const STUB_MODE = process.env.SUPABASE_STUB_MODE === "true";
 
-type FactJoinRow = DbFact & {
-  fact_types?: {
-    id?: string | null;
-    name?: string | null;
-    category_id?: string | null;
-    fact_categories?: { id?: string | null; name?: string | null } | null;
-  } | null;
+type FactCategoriesJoin = {
+  id?: string | null;
+  name?: string | null;
+} | null;
+
+type FactTypesJoin = {
+  id?: string | null;
+  name?: string | null;
+  category_id?: string | null;
+  fact_categories?: FactCategoriesJoin;
+} | null;
+
+type FactQueryRow = {
+  id: string;
+  business_id: string;
+  fact_id: string;
+  fact_value: string;
+  source_workflow: string | null;
+  created_at: string;
+  updated_at: string;
+  fact_type_id: string | null;
+  fact_types?: FactTypesJoin;
 };
 
 function createStubFact(data: FactInsert): DbFact {
@@ -78,7 +93,14 @@ export async function getByBusinessId(businessId: string): Promise<DbFact[]> {
     .from("facts")
     .select(
       `
-      *,
+      id,
+      business_id,
+      fact_id,
+      fact_value,
+      source_workflow,
+      created_at,
+      updated_at,
+      fact_type_id,
       fact_types:facts_fact_type_id_fkey (
         id,
         name,
@@ -94,17 +116,24 @@ export async function getByBusinessId(businessId: string): Promise<DbFact[]> {
     throw new Error(`Failed to fetch facts: ${error.message}`);
   }
 
-  const rows = (data ?? []) as FactJoinRow[];
+  const rows = (data ?? []) as FactQueryRow[];
   return rows.map((r) => {
     const ft = r.fact_types ?? {};
     const fc = ft.fact_categories ?? {};
-    return {
-      ...r,
+    const fact: DbFact = {
+      id: r.id,
+      business_id: r.business_id,
+      fact_id: r.fact_id,
+      fact_value: r.fact_value,
+      source_workflow: r.source_workflow,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
       fact_type_id: ft.id ?? null,
       fact_type_name: ft.name ?? null,
-      category_id: fc.id ?? null,
-      category_name: fc.name ?? null,
-    } as DbFact;
+      category_id: fc?.id ?? null,
+      category_name: fc?.name ?? null,
+    };
+    return fact;
   });
 }
 
