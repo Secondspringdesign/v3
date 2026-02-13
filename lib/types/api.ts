@@ -92,16 +92,22 @@ export type ApiErrorCode =
 
 /** Convert DbFact (with joins) to FactResponse */
 export function toFactResponse(fact: DbFact): FactResponse {
+  const factValue =
+    typeof fact.fact_value === "string"
+      ? fact.fact_value
+      : // backward compatibility if a row still has fact_text
+        (fact as unknown as { fact_text?: string | null }).fact_text ?? "";
+
   return {
     id: fact.id,
     fact_id: fact.fact_id,
-    fact_value: (fact as any).fact_value ?? (fact as any).fact_text ?? "",
+    fact_value: factValue,
     source_workflow: fact.source_workflow ?? null,
     created_at: fact.created_at,
     updated_at: fact.updated_at,
-    fact_type_id: (fact as any).fact_type_id ?? null,
-    fact_type_name: (fact as any).fact_type_name ?? null,
-    category_id: (fact as any).category_id ?? null,
-    category_name: (fact as any).category_name ?? null,
+    fact_type_id: fact.fact_type_id ?? null,
+    fact_type_name: fact.fact_type_name ?? null,
+    category_id: fact.category_id ?? null,
+    category_name: fact.category_name ?? null,
   };
 }
