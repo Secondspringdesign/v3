@@ -11,17 +11,26 @@ import type { DbFact, FactInsert, FactUpdate } from "../types/database";
 // Feature flag to stub out Supabase for testing
 const STUB_MODE = process.env.SUPABASE_STUB_MODE === "true";
 
+type FactJoinRow = DbFact & {
+  fact_types?: {
+    id?: string | null;
+    name?: string | null;
+    category_id?: string | null;
+    fact_categories?: { id?: string | null; name?: string | null } | null;
+  } | null;
+};
+
 function createStubFact(data: FactInsert): DbFact {
   return {
     id: "stub-fact-" + (data.fact_id ?? data.fact_type_id ?? "unknown"),
     business_id: data.business_id,
-    fact_id: data.fact_id ?? "",
-    fact_value: (data as any).fact_value ?? (data as any).fact_text ?? "",
-    fact_type_id: (data as any).fact_type_id ?? null,
+    fact_id: data.fact_id,
+    fact_value: data.fact_value,
+    fact_type_id: data.fact_type_id ?? null,
     source_workflow: data.source_workflow ?? null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-  } as DbFact;
+  };
 }
 
 // ============================================
@@ -79,15 +88,13 @@ export async function getByBusinessId(businessId: string): Promise<DbFact[]> {
     `
     )
     .eq("business_id", businessId)
-    .order("category_name", { foreignTable: "fact_types" }) // noop if missing
     .order("fact_id", { ascending: true });
 
   if (error) {
     throw new Error(`Failed to fetch facts: ${error.message}`);
   }
 
-  // Flatten joins into DbFact-like objects with fact_type_name/category_name
-  const rows = (data ?? []) as any[];
+  const rows = (data ?? []) as FactJoinRow[];
   return rows.map((r) => {
     const ft = r.fact_types ?? {};
     const fc = ft.fact_categories ?? {};
@@ -114,10 +121,12 @@ export async function upsert(data: FactInsert): Promise<DbFact> {
 
   const supabase = getSupabaseClient();
 
-  // Prefer fact_value; keep backward compatibility if fact_text is used upstream
-  const payload: any = {
-    ...data,
-    fact_value: (data as any).fact_value ?? (data as any).fact_text ?? "",
+  const payload: FactInsert = {
+    business_id: data.business_id,
+    fact_id: data.fact_id,
+    fact_value: data.fact_value,
+    source_workflow: data.source_workflow ?? null,
+    fact_type_id: data.fact_type_id ?? null,
   };
 
   const { data: fact, error } = await supabase
@@ -139,9 +148,10 @@ export async function upsert(data: FactInsert): Promise<DbFact> {
 export async function update(id: string, data: FactUpdate): Promise<DbFact> {
   const supabase = getSupabaseClient();
 
-  const payload: any = {
-    ...data,
-    fact_value: (data as any).fact_value ?? (data as any).fact_text ?? undefined,
+  const payload: FactUpdate = {
+    fact_value: data.fact_value,
+    source_workflow: data.source_workflow ?? null,
+    fact_type_id: data.fact_type_id ?? null,
   };
 
   const { data: fact, error } = await supabase.from("facts").update(payload).eq("id", id).select().single();
