@@ -31,7 +31,7 @@ export interface UserUpdate {
 // BUSINESSES
 // ============================================
 
-export type BusinessStatus = 'active' | 'archived';
+export type BusinessStatus = "active" | "archived";
 
 export interface DbBusiness {
   id: string;
@@ -61,25 +61,32 @@ export interface DbFact {
   id: string;
   business_id: string;
   fact_id: string;
-  fact_text: string;
+  fact_value: string; // renamed from fact_text
   source_workflow: string | null;
   created_at: string;
   updated_at: string;
+  fact_type_id: string | null;
+  // joined fields (optional)
+  fact_type_name?: string | null;
+  category_id?: string | null;
+  category_name?: string | null;
 }
 
 export interface FactInsert {
   business_id: string;
   fact_id: string;
-  fact_text: string;
+  fact_value: string;
   source_workflow?: string | null;
+  fact_type_id?: string | null;
 }
 
-/** For upsert operations - same as insert since we use ON CONFLICT */
+/** For upsert operations - same as insert */
 export type FactUpsert = FactInsert;
 
 export interface FactUpdate {
-  fact_text?: string;
+  fact_value?: string;
   source_workflow?: string | null;
+  fact_type_id?: string | null;
 }
 
 // ============================================
@@ -115,7 +122,7 @@ export interface DocumentUpdate {
 // PILLARS (read-only lookup)
 // ============================================
 
-export type PillarId = 'business' | 'product' | 'marketing' | 'money';
+export type PillarId = "business" | "product" | "marketing" | "money";
 
 export interface DbPillar {
   id: PillarId;
@@ -130,7 +137,7 @@ export interface DbPillar {
 // PLANNER
 // ============================================
 
-export type DuePeriod = 'today' | 'this_week' | 'next_week';
+export type DuePeriod = "today" | "this_week" | "next_week";
 
 export interface DbPlannerItem {
   id: string;
@@ -175,8 +182,8 @@ export interface PlannerItemUpdate {
 // GOALS
 // ============================================
 
-export type TimeHorizon = 'this_week' | 'this_month' | 'this_quarter';
-export type GoalStatus = 'active' | 'achieved' | 'archived';
+export type TimeHorizon = "this_week" | "this_month" | "this_quarter";
+export type GoalStatus = "active" | "achieved" | "archived";
 
 export interface DbGoal {
   id: string;
