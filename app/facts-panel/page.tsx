@@ -38,6 +38,8 @@ type Fact = {
   fact_text: string;
   source_workflow?: string | null;
   updated_at?: string | null;
+  // If API later returns category_name, we can use it directly.
+  category_name?: string | null;
 };
 
 type Document = {
@@ -132,9 +134,9 @@ export default function BusinessHubPanel() {
 
   const [plannerBucketsOpen, setPlannerBucketsOpen] = useState<Record<string, boolean>>({
     today: true,
-    this_week: true,
-    next_week: true,
-    completed: true,
+    this_week: false,
+    next_week: false,
+    completed: false,
   });
 
   const [goalBucketsOpen, setGoalBucketsOpen] = useState<Record<string, boolean>>({
@@ -480,23 +482,34 @@ export default function BusinessHubPanel() {
     this_quarter: goals.filter((g) => g.time_horizon === "this_quarter"),
   };
 
+  // Group facts — currently by ID prefix; can switch to category_name when API provides it.
   const factCategories = ["business", "offer", "marketing", "money", "custom"] as const;
   const factsByCategory = factCategories.reduce<Record<string, Fact[]>>((acc, cat) => {
     acc[cat] = [];
     return acc;
   }, {});
   for (const f of facts) {
-    const id = f.fact_id?.toLowerCase() ?? "";
-    if (id.startsWith("business_")) factsByCategory.business.push(f);
-    else if (id.startsWith("offer_")) factsByCategory.offer.push(f);
-    else if (id.startsWith("marketing_")) factsByCategory.marketing.push(f);
-    else if (id.startsWith("money_")) factsByCategory.money.push(f);
-    else factsByCategory.custom.push(f);
+    if (f.category_name) {
+      const key = f.category_name.toLowerCase();
+      if (key === "business") factsByCategory.business.push(f);
+      else if (key === "offer") factsByCategory.offer.push(f);
+      else if (key === "marketing") factsByCategory.marketing.push(f);
+      else if (key === "money") factsByCategory.money.push(f);
+      else factsByCategory.custom.push(f);
+    } else {
+      const id = f.fact_id?.toLowerCase() ?? "";
+      if (id.startsWith("business_")) factsByCategory.business.push(f);
+      else if (id.startsWith("offer_")) factsByCategory.offer.push(f);
+      else if (id.startsWith("marketing_")) factsByCategory.marketing.push(f);
+      else if (id.startsWith("money_")) factsByCategory.money.push(f);
+      else factsByCategory.custom.push(f);
+    }
   }
 
   const renderPlannerBucket = (bucketKey: "today" | "this_week" | "next_week") => {
     const items = groupedPlanner[bucketKey];
     const open = plannerBucketsOpen[bucketKey];
+    const isToday = bucketKey === "today";
     return (
       <div style={{ marginBottom: "0.5rem" }}>
         <div
@@ -512,8 +525,65 @@ export default function BusinessHubPanel() {
           onClick={() => togglePlannerBucket(bucketKey)}
         >
           <span style={{ fontSize: "1rem" }}>{open ? "▾" : "▸"}</span>
-          <span>{bucketHeading(bucketKey)}</span>
+          <span style={{ flex: 1 }}>{bucketHeading(bucketKey)}</span>
+          {isToday && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowNewTaskRow((s) => !s);
+              }}
+              style={{
+                background: "#fff",
+                border: "1px solid #ddd",
+                borderRadius: 16,
+                padding: "0.25rem 0.75rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+              }}
+            >
+              + Add
+            </button>
+          )}
         </div>
+        {isToday && showNewTaskRow && (
+          <div
+            style={{
+              display: "flex",
+              gap: "0.5rem",
+              marginBottom: "0.75rem",
+              flexWrap: "wrap",
+              alignItems: "center",
+              paddingLeft: "1.5rem",
+            }}
+          >
+            <input
+              placeholder="Add a calendar event..."
+              value={newTaskTitle}
+              onChange={(e) => setNewTaskTitle(e.target.value)}
+              style={{ flex: "1 1 180px", padding: "0.5rem" }}
+            />
+            <input
+              type="date"
+              value={newTaskDueDate}
+              onChange={(e) => setNewTaskDueDate(e.target.value)}
+              style={{ padding: "0.5rem" }}
+            />
+            <button onClick={addPlannerTask} style={{ padding: "0.5rem 0.75rem" }}>
+              Add
+            </button>
+            <button
+              onClick={() => {
+                setShowNewTaskRow(false);
+                setNewTaskTitle("");
+                setNewTaskDueDate("");
+              }}
+              style={{ padding: "0.5rem 0.75rem", background: "#f3f3f3", border: "1px solid #ddd" }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
         {open && (
           <div>
             {items.length === 0 && <div style={{ color: "#777", fontSize: "0.9rem" }}>No calendar events</div>}
@@ -611,59 +681,6 @@ export default function BusinessHubPanel() {
 
       {/* Planner */}
       <Section title="Planner" open={sections.planner.open} onToggle={() => toggleSection("planner")}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "0.5rem",
-          }}
-        >
-          <div style={{ fontWeight: 700 }}>Calendar events</div>
-          <button
-            onClick={() => setShowNewTaskRow((s) => !s)}
-            style={{
-              background: "#fff",
-              border: "1px solid #ddd",
-              borderRadius: 16,
-              padding: "0.25rem 0.75rem",
-              fontWeight: 700,
-              cursor: "pointer",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-            }}
-          >
-            + Add
-          </button>
-        </div>
-
-        {showNewTaskRow && (
-          <div
-            style={{
-              display: "flex",
-              gap: "0.5rem",
-              marginBottom: "0.75rem",
-              flexWrap: "wrap",
-              alignItems: "center",
-            }}
-          >
-            <input
-              placeholder="Add a calendar event..."
-              value={newTaskTitle}
-              onChange={(e) => setNewTaskTitle(e.target.value)}
-              style={{ flex: "1 1 180px", padding: "0.5rem" }}
-            />
-            <input
-              type="date"
-              value={newTaskDueDate}
-              onChange={(e) => setNewTaskDueDate(e.target.value)}
-              style={{ padding: "0.5rem" }}
-            />
-            <button onClick={addPlannerTask} style={{ padding: "0.5rem 0.75rem" }}>
-              Add
-            </button>
-          </div>
-        )}
-
         {renderPlannerBucket("today")}
         {renderPlannerBucket("this_week")}
         {renderPlannerBucket("next_week")}
