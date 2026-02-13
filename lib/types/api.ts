@@ -3,7 +3,7 @@
  * See: docs/spec-phase1-foundation.md for API specification
  */
 
-import type { DbFact } from './database';
+import type { DbFact } from "./database";
 
 // ============================================
 // AUTH CONTEXT
@@ -23,18 +23,23 @@ export interface AuthContext {
 /** POST /api/facts - Create or update a fact */
 export interface CreateFactRequest {
   fact_id: string;
-  fact_text: string;
+  fact_value: string;
   source_workflow?: string;
+  fact_type_id?: string | null; // optional: when set, upsert into that predefined slot
 }
 
-/** Fact data returned in API responses (subset of DbFact) */
+/** Fact data returned in API responses (subset of DbFact plus joins) */
 export interface FactResponse {
   id: string;
   fact_id: string;
-  fact_text: string;
+  fact_value: string;
   source_workflow: string | null;
   created_at: string;
   updated_at: string;
+  fact_type_id: string | null;
+  fact_type_name: string | null;
+  category_id: string | null;
+  category_name: string | null;
 }
 
 /** POST /api/facts - Success response */
@@ -74,25 +79,29 @@ export interface ErrorResponse {
 
 /** Common HTTP error codes used in API */
 export type ApiErrorCode =
-  | 'UNAUTHORIZED'
-  | 'INVALID_TOKEN'
-  | 'MISSING_FIELDS'
-  | 'NOT_FOUND'
-  | 'DATABASE_ERROR'
-  | 'INTERNAL_ERROR';
+  | "UNAUTHORIZED"
+  | "INVALID_TOKEN"
+  | "MISSING_FIELDS"
+  | "NOT_FOUND"
+  | "DATABASE_ERROR"
+  | "INTERNAL_ERROR";
 
 // ============================================
 // UTILITY TYPES
 // ============================================
 
-/** Convert DbFact to FactResponse (omits business_id) */
+/** Convert DbFact (with joins) to FactResponse */
 export function toFactResponse(fact: DbFact): FactResponse {
   return {
     id: fact.id,
     fact_id: fact.fact_id,
-    fact_text: fact.fact_text,
-    source_workflow: fact.source_workflow,
+    fact_value: (fact as any).fact_value ?? (fact as any).fact_text ?? "",
+    source_workflow: fact.source_workflow ?? null,
     created_at: fact.created_at,
     updated_at: fact.updated_at,
+    fact_type_id: (fact as any).fact_type_id ?? null,
+    fact_type_name: (fact as any).fact_type_name ?? null,
+    category_id: (fact as any).category_id ?? null,
+    category_name: (fact as any).category_name ?? null,
   };
 }
