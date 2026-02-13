@@ -78,6 +78,15 @@ function computeDuePeriod(dateStr: string | null): "today" | "this_week" | "next
   return "next_week";
 }
 
+function categorizeFact(fact: Fact): "business" | "offer" | "marketing" | "money" | "custom" {
+  const id = fact.fact_id?.toLowerCase() ?? "";
+  if (id.startsWith("business_")) return "business";
+  if (id.startsWith("offer_")) return "offer";
+  if (id.startsWith("marketing_")) return "marketing";
+  if (id.startsWith("money_")) return "money";
+  return "custom";
+}
+
 export default function BusinessHubPanel() {
   const [outsetaToken, setOutsetaToken] = useState<string | null>(null);
   const [supabaseToken, setSupabaseToken] = useState<string | null>(null);
@@ -92,6 +101,7 @@ export default function BusinessHubPanel() {
 
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDueDate, setNewTaskDueDate] = useState("");
+  const [activeTab, setActiveTab] = useState<"facts" | "files">("facts");
 
   const reconnectingRef = useRef(false);
   const exchangeAttemptsRef = useRef(0);
@@ -406,6 +416,15 @@ export default function BusinessHubPanel() {
     this_quarter: goals.filter((g) => g.time_horizon === "this_quarter"),
   };
 
+  const factCategories = ["business", "offer", "marketing", "money", "custom"] as const;
+  const factsByCategory = factCategories.reduce<Record<string, Fact[]>>((acc, cat) => {
+    acc[cat] = [];
+    return acc;
+  }, {});
+  for (const f of facts) {
+    factsByCategory[categorizeFact(f)].push(f);
+  }
+
   return (
     <main
       style={{
@@ -562,54 +581,99 @@ export default function BusinessHubPanel() {
         ))}
       </Section>
 
-      {/* Facts */}
-      <Section title="Facts" open={sections.facts.open} onToggle={() => toggleSection("facts")}>
-        {facts.length === 0 && <div style={{ color: "#777" }}>No facts yet.</div>}
-        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-          {facts.map((f) => (
-            <li
-              key={f.id}
-              style={{
-                marginBottom: "0.75rem",
-                padding: "0.75rem",
-                background: "#fff",
-                borderRadius: "8px",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-              }}
-            >
-              <div style={{ fontWeight: 600 }}>{f.fact_id}</div>
-              <div style={{ marginTop: "0.25rem" }}>{f.fact_text}</div>
-              <div style={{ marginTop: "0.25rem", fontSize: "0.8rem", color: "#666" }}>
-                {f.source_workflow ? `source: ${f.source_workflow}` : "source: n/a"}
-                {f.updated_at ? ` • updated: ${new Date(f.updated_at).toLocaleString()}` : ""}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </Section>
-
-      {/* Files / Documents */}
-      <Section title="Files" open={sections.files.open} onToggle={() => toggleSection("files")}>
-        {documents.length === 0 && <div style={{ color: "#777" }}>No files yet.</div>}
-        {documents.map((d) => (
-          <div
-            key={d.id}
+      {/* Tabs for Facts / Files */}
+      <div style={{ marginTop: "0.5rem", borderTop: "1px solid #e5e5e5", paddingTop: "0.5rem" }}>
+        <div style={{ display: "flex", gap: "0.75rem", marginBottom: "0.5rem" }}>
+          <button
+            onClick={() => setActiveTab("facts")}
             style={{
-              padding: "0.6rem",
-              background: "#fff",
-              borderRadius: 8,
-              marginBottom: 6,
-              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+              border: "none",
+              background: "transparent",
+              borderBottom: activeTab === "facts" ? "2px solid #2563eb" : "2px solid transparent",
+              color: activeTab === "facts" ? "#111" : "#666",
+              paddingBottom: "0.25rem",
+              fontWeight: activeTab === "facts" ? 700 : 600,
+              cursor: "pointer",
             }}
           >
-            <div style={{ fontWeight: 600 }}>{d.title || d.document_type}</div>
-            <div style={{ color: "#666", fontSize: "0.9rem", marginTop: 4 }}>Type: {d.document_type}</div>
-            <div style={{ color: "#888", fontSize: "0.85rem", marginTop: 4 }}>
-              Updated: {new Date(d.updated_at).toLocaleString()}
-            </div>
-          </div>
-        ))}
-      </Section>
+            Facts
+          </button>
+          <button
+            onClick={() => setActiveTab("files")}
+            style={{
+              border: "none",
+              background: "transparent",
+              borderBottom: activeTab === "files" ? "2px solid #2563eb" : "2px solid transparent",
+              color: activeTab === "files" ? "#111" : "#666",
+              paddingBottom: "0.25rem",
+              fontWeight: activeTab === "files" ? 700 : 600,
+              cursor: "pointer",
+            }}
+          >
+            Files
+          </button>
+        </div>
+
+        {activeTab === "facts" ? (
+          <Section title="Facts" open={sections.facts.open} onToggle={() => toggleSection("facts")}>
+            {facts.length === 0 && <div style={{ color: "#777" }}>No facts yet.</div>}
+            {factCategories.map((cat) => (
+              <div key={cat} style={{ marginBottom: "0.5rem" }}>
+                <div style={{ fontWeight: 700, marginBottom: "0.25rem", textTransform: "capitalize" }}>
+                  {cat}
+                </div>
+                {factsByCategory[cat].length === 0 ? (
+                  <div style={{ color: "#777", fontSize: "0.9rem" }}>No facts</div>
+                ) : (
+                  <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                    {factsByCategory[cat].map((f) => (
+                      <li
+                        key={f.id}
+                        style={{
+                          marginBottom: "0.6rem",
+                          padding: "0.65rem",
+                          background: "#fff",
+                          borderRadius: "8px",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                        }}
+                      >
+                        <div style={{ fontWeight: 600 }}>{f.fact_id}</div>
+                        <div style={{ marginTop: "0.25rem" }}>{f.fact_text}</div>
+                        <div style={{ marginTop: "0.25rem", fontSize: "0.8rem", color: "#666" }}>
+                          {f.source_workflow ? `source: ${f.source_workflow}` : "source: n/a"}
+                          {f.updated_at ? ` • updated: ${new Date(f.updated_at).toLocaleString()}` : ""}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </Section>
+        ) : (
+          <Section title="Files" open={sections.files.open} onToggle={() => toggleSection("files")}>
+            {documents.length === 0 && <div style={{ color: "#777" }}>No files yet.</div>}
+            {documents.map((d) => (
+              <div
+                key={d.id}
+                style={{
+                  padding: "0.6rem",
+                  background: "#fff",
+                  borderRadius: 8,
+                  marginBottom: 6,
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                }}
+              >
+                <div style={{ fontWeight: 600 }}>{d.title || d.document_type}</div>
+                <div style={{ color: "#666", fontSize: "0.9rem", marginTop: 4 }}>Type: {d.document_type}</div>
+                <div style={{ color: "#888", fontSize: "0.85rem", marginTop: 4 }}>
+                  Updated: {new Date(d.updated_at).toLocaleString()}
+                </div>
+              </div>
+            ))}
+          </Section>
+        )}
+      </div>
     </main>
   );
 }
