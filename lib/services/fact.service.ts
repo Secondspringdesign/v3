@@ -1,111 +1,104 @@
 /**
  * Fact service for managing business facts
  *
- * Facts are stored per-business with a unique fact_id that supports
- * upsert semantics (update existing fact or create new).
+ * Facts are stored per-business with a unique fact_type_id slot (for predefined types)
+ * and a unique fact_id slot for legacy/custom. We enforce one fact per fact_type_id per business.
  */
 
-import { getSupabaseClient } from '../supabase';
-import type { DbFact, FactInsert, FactUpdate } from '../types/database';
+import { getSupabaseClient } from "../supabase";
+import type { DbFact, FactInsert, FactUpdate } from "../types/database";
 
 // Feature flag to stub out Supabase for testing
-const STUB_MODE = process.env.SUPABASE_STUB_MODE === 'true';
+const STUB_MODE = process.env.SUPABASE_STUB_MODE === "true";
 
 function createStubFact(data: FactInsert): DbFact {
   return {
-    id: 'stub-fact-' + data.fact_id,
+    id: "stub-fact-" + (data.fact_id ?? data.fact_type_id ?? "unknown"),
     business_id: data.business_id,
-    fact_id: data.fact_id,
-    fact_text: data.fact_text,
+    fact_id: data.fact_id ?? "",
+    fact_value: (data as any).fact_value ?? (data as any).fact_text ?? "",
+    fact_type_id: (data as any).fact_type_id ?? null,
     source_workflow: data.source_workflow ?? null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-  };
+  } as DbFact;
 }
 
 // ============================================
 // QUERIES
 // ============================================
 
-/**
- * Get a fact by its internal ID
- *
- * @param id - The internal UUID
- * @returns The fact record or null if not found
- */
 export async function getById(id: string): Promise<DbFact | null> {
   const supabase = getSupabaseClient();
 
-  const { data, error } = await supabase
-    .from('facts')
-    .select('*')
-    .eq('id', id)
-    .single();
+  const { data, error } = await supabase.from("facts").select("*").eq("id", id).single();
 
   if (error) {
-    if (error.code === 'PGRST116') {
-      return null;
-    }
+    if (error.code === "PGRST116") return null;
     throw new Error(`Failed to fetch fact: ${error.message}`);
   }
-
   return data as DbFact;
 }
 
-/**
- * Get a fact by business_id and fact_id
- *
- * @param businessId - The business's internal ID
- * @param factId - The fact identifier (e.g., 'business_name')
- * @returns The fact record or null if not found
- */
-export async function getByFactId(
-  businessId: string,
-  factId: string
-): Promise<DbFact | null> {
+export async function getByFactId(businessId: string, factId: string): Promise<DbFact | null> {
   const supabase = getSupabaseClient();
 
   const { data, error } = await supabase
-    .from('facts')
-    .select('*')
-    .eq('business_id', businessId)
-    .eq('fact_id', factId)
+    .from("facts")
+    .select("*")
+    .eq("business_id", businessId)
+    .eq("fact_id", factId)
     .single();
 
   if (error) {
-    if (error.code === 'PGRST116') {
-      return null;
-    }
+    if (error.code === "PGRST116") return null;
     throw new Error(`Failed to fetch fact: ${error.message}`);
   }
-
   return data as DbFact;
 }
 
 /**
- * Get all facts for a business
- *
- * @param businessId - The business's internal ID
- * @returns Array of fact records, ordered by fact_id
+ * Get all facts for a business, joined with type/category metadata.
  */
 export async function getByBusinessId(businessId: string): Promise<DbFact[]> {
-  if (STUB_MODE) {
-    return []; // No persisted facts in stub mode
-  }
+  if (STUB_MODE) return [];
 
   const supabase = getSupabaseClient();
 
   const { data, error } = await supabase
-    .from('facts')
-    .select('*')
-    .eq('business_id', businessId)
-    .order('fact_id', { ascending: true });
+    .from("facts")
+    .select(
+      `
+      *,
+      fact_types:facts_fact_type_id_fkey (
+        id,
+        name,
+        category_id,
+        fact_categories:fact_categories!fact_types_category_id_fkey ( id, name )
+      )
+    `
+    )
+    .eq("business_id", businessId)
+    .order("category_name", { foreignTable: "fact_types" }) // noop if missing
+    .order("fact_id", { ascending: true });
 
   if (error) {
     throw new Error(`Failed to fetch facts: ${error.message}`);
   }
 
-  return (data ?? []) as DbFact[];
+  // Flatten joins into DbFact-like objects with fact_type_name/category_name
+  const rows = (data ?? []) as any[];
+  return rows.map((r) => {
+    const ft = r.fact_types ?? {};
+    const fc = ft.fact_categories ?? {};
+    return {
+      ...r,
+      fact_type_id: ft.id ?? null,
+      fact_type_name: ft.name ?? null,
+      category_id: fc.id ?? null,
+      category_name: fc.name ?? null,
+    } as DbFact;
+  });
 }
 
 // ============================================
@@ -113,26 +106,24 @@ export async function getByBusinessId(businessId: string): Promise<DbFact[]> {
 // ============================================
 
 /**
- * Upsert a fact (insert or update on conflict)
- *
- * Uses the unique constraint on (business_id, fact_id) to either:
- * - Insert a new fact if fact_id doesn't exist for this business
- * - Update the existing fact if fact_id already exists
- *
- * @param data - Fact data to upsert
- * @returns The created or updated fact
+ * Upsert a fact. If fact_type_id is provided, we rely on the DB unique(business_id, fact_type_id)
+ * to overwrite that slot. If fact_type_id is null, this acts like a custom fact keyed by fact_id.
  */
 export async function upsert(data: FactInsert): Promise<DbFact> {
-  if (STUB_MODE) {
-    return createStubFact(data);
-  }
+  if (STUB_MODE) return createStubFact(data);
 
   const supabase = getSupabaseClient();
 
+  // Prefer fact_value; keep backward compatibility if fact_text is used upstream
+  const payload: any = {
+    ...data,
+    fact_value: (data as any).fact_value ?? (data as any).fact_text ?? "",
+  };
+
   const { data: fact, error } = await supabase
-    .from('facts')
-    .upsert(data, {
-      onConflict: 'business_id,fact_id',
+    .from("facts")
+    .upsert(payload, {
+      onConflict: "business_id,fact_type_id",
       ignoreDuplicates: false,
     })
     .select()
@@ -145,22 +136,15 @@ export async function upsert(data: FactInsert): Promise<DbFact> {
   return fact as DbFact;
 }
 
-/**
- * Update an existing fact by internal ID
- *
- * @param id - The fact's internal ID
- * @param data - Fields to update
- * @returns The updated fact
- */
 export async function update(id: string, data: FactUpdate): Promise<DbFact> {
   const supabase = getSupabaseClient();
 
-  const { data: fact, error } = await supabase
-    .from('facts')
-    .update(data)
-    .eq('id', id)
-    .select()
-    .single();
+  const payload: any = {
+    ...data,
+    fact_value: (data as any).fact_value ?? (data as any).fact_text ?? undefined,
+  };
+
+  const { data: fact, error } = await supabase.from("facts").update(payload).eq("id", id).select().single();
 
   if (error) {
     throw new Error(`Failed to update fact: ${error.message}`);
@@ -169,28 +153,16 @@ export async function update(id: string, data: FactUpdate): Promise<DbFact> {
   return fact as DbFact;
 }
 
-/**
- * Delete a fact by business_id and fact_id
- *
- * @param businessId - The business's internal ID
- * @param factId - The fact identifier to delete
- * @returns true if deleted, false if fact didn't exist
- */
-export async function deleteByFactId(
-  businessId: string,
-  factId: string
-): Promise<boolean> {
-  if (STUB_MODE) {
-    return true; // Always succeed in stub mode
-  }
+export async function deleteByFactId(businessId: string, factId: string): Promise<boolean> {
+  if (STUB_MODE) return true;
 
   const supabase = getSupabaseClient();
 
   const { error, count } = await supabase
-    .from('facts')
-    .delete({ count: 'exact' })
-    .eq('business_id', businessId)
-    .eq('fact_id', factId);
+    .from("facts")
+    .delete({ count: "exact" })
+    .eq("business_id", businessId)
+    .eq("fact_id", factId);
 
   if (error) {
     throw new Error(`Failed to delete fact: ${error.message}`);
@@ -199,19 +171,10 @@ export async function deleteByFactId(
   return (count ?? 0) > 0;
 }
 
-/**
- * Delete a fact by internal ID
- *
- * @param id - The fact's internal ID
- * @returns true if deleted, false if fact didn't exist
- */
 export async function deleteById(id: string): Promise<boolean> {
   const supabase = getSupabaseClient();
 
-  const { error, count } = await supabase
-    .from('facts')
-    .delete({ count: 'exact' })
-    .eq('id', id);
+  const { error, count } = await supabase.from("facts").delete({ count: "exact" }).eq("id", id);
 
   if (error) {
     throw new Error(`Failed to delete fact: ${error.message}`);
