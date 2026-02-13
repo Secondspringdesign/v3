@@ -5,7 +5,7 @@
  * injection into AI conversation context.
  */
 
-import type { DbFact } from '../types/database';
+import type { DbFact } from "../types/database";
 
 // ============================================
 // FORMATTING UTILITIES
@@ -20,9 +20,9 @@ import type { DbFact } from '../types/database';
  */
 function snakeCaseToTitleCase(str: string): string {
   return str
-    .split('_')
+    .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
+    .join(" ");
 }
 
 /**
@@ -37,7 +37,7 @@ function snakeCaseToTitleCase(str: string): string {
  * stripVersionSuffix('business_name') // 'business_name'
  */
 function stripVersionSuffix(factId: string): string {
-  return factId.replace(/_v\d+$/, '');
+  return factId.replace(/_v\d+$/, "");
 }
 
 /**
@@ -66,35 +66,21 @@ export function formatFactLabel(factId: string): string {
  *
  * @param facts - Array of facts to format
  * @returns Markdown string, empty string if no facts
- *
- * @example
- * ```
- * formatForAI([
- *   { fact_id: 'business_name', fact_text: 'Acme Corp', ... },
- *   { fact_id: 'target_audience', fact_text: 'Small businesses', ... },
- * ])
- * // Returns:
- * // ## Business Memory
- * //
- * // **Business Name**: Acme Corp
- * //
- * // **Target Audience**: Small businesses
- * ```
  */
 export function formatForAI(facts: DbFact[]): string {
   if (facts.length === 0) {
-    return '';
+    return "";
   }
 
-  const lines: string[] = ['## Business Memory', ''];
+  const lines: string[] = ["## Business Memory", ""];
 
   for (const fact of facts) {
     const label = formatFactLabel(fact.fact_id);
-    lines.push(`**${label}**: ${fact.fact_text}`);
-    lines.push('');
+    lines.push(`**${label}**: ${fact.fact_value}`);
+    lines.push("");
   }
 
-  return lines.join('\n').trim();
+  return lines.join("\n").trim();
 }
 
 /**
@@ -103,12 +89,12 @@ export function formatForAI(facts: DbFact[]): string {
  * Useful for API responses or client-side processing.
  *
  * @param facts - Array of facts to format
- * @returns Object mapping fact_id to fact_text
+ * @returns Object mapping fact_id to fact_value
  */
 export function formatAsObject(facts: DbFact[]): Record<string, string> {
   const result: Record<string, string> = {};
   for (const fact of facts) {
-    result[fact.fact_id] = fact.fact_text;
+    result[fact.fact_id] = fact.fact_value;
   }
   return result;
 }
