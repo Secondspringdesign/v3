@@ -78,14 +78,28 @@ function computeDuePeriod(dateStr: string | null): "today" | "this_week" | "next
   return "next_week";
 }
 
-function categorizeFact(fact: Fact): "business" | "offer" | "marketing" | "money" | "custom" {
-  const id = fact.fact_id?.toLowerCase() ?? "";
-  if (id.startsWith("business_")) return "business";
-  if (id.startsWith("offer_")) return "offer";
-  if (id.startsWith("marketing_")) return "marketing";
-  if (id.startsWith("money_")) return "money";
-  return "custom";
+function dueLabel(dateStr: string | null): string {
+  if (!dateStr) return "No date";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr);
+  target.setHours(0, 0, 0, 0);
+  const diff = Math.round((target.getTime() - today.getTime()) / 86400000);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Tomorrow";
+  if (diff === -1) return "Yesterday";
+  return target.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
+
+function bucketHeading(bucket: "today" | "this_week" | "next_week") {
+  const today = new Date();
+  const dayName = today.toLocaleDateString(undefined, { weekday: "long" });
+  if (bucket === "today") return `Today (${dayName})`;
+  if (bucket === "this_week") return "This Week";
+  return "Next Week";
+}
+
+type InlineDateState = { id: string; value: string };
 
 export default function BusinessHubPanel() {
   const [outsetaToken, setOutsetaToken] = useState<string | null>(null);
@@ -101,6 +115,9 @@ export default function BusinessHubPanel() {
 
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDueDate, setNewTaskDueDate] = useState("");
+  const [showNewTaskRow, setShowNewTaskRow] = useState(false);
+  const [editingDate, setEditingDate] = useState<InlineDateState | null>(null);
+
   const [activeTab, setActiveTab] = useState<"facts" | "files">("facts");
 
   const reconnectingRef = useRef(false);
@@ -113,8 +130,29 @@ export default function BusinessHubPanel() {
     files: { open: true },
   });
 
+  const [plannerBucketsOpen, setPlannerBucketsOpen] = useState<Record<string, boolean>>({
+    today: true,
+    this_week: true,
+    next_week: true,
+    completed: true,
+  });
+
+  const [goalBucketsOpen, setGoalBucketsOpen] = useState<Record<string, boolean>>({
+    this_week: true,
+    this_month: true,
+    this_quarter: true,
+  });
+
   const toggleSection = (key: string) => {
     setSections((prev) => ({ ...prev, [key]: { open: !prev[key].open } }));
+  };
+
+  const togglePlannerBucket = (key: keyof typeof plannerBucketsOpen) => {
+    setPlannerBucketsOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const toggleGoalBucket = (key: keyof typeof goalBucketsOpen) => {
+    setGoalBucketsOpen((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const requestTokenFromParent = () => {
@@ -370,12 +408,13 @@ export default function BusinessHubPanel() {
     });
     const json = await res.json();
     if (!res.ok) {
-      setError(json?.error || "Failed to create task");
+      setError(json?.error || "Failed to create calendar event");
       return;
     }
     setPlanner((prev) => [json.planner, ...prev]);
     setNewTaskTitle("");
     setNewTaskDueDate("");
+    setShowNewTaskRow(false);
   };
 
   const togglePlannerTask = async (item: PlannerItem) => {
@@ -395,10 +434,35 @@ export default function BusinessHubPanel() {
     });
     const json = await res.json();
     if (!res.ok) {
-      setError(json?.error || "Failed to update task");
+      setError(json?.error || "Failed to update calendar event");
       return;
     }
     setPlanner((prev) => prev.map((p) => (p.id === item.id ? json.planner : p)));
+  };
+
+  const updateDueDate = async (item: PlannerItem, newDate: string) => {
+    if (!supabaseToken) {
+      setError("Missing Supabase token; request auth again.");
+      requestTokenFromParent();
+      return;
+    }
+    const headers = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${supabaseToken}`,
+    };
+    const due_period = computeDuePeriod(newDate || null);
+    const res = await fetch("/api/planner", {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ id: item.id, due_date: newDate || null, due_period }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      setError(json?.error || "Failed to update date");
+      return;
+    }
+    setPlanner((prev) => prev.map((p) => (p.id === item.id ? json.planner : p)));
+    setEditingDate(null);
   };
 
   const pendingPlanner = planner.filter((p) => !p.completed);
@@ -422,8 +486,96 @@ export default function BusinessHubPanel() {
     return acc;
   }, {});
   for (const f of facts) {
-    factsByCategory[categorizeFact(f)].push(f);
+    const id = f.fact_id?.toLowerCase() ?? "";
+    if (id.startsWith("business_")) factsByCategory.business.push(f);
+    else if (id.startsWith("offer_")) factsByCategory.offer.push(f);
+    else if (id.startsWith("marketing_")) factsByCategory.marketing.push(f);
+    else if (id.startsWith("money_")) factsByCategory.money.push(f);
+    else factsByCategory.custom.push(f);
   }
+
+  const renderPlannerBucket = (bucketKey: "today" | "this_week" | "next_week") => {
+    const items = groupedPlanner[bucketKey];
+    const open = plannerBucketsOpen[bucketKey];
+    return (
+      <div style={{ marginBottom: "0.5rem" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.4rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            userSelect: "none",
+            padding: "0.35rem 0",
+          }}
+          onClick={() => togglePlannerBucket(bucketKey)}
+        >
+          <span style={{ fontSize: "1rem" }}>{open ? "▾" : "▸"}</span>
+          <span>{bucketHeading(bucketKey)}</span>
+        </div>
+        {open && (
+          <div>
+            {items.length === 0 && <div style={{ color: "#777", fontSize: "0.9rem" }}>No calendar events</div>}
+            {items.map((item) => (
+              <div
+                key={item.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  padding: "0.5rem",
+                  background: "#fff",
+                  borderRadius: 10,
+                  marginBottom: 6,
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                }}
+              >
+                <input type="checkbox" checked={item.completed} onChange={() => togglePlannerTask(item)} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      textDecoration: item.completed ? "line-through" : "none",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {item.title}
+                  </div>
+                </div>
+                <div style={{ fontSize: "0.9rem", color: "#555", minWidth: 110, textAlign: "right" }}>
+                  {editingDate?.id === item.id ? (
+                    <input
+                      type="date"
+                      value={editingDate.value}
+                      onChange={(e) => setEditingDate({ id: item.id, value: e.target.value })}
+                      onBlur={() => updateDueDate(item, editingDate.value)}
+                      style={{ padding: "0.25rem", fontSize: "0.9rem" }}
+                      autoFocus
+                    />
+                  ) : (
+                    <span
+                      style={{ cursor: "pointer", textDecoration: "underline dotted" }}
+                      onClick={() =>
+                        setEditingDate({
+                          id: item.id,
+                          value: item.due_date ? item.due_date : "",
+                        })
+                      }
+                    >
+                      {dueLabel(item.due_date)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <main
@@ -459,90 +611,107 @@ export default function BusinessHubPanel() {
 
       {/* Planner */}
       <Section title="Planner" open={sections.planner.open} onToggle={() => toggleSection("planner")}>
-        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
-          <input
-            placeholder="Add a task..."
-            value={newTaskTitle}
-            onChange={(e) => setNewTaskTitle(e.target.value)}
-            style={{ flex: "1 1 180px", padding: "0.5rem" }}
-          />
-          <input
-            type="date"
-            value={newTaskDueDate}
-            onChange={(e) => setNewTaskDueDate(e.target.value)}
-            style={{ padding: "0.5rem" }}
-          />
-          <button onClick={addPlannerTask} style={{ padding: "0.5rem 0.75rem" }}>
-            Add
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "0.5rem",
+          }}
+        >
+          <div style={{ fontWeight: 700 }}>Calendar events</div>
+          <button
+            onClick={() => setShowNewTaskRow((s) => !s)}
+            style={{
+              background: "#fff",
+              border: "1px solid #ddd",
+              borderRadius: 16,
+              padding: "0.25rem 0.75rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+            }}
+          >
+            + Add
           </button>
         </div>
 
-        {["today", "this_week", "next_week"].map((bucket) => (
-          <div key={bucket} style={{ marginBottom: "0.5rem" }}>
-            <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
-              {bucket === "today" ? "Today" : bucket === "this_week" ? "This Week" : "Next Week"}
-            </div>
-            {groupedPlanner[bucket as keyof typeof groupedPlanner].length === 0 && (
-              <div style={{ color: "#777", fontSize: "0.9rem" }}>No tasks</div>
-            )}
-            {groupedPlanner[bucket as keyof typeof groupedPlanner].map((item) => (
-              <div
-                key={item.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  padding: "0.5rem",
-                  background: "#fff",
-                  borderRadius: 8,
-                  marginBottom: 4,
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                }}
-              >
-                <input type="checkbox" checked={item.completed} onChange={() => togglePlannerTask(item)} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, textDecoration: item.completed ? "line-through" : "none" }}>
-                    {item.title}
-                  </div>
-                  <div style={{ color: "#666", fontSize: "0.9rem" }}>
-                    {item.due_date ? `Due: ${item.due_date}` : ""}
-                  </div>
-                  {item.description && (
-                    <div style={{ color: "#666", fontSize: "0.9rem" }}>{item.description}</div>
-                  )}
-                </div>
-              </div>
-            ))}
+        {showNewTaskRow && (
+          <div
+            style={{
+              display: "flex",
+              gap: "0.5rem",
+              marginBottom: "0.75rem",
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
+            <input
+              placeholder="Add a calendar event..."
+              value={newTaskTitle}
+              onChange={(e) => setNewTaskTitle(e.target.value)}
+              style={{ flex: "1 1 180px", padding: "0.5rem" }}
+            />
+            <input
+              type="date"
+              value={newTaskDueDate}
+              onChange={(e) => setNewTaskDueDate(e.target.value)}
+              style={{ padding: "0.5rem" }}
+            />
+            <button onClick={addPlannerTask} style={{ padding: "0.5rem 0.75rem" }}>
+              Add
+            </button>
           </div>
-        ))}
+        )}
 
-        <div style={{ marginTop: "0.75rem" }}>
-          <div style={{ fontWeight: 700, marginBottom: "0.25rem" }}>Completed</div>
-          {completedPlanner.length === 0 && <div style={{ color: "#777", fontSize: "0.9rem" }}>No completed tasks</div>}
-          {completedPlanner.map((item) => (
-            <div
-              key={item.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-                padding: "0.5rem",
-                background: "#f3f3f3",
-                borderRadius: 8,
-                marginBottom: 4,
-                boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-              }}
-            >
-              <input type="checkbox" checked onChange={() => togglePlannerTask(item)} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, textDecoration: "line-through" }}>{item.title}</div>
-                <div style={{ color: "#666", fontSize: "0.9rem" }}>
-                  {item.due_date ? `Due: ${item.due_date}` : ""}
-                  {item.completed_at ? ` • completed: ${new Date(item.completed_at).toLocaleString()}` : ""}
+        {renderPlannerBucket("today")}
+        {renderPlannerBucket("this_week")}
+        {renderPlannerBucket("next_week")}
+
+        <div style={{ marginTop: "0.5rem" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              userSelect: "none",
+              padding: "0.35rem 0",
+            }}
+            onClick={() => togglePlannerBucket("completed")}
+          >
+            <span style={{ fontSize: "1rem" }}>{plannerBucketsOpen.completed ? "▾" : "▸"}</span>
+            <span>Completed</span>
+          </div>
+          {plannerBucketsOpen.completed && (
+            <div>
+              {completedPlanner.length === 0 && <div style={{ color: "#777", fontSize: "0.9rem" }}>No completed</div>}
+              {completedPlanner.map((item) => (
+                <div
+                  key={item.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    padding: "0.5rem",
+                    background: "#f3f3f3",
+                    borderRadius: 10,
+                    marginBottom: 6,
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                  }}
+                >
+                  <input type="checkbox" checked onChange={() => togglePlannerTask(item)} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, textDecoration: "line-through" }}>{item.title}</div>
+                  </div>
+                  <div style={{ fontSize: "0.9rem", color: "#666", minWidth: 110, textAlign: "right" }}>
+                    {dueLabel(item.due_date)}
+                  </div>
                 </div>
-              </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       </Section>
 
@@ -550,33 +719,51 @@ export default function BusinessHubPanel() {
       <Section title="Goals" open={sections.goals.open} onToggle={() => toggleSection("goals")}>
         {(["this_week", "this_month", "this_quarter"] as const).map((bucket) => (
           <div key={bucket} style={{ marginBottom: "0.5rem" }}>
-            <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
-              {bucket === "this_week" ? "This Week" : bucket === "this_month" ? "This Month" : "This Quarter"}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                userSelect: "none",
+                padding: "0.35rem 0",
+              }}
+              onClick={() => toggleGoalBucket(bucket)}
+            >
+              <span style={{ fontSize: "1rem" }}>{goalBucketsOpen[bucket] ? "▾" : "▸"}</span>
+              <span>
+                {bucket === "this_week" ? "This Week" : bucket === "this_month" ? "This Month" : "This Quarter"}
+              </span>
             </div>
-            {groupedGoals[bucket].length === 0 && (
-              <div style={{ color: "#777", fontSize: "0.9rem" }}>No goals</div>
-            )}
-            {groupedGoals[bucket].map((g) => (
-              <div
-                key={g.id}
-                style={{
-                  padding: "0.6rem",
-                  background: "#fff",
-                  borderRadius: 8,
-                  marginBottom: 4,
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                }}
-              >
-                <div style={{ fontWeight: 600 }}>{g.title}</div>
-                {g.description && (
-                  <div style={{ color: "#666", fontSize: "0.9rem", marginTop: 4 }}>{g.description}</div>
+            {goalBucketsOpen[bucket] && (
+              <>
+                {groupedGoals[bucket].length === 0 && (
+                  <div style={{ color: "#777", fontSize: "0.9rem" }}>No goals</div>
                 )}
-                <div style={{ color: "#888", fontSize: "0.85rem", marginTop: 4 }}>
-                  Status: {g.status}
-                  {g.achieved_at ? ` • achieved ${new Date(g.achieved_at).toLocaleDateString()}` : ""}
-                </div>
-              </div>
-            ))}
+                {groupedGoals[bucket].map((g) => (
+                  <div
+                    key={g.id}
+                    style={{
+                      padding: "0.6rem",
+                      background: "#fff",
+                      borderRadius: 8,
+                      marginBottom: 4,
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                    }}
+                  >
+                    <div style={{ fontWeight: 600 }}>{g.title}</div>
+                    {g.description && (
+                      <div style={{ color: "#666", fontSize: "0.9rem", marginTop: 4 }}>{g.description}</div>
+                    )}
+                    <div style={{ color: "#888", fontSize: "0.85rem", marginTop: 4 }}>
+                      Status: {g.status}
+                      {g.achieved_at ? ` • achieved ${new Date(g.achieved_at).toLocaleDateString()}` : ""}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         ))}
       </Section>
