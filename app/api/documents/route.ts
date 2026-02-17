@@ -1,41 +1,75 @@
-import { NextResponse } from "next/server";
-// TODO: adjust these imports to your actual helpers
-import { getSupabaseClient } from "@/lib/supabase"; // or "@/lib/supabase/server"
-import { getUserFromRequest } from "@/lib/auth";    // whatever you use to get the user
+export const runtime = 'edge';
 
-export async function GET(req: Request) {
+import { createClient } from '@supabase/supabase-js';
+import { authenticateRequest, errorResponse, jsonResponse } from '@/lib/auth/middleware';
+
+function requireEnv() {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url) throw new Error('Missing SUPABASE_URL/NEXT_PUBLIC_SUPABASE_URL');
+  if (!key) throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY');
+  return { url, key };
+}
+
+function supabaseAdmin() {
+  const { url, key } = requireEnv();
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+}
+
+async function getUserBusiness(outsetaUid: string) {
+  const supabase = supabaseAdmin();
+  const { data: userRow, error: userErr } = await supabase
+    .from('users')
+    .select('id')
+    .eq('outseta_uid', outsetaUid)
+    .maybeSingle();
+  if (userErr) throw userErr;
+  if (!userRow) return null;
+
+  const { data: bizRow, error: bizErr } = await supabase
+    .from('businesses')
+    .select('id')
+    .eq('user_id', userRow.id)
+    .eq('status', 'active')
+    .order('created_at', { ascending: true })
+    .maybeSingle();
+  if (bizErr) throw bizErr;
+  if (!bizRow) return null;
+
+  return { userId: userRow.id, businessId: bizRow.id };
+}
+
+// GET /api/documents -> list documents for active business
+export async function GET(request: Request): Promise<Response> {
+  const auth = await authenticateRequest(request);
+  if (!auth.success) return errorResponse(auth.error, auth.status, 'UNAUTHORIZED');
+
   try {
-    const user = await getUserFromRequest(req);
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const ctx = await getUserBusiness(auth.context.outsetaUid);
+    if (!ctx) return jsonResponse({ documents: [] });
 
-    const supabase = getSupabaseClient();
-
+    const supabase = supabaseAdmin();
     const { data, error } = await supabase
-      .from("documents")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
+      .from('documents')
+      .select('*')
+      .eq('business_id', ctx.businessId)
+      .order('created_at', { ascending: false });
 
-    // Treat "no rows" as empty list
     if (error) {
-      if (error.code === "PGRST116") {
-        return NextResponse.json({ documents: [] }, { status: 200 });
-      }
-      console.error("documents GET error", error);
-      return NextResponse.json(
-        { documents: [], error: "Failed to fetch documents", code: "DATABASE_ERROR" },
-        { status: 200 } // soften to 200 so UI doesn't show a banner
+      console.error('documents GET error:', error.message ?? error);
+      return jsonResponse(
+        { documents: [], error: 'Failed to fetch documents', code: 'DATABASE_ERROR' },
+        200,
       );
     }
 
-    return NextResponse.json({ documents: data ?? [] }, { status: 200 });
+    return jsonResponse({ documents: data ?? [] });
   } catch (err) {
-    console.error("documents GET unknown error", err);
-    return NextResponse.json(
-      { documents: [], error: "Failed to fetch documents", code: "DATABASE_ERROR" },
-      { status: 200 } // soften to 200 for empty state
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error('documents GET error:', message);
+    return jsonResponse(
+      { documents: [], error: 'Failed to fetch documents', code: 'DATABASE_ERROR' },
+      200,
     );
   }
 }
