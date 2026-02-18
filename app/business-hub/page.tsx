@@ -35,11 +35,13 @@ type Goal = {
 type Fact = {
   id: string;
   fact_id: string;
-  fact_text: string;
+  fact_value: string;
   source_workflow?: string | null;
   updated_at?: string | null;
-  // If API later returns category_name, we can use it directly.
   category_name?: string | null;
+  fact_type_name?: string | null;
+  fact_type_id?: string | null;
+  description?: string | null;
 };
 
 type Document = {
@@ -53,6 +55,47 @@ type Document = {
 };
 
 type SectionState = { open: boolean };
+
+// Predefined fact slots - all 28 fact types grouped by category
+const PREDEFINED_FACT_SLOTS: Record<string, Array<{fact_type_id: string; label: string; description: string}>> = {
+  business: [
+    { fact_type_id: "business_name", label: "Business Name", description: "The name of the venture" },
+    { fact_type_id: "core_problem", label: "Core Problem", description: "The core problem you are solving" },
+    { fact_type_id: "vision_statement", label: "Vision Statement", description: "Where you're headed; aspirational future state" },
+    { fact_type_id: "target_customer", label: "Target Customer", description: "Who the product or service is for" },
+    { fact_type_id: "market_size", label: "Market Size", description: "How big the market/opportunity is" },
+    { fact_type_id: "primary_competitors", label: "Primary Competitors", description: "Top competitors or alternatives" },
+    { fact_type_id: "founder_background_summary", label: "Founder Background", description: "Relevant founder experience and context" },
+  ],
+  offer: [
+    { fact_type_id: "offer_summary", label: "Offer Summary", description: "Short description of what you sell" },
+    { fact_type_id: "core_benefits_outcomes", label: "Core Benefits & Outcomes", description: "Outcomes/benefits the offer delivers" },
+    { fact_type_id: "value_proposition", label: "Value Proposition", description: "Why choose this over alternatives" },
+    { fact_type_id: "pricing_model", label: "Pricing Model", description: "How the product or service is priced" },
+    { fact_type_id: "positioning_statement", label: "Positioning Statement", description: "How you position vs. the market" },
+  ],
+  marketing: [
+    { fact_type_id: "brand_voice", label: "Brand Voice", description: "How the brand sounds when it communicates" },
+    { fact_type_id: "brand_tone", label: "Brand Tone", description: "Emotional quality of the brand communication" },
+    { fact_type_id: "brand_personality_traits", label: "Brand Personality Traits", description: "Brand character traits" },
+    { fact_type_id: "elevator_pitch", label: "Elevator Pitch", description: "One-sentence pitch" },
+    { fact_type_id: "primary_channels", label: "Primary Channels", description: "Where you reach/engage customers" },
+    { fact_type_id: "growth_loop_hypothesis", label: "Growth Loop Hypothesis", description: "How growth may reinforce itself" },
+  ],
+  money: [
+    { fact_type_id: "startup_costs", label: "Startup Costs", description: "Initial capital required to launch" },
+    { fact_type_id: "runway", label: "Runway", description: "Months of runway; burn vs. cash" },
+    { fact_type_id: "revenue_streams", label: "Revenue Streams", description: "Sources of income for the business" },
+    { fact_type_id: "unit_economics", label: "Unit Economics", description: "Key unit economics (e.g., CAC, LTV, gross margin)" },
+  ],
+  operations: [
+    { fact_type_id: "key_tools_stack", label: "Key Tools Stack", description: "Core software/tools and their primary use" },
+    { fact_type_id: "standard_operating_procedures_links", label: "SOP Links", description: "Where SOP docs live / key processes" },
+    { fact_type_id: "customer_support_guidelines", label: "Customer Support Guidelines", description: "SLAs, escalation, tone" },
+    { fact_type_id: "legal_entity_structure", label: "Legal Entity Structure", description: "LLC/C-Corp/etc., jurisdiction, key contracts" },
+    { fact_type_id: "intellectual_property_summary", label: "IP Summary", description: "Trademarks, patents, key domains" },
+  ],
+};
 
 function requireEnv() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -119,6 +162,10 @@ export default function BusinessHubPanel() {
   const [newTaskDueDate, setNewTaskDueDate] = useState("");
   const [showNewTaskRow, setShowNewTaskRow] = useState(false);
   const [editingDate, setEditingDate] = useState<InlineDateState | null>(null);
+
+  // State for inline fact editing
+  const [editingFact, setEditingFact] = useState<{ factTypeId: string; value: string } | null>(null);
+  const [savingFact, setSavingFact] = useState(false);
 
   const [activeTab, setActiveTab] = useState<"facts" | "files">("facts");
 
@@ -467,6 +514,59 @@ export default function BusinessHubPanel() {
     setEditingDate(null);
   };
 
+  // Handler for saving a fact (create or update)
+  const saveFact = async (factTypeId: string, factValue: string, existingFactId?: string) => {
+    if (!outsetaToken) {
+      setError("Missing auth token; request auth again.");
+      requestTokenFromParent();
+      return;
+    }
+    
+    setSavingFact(true);
+    try {
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${outsetaToken}`,
+      };
+      
+      const body = {
+        fact_id: existingFactId || factTypeId,
+        fact_value: factValue.trim(),
+        fact_type_id: factTypeId,
+      };
+      
+      const res = await fetch("/api/facts", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+      
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json?.error || "Failed to save fact");
+        return;
+      }
+      
+      // Update local state
+      setFacts((prev) => {
+        const existing = prev.find((f) => f.fact_type_id === factTypeId || f.fact_id === factTypeId);
+        if (existing) {
+          return prev.map((f) => 
+            (f.fact_type_id === factTypeId || f.fact_id === factTypeId) ? json.fact : f
+          );
+        } else {
+          return [...prev, json.fact];
+        }
+      });
+      
+      setEditingFact(null);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSavingFact(false);
+    }
+  };
+
   const pendingPlanner = planner.filter((p) => !p.completed);
   const completedPlanner = planner.filter((p) => p.completed);
 
@@ -483,7 +583,7 @@ export default function BusinessHubPanel() {
   };
 
   // Group facts — currently by ID prefix; can switch to category_name when API provides it.
-  const factCategories = ["business", "offer", "marketing", "money", "custom"] as const;
+  const factCategories = ["business", "offer", "marketing", "money", "operations", "custom"] as const;
   const factsByCategory = factCategories.reduce<Record<string, Fact[]>>((acc, cat) => {
     acc[cat] = [];
     return acc;
@@ -495,6 +595,7 @@ export default function BusinessHubPanel() {
       else if (key === "offer") factsByCategory.offer.push(f);
       else if (key === "marketing") factsByCategory.marketing.push(f);
       else if (key === "money") factsByCategory.money.push(f);
+      else if (key === "operations") factsByCategory.operations.push(f);
       else factsByCategory.custom.push(f);
     } else {
       const id = f.fact_id?.toLowerCase() ?? "";
@@ -502,6 +603,7 @@ export default function BusinessHubPanel() {
       else if (id.startsWith("offer_")) factsByCategory.offer.push(f);
       else if (id.startsWith("marketing_")) factsByCategory.marketing.push(f);
       else if (id.startsWith("money_")) factsByCategory.money.push(f);
+      else if (id.startsWith("key_tools_") || id.startsWith("standard_operating_") || id.startsWith("customer_support_") || id.startsWith("legal_entity_") || id.startsWith("intellectual_property_")) factsByCategory.operations.push(f);
       else factsByCategory.custom.push(f);
     }
   }
@@ -820,39 +922,165 @@ export default function BusinessHubPanel() {
 
         {activeTab === "facts" ? (
           <Section title="Facts" open={sections.facts.open} onToggle={() => toggleSection("facts")}>
-            {facts.length === 0 && <div style={{ color: "#777" }}>No facts yet.</div>}
-            {factCategories.map((cat) => (
-              <div key={cat} style={{ marginBottom: "0.5rem" }}>
-                <div style={{ fontWeight: 700, marginBottom: "0.25rem", textTransform: "capitalize" }}>
-                  {cat}
-                </div>
-                {factsByCategory[cat].length === 0 ? (
-                  <div style={{ color: "#777", fontSize: "0.9rem" }}>No facts</div>
-                ) : (
+            {factCategories.map((cat) => {
+              if (cat === "custom") {
+                // Custom facts: show only those that don't match predefined slots
+                const customFacts = factsByCategory[cat];
+                if (customFacts.length === 0) return null;
+                
+                return (
+                  <div key={cat} style={{ marginBottom: "1rem" }}>
+                    <div style={{ fontWeight: 700, marginBottom: "0.5rem", textTransform: "capitalize" }}>
+                      {cat}
+                    </div>
+                    <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                      {customFacts.map((f) => (
+                        <li
+                          key={f.id}
+                          style={{
+                            marginBottom: "0.6rem",
+                            padding: "0.65rem",
+                            background: "#fff",
+                            borderRadius: "8px",
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                          }}
+                        >
+                          <div style={{ fontWeight: 600 }}>{f.fact_id}</div>
+                          <div style={{ marginTop: "0.25rem" }}>{f.fact_value}</div>
+                          <div style={{ marginTop: "0.25rem", fontSize: "0.8rem", color: "#666" }}>
+                            {f.source_workflow ? `source: ${f.source_workflow}` : "source: n/a"}
+                            {f.updated_at ? ` • updated: ${new Date(f.updated_at).toLocaleString()}` : ""}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              }
+              
+              // For predefined categories, show all slots
+              const predefinedSlots = PREDEFINED_FACT_SLOTS[cat] || [];
+              if (predefinedSlots.length === 0) return null;
+              
+              return (
+                <div key={cat} style={{ marginBottom: "1rem" }}>
+                  <div style={{ fontWeight: 700, marginBottom: "0.5rem", textTransform: "capitalize" }}>
+                    {cat}
+                  </div>
                   <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                    {factsByCategory[cat].map((f) => (
-                      <li
-                        key={f.id}
-                        style={{
-                          marginBottom: "0.6rem",
-                          padding: "0.65rem",
-                          background: "#fff",
-                          borderRadius: "8px",
-                          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                        }}
-                      >
-                        <div style={{ fontWeight: 600 }}>{f.fact_id}</div>
-                        <div style={{ marginTop: "0.25rem" }}>{f.fact_text}</div>
-                        <div style={{ marginTop: "0.25rem", fontSize: "0.8rem", color: "#666" }}>
-                          {f.source_workflow ? `source: ${f.source_workflow}` : "source: n/a"}
-                          {f.updated_at ? ` • updated: ${new Date(f.updated_at).toLocaleString()}` : ""}
-                        </div>
-                      </li>
-                    ))}
+                    {predefinedSlots.map((slot) => {
+                      const existingFact = facts.find((f) => 
+                        f.fact_type_id === slot.fact_type_id || f.fact_id === slot.fact_type_id
+                      );
+                      const isEditing = editingFact?.factTypeId === slot.fact_type_id;
+                      
+                      return (
+                        <li
+                          key={slot.fact_type_id}
+                          style={{
+                            marginBottom: "0.6rem",
+                            padding: "0.65rem",
+                            background: "#fff",
+                            borderRadius: "8px",
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 600 }}>{slot.label}</div>
+                              {isEditing ? (
+                                <div style={{ marginTop: "0.5rem" }}>
+                                  <textarea
+                                    value={editingFact.value}
+                                    onChange={(e) => setEditingFact({ factTypeId: slot.fact_type_id, value: e.target.value })}
+                                    style={{
+                                      width: "100%",
+                                      minHeight: "80px",
+                                      padding: "0.5rem",
+                                      border: "1px solid #ccc",
+                                      borderRadius: "4px",
+                                      fontFamily: "inherit",
+                                      fontSize: "0.9rem",
+                                    }}
+                                    autoFocus
+                                  />
+                                  <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+                                    <button
+                                      onClick={() => saveFact(slot.fact_type_id, editingFact.value, existingFact?.fact_id)}
+                                      disabled={savingFact}
+                                      style={{
+                                        padding: "0.4rem 0.75rem",
+                                        background: "#2563eb",
+                                        color: "#fff",
+                                        border: "none",
+                                        borderRadius: "4px",
+                                        cursor: savingFact ? "not-allowed" : "pointer",
+                                        fontSize: "0.85rem",
+                                      }}
+                                    >
+                                      {savingFact ? "Saving..." : "Save"}
+                                    </button>
+                                    <button
+                                      onClick={() => setEditingFact(null)}
+                                      disabled={savingFact}
+                                      style={{
+                                        padding: "0.4rem 0.75rem",
+                                        background: "#f3f3f3",
+                                        color: "#333",
+                                        border: "1px solid #ddd",
+                                        borderRadius: "4px",
+                                        cursor: savingFact ? "not-allowed" : "pointer",
+                                        fontSize: "0.85rem",
+                                      }}
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  {existingFact ? (
+                                    <>
+                                      <div style={{ marginTop: "0.25rem", whiteSpace: "pre-wrap" }}>
+                                        {existingFact.fact_value}
+                                      </div>
+                                      <div style={{ marginTop: "0.25rem", fontSize: "0.8rem", color: "#666" }}>
+                                        {existingFact.source_workflow ? `source: ${existingFact.source_workflow}` : "source: n/a"}
+                                        {existingFact.updated_at ? ` • updated: ${new Date(existingFact.updated_at).toLocaleString()}` : ""}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div style={{ marginTop: "0.25rem", color: "#999", fontStyle: "italic", fontSize: "0.9rem" }}>
+                                      {slot.description}
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                            {!isEditing && (
+                              <button
+                                onClick={() => setEditingFact({ factTypeId: slot.fact_type_id, value: existingFact?.fact_value || "" })}
+                                style={{
+                                  background: "transparent",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  fontSize: "1.1rem",
+                                  padding: "0.25rem",
+                                  color: "#666",
+                                }}
+                                title="Edit"
+                              >
+                                ✏️
+                              </button>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
-                )}
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </Section>
         ) : (
           <Section title="Files" open={sections.files.open} onToggle={() => toggleSection("files")}>
