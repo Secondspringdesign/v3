@@ -60,7 +60,7 @@ const mockFact = {
   id: 'fact-789',
   business_id: 'business-456',
   fact_id: 'business_name',
-  fact_text: 'Acme Corp',
+  fact_value: 'Acme Corp',
   source_workflow: 'onboarding',
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
@@ -80,7 +80,7 @@ describe('POST /api/facts', () => {
 
     const request = new Request('http://localhost/api/facts', {
       method: 'POST',
-      body: JSON.stringify({ fact_id: 'test', fact_text: 'value' }),
+      body: JSON.stringify({ fact_id: 'test', fact_value: 'value' }),
     });
 
     const response = await POST(request);
@@ -117,7 +117,7 @@ describe('POST /api/facts', () => {
     const request = new Request('http://localhost/api/facts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fact_text: 'value' }),
+      body: JSON.stringify({ fact_value: 'value' }),
     });
 
     const response = await POST(request);
@@ -127,7 +127,7 @@ describe('POST /api/facts', () => {
     expect(body.error).toContain('fact_id');
   });
 
-  it('should return 400 when fact_text is missing', async () => {
+  it('should return 400 when fact_value is missing', async () => {
     vi.mocked(authenticateRequest).mockResolvedValue({
       success: true,
       context: { outsetaUid: 'outseta-abc', email: 'test@example.com' },
@@ -143,7 +143,7 @@ describe('POST /api/facts', () => {
 
     expect(response.status).toBe(400);
     const body = await response.json();
-    expect(body.error).toContain('fact_text');
+    expect(body.error).toContain('fact_value');
   });
 
   it('should create fact and return 201 on success', async () => {
@@ -160,7 +160,7 @@ describe('POST /api/facts', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         fact_id: 'business_name',
-        fact_text: 'Acme Corp',
+        fact_value: 'Acme Corp',
         source_workflow: 'onboarding',
       }),
     });
@@ -171,7 +171,7 @@ describe('POST /api/facts', () => {
     const body = await response.json();
     expect(body.success).toBe(true);
     expect(body.fact.fact_id).toBe('business_name');
-    expect(body.fact.fact_text).toBe('Acme Corp');
+    expect(body.fact.fact_value).toBe('Acme Corp');
   });
 
   it('should auto-create user and business', async () => {
@@ -186,7 +186,7 @@ describe('POST /api/facts', () => {
     const request = new Request('http://localhost/api/facts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fact_id: 'test', fact_text: 'value' }),
+      body: JSON.stringify({ fact_id: 'test', fact_value: 'value' }),
     });
 
     await POST(request);
@@ -271,7 +271,7 @@ describe('GET /api/facts', () => {
     const userA = { ...mockUser, id: 'user-A', outseta_uid: 'outseta-A' };
     const userB = { ...mockUser, id: 'user-B', outseta_uid: 'outseta-B' };
     const businessA = { ...mockBusiness, id: 'business-A', user_id: 'user-A' };
-    const factA = { ...mockFact, business_id: 'business-A', fact_text: 'User A Business' };
+    const factA = { ...mockFact, business_id: 'business-A', fact_value: 'User A Business' };
 
     // User A's request
     vi.mocked(authenticateRequest).mockResolvedValue({
@@ -286,7 +286,7 @@ describe('GET /api/facts', () => {
     const responseA = await GET(requestA);
     const bodyA = await responseA.json();
 
-    expect(bodyA.facts[0].fact_text).toBe('User A Business');
+    expect(bodyA.facts[0].fact_value).toBe('User A Business');
 
     // User B's request - should NOT see User A's facts
     vi.mocked(authenticateRequest).mockResolvedValue({

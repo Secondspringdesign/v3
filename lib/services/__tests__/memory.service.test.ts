@@ -6,7 +6,7 @@ const mockFact = (overrides: Partial<DbFact> = {}): DbFact => ({
   id: 'fact-123',
   business_id: 'business-456',
   fact_id: 'test_fact',
-  fact_text: 'Test value',
+  fact_value: 'Test value',
   source_workflow: null,
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
@@ -42,7 +42,7 @@ describe('formatForAI', () => {
   });
 
   it('should format single fact correctly', () => {
-    const facts = [mockFact({ fact_id: 'business_name', fact_text: 'Acme Corp' })];
+    const facts = [mockFact({ fact_id: 'business_name', fact_value: 'Acme Corp' })];
     const result = formatForAI(facts);
 
     expect(result).toContain('## Business Memory');
@@ -51,8 +51,8 @@ describe('formatForAI', () => {
 
   it('should format multiple facts correctly', () => {
     const facts = [
-      mockFact({ fact_id: 'business_name', fact_text: 'Acme Corp' }),
-      mockFact({ fact_id: 'target_audience', fact_text: 'Small businesses' }),
+      mockFact({ fact_id: 'business_name', fact_value: 'Acme Corp' }),
+      mockFact({ fact_id: 'target_audience', fact_value: 'Small businesses' }),
     ];
     const result = formatForAI(facts);
 
@@ -62,7 +62,7 @@ describe('formatForAI', () => {
   });
 
   it('should strip version suffixes in labels', () => {
-    const facts = [mockFact({ fact_id: 'business_name_v2', fact_text: 'Updated Corp' })];
+    const facts = [mockFact({ fact_id: 'business_name_v2', fact_value: 'Updated Corp' })];
     const result = formatForAI(facts);
 
     expect(result).toContain('**Business Name**: Updated Corp');
@@ -77,8 +77,8 @@ describe('formatAsObject', () => {
 
   it('should convert facts to key-value object', () => {
     const facts = [
-      mockFact({ fact_id: 'business_name', fact_text: 'Acme Corp' }),
-      mockFact({ fact_id: 'industry', fact_text: 'Technology' }),
+      mockFact({ fact_id: 'business_name', fact_value: 'Acme Corp' }),
+      mockFact({ fact_id: 'industry', fact_value: 'Technology' }),
     ];
     const result = formatAsObject(facts);
 
@@ -89,7 +89,7 @@ describe('formatAsObject', () => {
   });
 
   it('should preserve fact_id as-is (no transformation)', () => {
-    const facts = [mockFact({ fact_id: 'business_name_v1', fact_text: 'Corp' })];
+    const facts = [mockFact({ fact_id: 'business_name_v1', fact_value: 'Corp' })];
     const result = formatAsObject(facts);
 
     expect(result).toEqual({
