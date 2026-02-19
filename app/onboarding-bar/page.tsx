@@ -173,7 +173,7 @@ export default function OnboardingBarPage() {
       {progress.complete && (
         <div className="w-full max-w-4xl mt-4 p-4 bg-gradient-to-r from-green-900/30 to-teal-900/30 border border-green-500/30 rounded-lg">
           <p className="text-center text-green-400 text-sm font-medium">
-            Congratulations! You've completed the onboarding process. 🎉
+            Congratulations! You&apos;ve completed the onboarding process. 🎉
           </p>
         </div>
       )}

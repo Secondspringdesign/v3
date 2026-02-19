@@ -1,7 +1,7 @@
 export const runtime = 'edge';
 
 import { createClient } from '@supabase/supabase-js';
-import { authenticateRequest, errorResponse, jsonResponse } from '@/lib/auth/middleware';
+import { authenticateRequest, jsonResponse } from '@/lib/auth/middleware';
 
 function requireEnv() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
