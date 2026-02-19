@@ -97,6 +97,30 @@ const PREDEFINED_FACT_SLOTS: Record<string, Array<{fact_type_id: string; label: 
   ],
 };
 
+// Common timezones with friendly display names
+const TIMEZONES = [
+  { value: "America/New_York", label: "Eastern Time", offset: "UTC-5/-4" },
+  { value: "America/Chicago", label: "Central Time", offset: "UTC-6/-5" },
+  { value: "America/Denver", label: "Mountain Time", offset: "UTC-7/-6" },
+  { value: "America/Los_Angeles", label: "Pacific Time", offset: "UTC-8/-7" },
+  { value: "America/Anchorage", label: "Alaska Time", offset: "UTC-9/-8" },
+  { value: "Pacific/Honolulu", label: "Hawaii Time", offset: "UTC-10" },
+  { value: "UTC", label: "UTC", offset: "UTC+0" },
+  { value: "Europe/London", label: "London (GMT/BST)", offset: "UTC+0/+1" },
+  { value: "Europe/Paris", label: "Central European", offset: "UTC+1/+2" },
+  { value: "Asia/Tokyo", label: "Japan Time", offset: "UTC+9" },
+  { value: "Asia/Kolkata", label: "India Time", offset: "UTC+5:30" },
+  { value: "Australia/Sydney", label: "Australia Eastern", offset: "UTC+10/+11" },
+];
+
+function getTimezoneDisplay(tz: string): string {
+  const found = TIMEZONES.find(t => t.value === tz);
+  if (found) {
+    return `${found.label} (${found.offset})`;
+  }
+  return tz;
+}
+
 function requireEnv() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -114,10 +138,14 @@ function getTodayInTimezone(tz: string): Date {
 
 function computeDuePeriod(dateStr: string | null, tz: string): "today" | "this_week" | "next_week" {
   if (!dateStr) return "today";
-  const today = getTodayInTimezone(tz);
-
-  const target = new Date(dateStr);
-  target.setHours(0, 0, 0, 0);
+  
+  // Get today in the user's timezone as YYYY-MM-DD
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: tz });
+  const today = new Date(todayStr + 'T00:00:00');
+  
+  // Parse the target date in the user's timezone
+  const targetStr = new Date(dateStr).toLocaleDateString('en-CA', { timeZone: tz });
+  const target = new Date(targetStr + 'T00:00:00');
 
   const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
 
@@ -129,20 +157,42 @@ function computeDuePeriod(dateStr: string | null, tz: string): "today" | "this_w
 
 function dueLabel(dateStr: string | null, tz: string): string {
   if (!dateStr) return "No date";
-  const today = getTodayInTimezone(tz);
-  const target = new Date(dateStr);
-  target.setHours(0, 0, 0, 0);
+  
+  // Get today in the user's timezone as YYYY-MM-DD
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: tz });
+  const today = new Date(todayStr + 'T00:00:00');
+  
+  // Parse the target date in the user's timezone
+  const targetStr = new Date(dateStr).toLocaleDateString('en-CA', { timeZone: tz });
+  const target = new Date(targetStr + 'T00:00:00');
+  
   const diff = Math.round((target.getTime() - today.getTime()) / 86400000);
   if (diff === 0) return "Today";
   if (diff === 1) return "Tomorrow";
   if (diff === -1) return "Yesterday";
-  return target.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  
+  // Format the date in the user's timezone
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric',
+    timeZone: tz 
+  });
 }
 
 function bucketHeading(bucket: "today" | "this_week" | "next_week", tz: string) {
   const today = getTodayInTimezone(tz);
-  const dayName = today.toLocaleDateString(undefined, { weekday: "long" });
-  if (bucket === "today") return `Today (${dayName})`;
+  if (bucket === "today") {
+    // Format: "Today — Thursday, Feb 19, 2026"
+    const dayName = today.toLocaleDateString('en-US', { weekday: 'long', timeZone: tz });
+    const fullDate = today.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric',
+      timeZone: tz 
+    });
+    return `Today — ${dayName}, ${fullDate}`;
+  }
   if (bucket === "this_week") return "This Week";
   return "Next Week";
 }
@@ -194,6 +244,10 @@ export default function BusinessHubPanel() {
   // State for inline goal editing
   const [editingGoal, setEditingGoal] = useState<{ id: string; title: string; description: string } | null>(null);
   const [savingGoal, setSavingGoal] = useState(false);
+
+  // State for document viewer
+  const [expandedDocId, setExpandedDocId] = useState<string | null>(null);
+  const [copiedDocId, setCopiedDocId] = useState<string | null>(null);
 
   // Timezone state (will be auto-detected on mount)
   const [userTimezone, setUserTimezone] = useState<string>("UTC");
@@ -751,6 +805,18 @@ export default function BusinessHubPanel() {
     }
   };
 
+  async function copyDocumentContent(doc: Document) {
+    try {
+      const content = doc.content as { markdown?: string } | null;
+      const markdown = content?.markdown || "";
+      await navigator.clipboard.writeText(markdown);
+      setCopiedDocId(doc.id);
+      setTimeout(() => setCopiedDocId(null), 2000);
+    } catch (e) {
+      console.error("Failed to copy:", e);
+    }
+  }
+
   const pendingPlanner = planner.filter((p) => !p.completed);
   const recentlyCompleted = planner.filter((p) => p.completed && isToday(p.completed_at, userTimezone));
   const completedPlanner = planner.filter((p) => p.completed && !isToday(p.completed_at, userTimezone));
@@ -959,27 +1025,27 @@ export default function BusinessHubPanel() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
         <h1 style={{ fontSize: "1.25rem", margin: 0 }}>Business Hub</h1>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", color: "#666" }}>
-          <span title="Your timezone (used for day rollover)">🌍 {userTimezone}</span>
-          <button
-            onClick={() => {
-              const newTz = prompt("Enter timezone (e.g., America/New_York):", userTimezone);
-              if (newTz && newTz.trim()) {
-                setUserTimezone(newTz.trim());
-              }
-            }}
+          <span>🌍</span>
+          <select
+            value={userTimezone}
+            onChange={(e) => setUserTimezone(e.target.value)}
             style={{
-              background: "transparent",
+              padding: "0.25rem 0.5rem",
               border: "1px solid #ddd",
-              borderRadius: 4,
-              padding: "0.2rem 0.4rem",
+              borderRadius: "4px",
+              background: "#fff",
               cursor: "pointer",
-              fontSize: "0.8rem",
-              color: "#666",
+              fontSize: "0.85rem",
+              fontFamily: "inherit",
             }}
-            title="Change timezone"
+            title="Select your timezone"
           >
-            ⚙️
-          </button>
+            {TIMEZONES.map((tz) => (
+              <option key={tz.value} value={tz.value}>
+                {tz.label} ({tz.offset})
+              </option>
+            ))}
+          </select>
         </div>
       </div>
       <div style={{ fontSize: "0.9rem", color: "#555", marginBottom: "0.5rem" }}>
@@ -1486,24 +1552,95 @@ export default function BusinessHubPanel() {
         ) : (
           <Section title="Files" open={sections.files.open} onToggle={() => toggleSection("files")}>
             {documents.length === 0 && <div style={{ color: "#777" }}>No files yet.</div>}
-            {documents.map((d) => (
-              <div
-                key={d.id}
-                style={{
-                  padding: "0.6rem",
-                  background: "#fff",
-                  borderRadius: 8,
-                  marginBottom: 6,
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                }}
-              >
-                <div style={{ fontWeight: 600 }}>{d.title || d.document_type}</div>
-                <div style={{ color: "#666", fontSize: "0.9rem", marginTop: 4 }}>Type: {d.document_type}</div>
-                <div style={{ color: "#888", fontSize: "0.85rem", marginTop: 4 }}>
-                  Updated: {new Date(d.updated_at).toLocaleString()}
+            {documents.map((d) => {
+              const isExpanded = expandedDocId === d.id;
+              const content = d.content as { markdown?: string } | null;
+              const markdown = content?.markdown || "";
+              const isCopied = copiedDocId === d.id;
+
+              return (
+                <div
+                  key={d.id}
+                  style={{
+                    padding: "0.6rem",
+                    background: "#fff",
+                    borderRadius: 8,
+                    marginBottom: 6,
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                  }}
+                >
+                  <div
+                    onClick={() => setExpandedDocId(isExpanded ? null : d.id)}
+                    style={{
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <span>{isExpanded ? "▼" : "▶"}</span>
+                        {d.title || d.document_type}
+                      </div>
+                      <div style={{ color: "#666", fontSize: "0.9rem", marginTop: 4, marginLeft: "1.5rem" }}>
+                        Type: {d.document_type}
+                      </div>
+                      <div style={{ color: "#888", fontSize: "0.85rem", marginTop: 4, marginLeft: "1.5rem" }}>
+                        Updated: {new Date(d.updated_at).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {isExpanded && markdown && (
+                    <div style={{ marginTop: "0.75rem", marginLeft: "1.5rem" }}>
+                      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.5rem" }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyDocumentContent(d);
+                          }}
+                          style={{
+                            padding: "0.4rem 0.75rem",
+                            background: isCopied ? "#10b981" : "#2563eb",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "0.85rem",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {isCopied ? "✓ Copied!" : "Copy"}
+                        </button>
+                      </div>
+                      <div
+                        style={{
+                          background: "#f9fafb",
+                          border: "1px solid #e5e7eb",
+                          borderRadius: "6px",
+                          padding: "0.75rem",
+                          maxHeight: "400px",
+                          overflowY: "auto",
+                          whiteSpace: "pre-wrap",
+                          fontFamily: "ui-monospace, monospace",
+                          fontSize: "0.85rem",
+                          lineHeight: "1.5",
+                        }}
+                      >
+                        {markdown}
+                      </div>
+                    </div>
+                  )}
+
+                  {isExpanded && !markdown && (
+                    <div style={{ marginTop: "0.75rem", marginLeft: "1.5rem", color: "#999", fontStyle: "italic" }}>
+                      No content available
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </Section>
         )}
       </div>
