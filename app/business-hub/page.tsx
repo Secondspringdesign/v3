@@ -481,8 +481,63 @@ export default function BusinessHubPanel() {
   useEffect(() => {
     if (!outsetaToken) return;
 
+    // Helper to parse JWT and extract payload
+    const parseJwtPayload = (token: string): { exp?: number; outseta_sub?: string; sub?: string } | null => {
+      try {
+        const parts = token.split('.');
+        if (parts.length !== 3) return null;
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+        return payload;
+      } catch {
+        return null;
+      }
+    };
+
+    // Helper to check if cached token is valid
+    const getCachedToken = (): string | null => {
+      try {
+        const cached = sessionStorage.getItem('sb_jwt');
+        if (!cached) return null;
+
+        const payload = parseJwtPayload(cached);
+        if (!payload) {
+          sessionStorage.removeItem('sb_jwt');
+          return null;
+        }
+
+        // Check expiry (must have > 60 seconds remaining)
+        const now = Math.floor(Date.now() / 1000);
+        if (!payload.exp || payload.exp - now <= 60) {
+          sessionStorage.removeItem('sb_jwt');
+          return null;
+        }
+
+        // Check outseta_sub matches current user
+        const outsetaPayload = parseJwtPayload(outsetaToken);
+        if (!outsetaPayload || payload.outseta_sub !== outsetaPayload.sub) {
+          sessionStorage.removeItem('sb_jwt');
+          return null;
+        }
+
+        return cached;
+      } catch {
+        sessionStorage.removeItem('sb_jwt');
+        return null;
+      }
+    };
+
     const exchangeToken = async () => {
       try {
+        // Check for cached token first
+        const cachedToken = getCachedToken();
+        if (cachedToken) {
+          setSupabaseToken(cachedToken);
+          setStatus("using cached token");
+          setError(null);
+          exchangeAttemptsRef.current = 0;
+          return;
+        }
+
         setStatus("exchanging");
         const res = await fetch("/api/auth/supabase-exchange", {
           method: "POST",
@@ -496,10 +551,23 @@ export default function BusinessHubPanel() {
           throw new Error(json?.error || `Exchange failed (status ${res.status})`);
         }
         exchangeAttemptsRef.current = 0;
+        
+        // Store token in sessionStorage
+        try {
+          sessionStorage.setItem('sb_jwt', json.access_token);
+        } catch (e) {
+          console.warn('Failed to cache Supabase JWT:', e);
+        }
+        
         setSupabaseToken(json.access_token);
         setStatus("exchanged (token)");
         setError(null);
       } catch (e) {
+        // Clear cache on error
+        try {
+          sessionStorage.removeItem('sb_jwt');
+        } catch {}
+        
         exchangeAttemptsRef.current += 1;
         setError(String(e));
         setStatus("exchange error; retrying");
