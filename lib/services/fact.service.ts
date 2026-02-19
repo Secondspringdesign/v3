@@ -143,7 +143,8 @@ export async function getByBusinessId(businessId: string): Promise<DbFact[]> {
 
 /**
  * Upsert a fact. If fact_type_id is provided, we rely on the DB unique(business_id, fact_type_id)
- * to overwrite that slot. If fact_type_id is null, this acts like a custom fact keyed by fact_id.
+ * to overwrite that slot. If fact_type_id is null, we use a select-then-update/insert pattern
+ * with fact_id as the logical key (since NULL doesn't participate in unique constraints).
  */
 export async function upsert(data: FactInsert): Promise<DbFact> {
   if (STUB_MODE) return createStubFact(data);
@@ -158,20 +159,59 @@ export async function upsert(data: FactInsert): Promise<DbFact> {
     fact_type_id: data.fact_type_id ?? null,
   };
 
-  const { data: fact, error } = await supabase
-    .from("facts")
-    .upsert(payload, {
-      onConflict: "business_id,fact_type_id",
-      ignoreDuplicates: false,
-    })
-    .select()
-    .single();
+  // When fact_type_id is provided, use the unique constraint for upsert
+  if (data.fact_type_id) {
+    const { data: fact, error } = await supabase
+      .from("facts")
+      .upsert(payload, {
+        onConflict: "business_id,fact_type_id",
+        ignoreDuplicates: false,
+      })
+      .select()
+      .single();
 
-  if (error) {
-    throw new Error(`Failed to upsert fact: ${error.message}`);
+    if (error) {
+      throw new Error(`Failed to upsert fact: ${error.message}`);
+    }
+
+    return fact as DbFact;
   }
 
-  return fact as DbFact;
+  // When fact_type_id is null, use select-then-update/insert pattern
+  // Check if a fact with the same business_id and fact_id already exists
+  const existing = await getByFactId(data.business_id, data.fact_id);
+
+  if (existing) {
+    // Update the existing fact
+    const { data: fact, error } = await supabase
+      .from("facts")
+      .update({
+        fact_value: payload.fact_value,
+        source_workflow: payload.source_workflow,
+      })
+      .eq("id", existing.id)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to update fact: ${error.message}`);
+    }
+
+    return fact as DbFact;
+  } else {
+    // Insert a new fact
+    const { data: fact, error } = await supabase
+      .from("facts")
+      .insert(payload)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to insert fact: ${error.message}`);
+    }
+
+    return fact as DbFact;
+  }
 }
 
 export async function update(id: string, data: FactUpdate): Promise<DbFact> {

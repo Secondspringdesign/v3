@@ -454,8 +454,7 @@ export function ChatKitPanel({
           ? String(invocation.params.source_workflow)
           : null;
 
-        if (!id || processedFacts.current.has(id)) return { success: true };
-        processedFacts.current.add(id);
+        if (!id) return { success: true };
 
         const cleanedText = text.replace(/\s+/g, " ").trim();
 

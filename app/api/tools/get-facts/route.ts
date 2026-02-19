@@ -51,14 +51,16 @@ export async function POST(req: NextRequest) {
 
     const rows = (await res.json()) as Array<{
       fact_id: string;
-      fact_text: string;
+      fact_value?: string;
+      fact_text?: string;  // legacy fallback
       source_workflow?: string | null;
       updated_at?: string | null;
     }>;
 
     const summary = rows.slice(0, 30).map((r) => {
+      const text = r.fact_value ?? r.fact_text ?? "";
       const src = r.source_workflow ? ` (source: ${r.source_workflow})` : "";
-      return `- ${r.fact_id}: ${r.fact_text}${src}`;
+      return `- ${r.fact_id}: ${text}${src}`;
     }).join("\n");
 
     return NextResponse.json({ facts: rows, summary }, { status: 200 });
