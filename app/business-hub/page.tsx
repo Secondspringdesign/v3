@@ -144,6 +144,27 @@ function bucketHeading(bucket: "today" | "this_week" | "next_week") {
   return "Next Week";
 }
 
+/**
+ * Check if a timestamp is "today" in the given timezone.
+ * Returns true if the timestamp is within today (00:00 - 23:59) in the user's timezone.
+ */
+function isToday(timestamp: string | null, timezone: string): boolean {
+  if (!timestamp) return false;
+  
+  try {
+    const date = new Date(timestamp);
+    const now = new Date();
+    
+    // Format both dates as YYYY-MM-DD in the user's timezone
+    const dateStr = date.toLocaleDateString("en-CA", { timeZone: timezone }); // en-CA gives YYYY-MM-DD
+    const nowStr = now.toLocaleDateString("en-CA", { timeZone: timezone });
+    
+    return dateStr === nowStr;
+  } catch {
+    return false;
+  }
+}
+
 type InlineDateState = { id: string; value: string };
 
 export default function BusinessHubPanel() {
@@ -170,6 +191,9 @@ export default function BusinessHubPanel() {
   // State for inline goal editing
   const [editingGoal, setEditingGoal] = useState<{ id: string; title: string; description: string } | null>(null);
   const [savingGoal, setSavingGoal] = useState(false);
+
+  // Timezone state (will be auto-detected on mount)
+  const [userTimezone, setUserTimezone] = useState<string>("UTC");
 
   const [activeTab, setActiveTab] = useState<"facts" | "files">("facts");
 
@@ -268,6 +292,64 @@ export default function BusinessHubPanel() {
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
+
+  // Auto-detect timezone on mount
+  useEffect(() => {
+    try {
+      const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      setUserTimezone(detected);
+    } catch (e) {
+      console.error("Failed to detect timezone:", e);
+      setUserTimezone("UTC");
+    }
+  }, []);
+
+  // Save timezone as a fact when it changes (and we have a token)
+  useEffect(() => {
+    if (!outsetaToken || !userTimezone) return;
+    
+    // Check if timezone fact already matches
+    const timezoneFact = facts.find((f) => f.fact_type_id === "user_timezone" || f.fact_id === "user_timezone");
+    if (timezoneFact && timezoneFact.fact_value === userTimezone) return;
+    
+    // Save the timezone fact
+    const saveTimezone = async () => {
+      try {
+        const headers = {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${outsetaToken}`,
+        };
+        
+        const res = await fetch("/api/facts", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            fact_id: "user_timezone",
+            fact_value: userTimezone,
+            fact_type_id: "user_timezone",
+          }),
+        });
+        
+        if (res.ok) {
+          const json = await res.json();
+          setFacts((prev) => {
+            const existing = prev.find((f) => f.fact_type_id === "user_timezone" || f.fact_id === "user_timezone");
+            if (existing) {
+              return prev.map((f) => 
+                (f.fact_type_id === "user_timezone" || f.fact_id === "user_timezone") ? json.fact : f
+              );
+            } else {
+              return [...prev, json.fact];
+            }
+          });
+        }
+      } catch (e) {
+        console.error("Failed to save timezone fact:", e);
+      }
+    };
+    
+    saveTimezone();
+  }, [userTimezone, outsetaToken, facts]);
 
   // Exchange Outseta -> Supabase
   useEffect(() => {
@@ -615,12 +697,22 @@ export default function BusinessHubPanel() {
   };
 
   const pendingPlanner = planner.filter((p) => !p.completed);
-  const completedPlanner = planner.filter((p) => p.completed);
+  const recentlyCompleted = planner.filter((p) => p.completed && isToday(p.completed_at, userTimezone));
+  const completedPlanner = planner.filter((p) => p.completed && !isToday(p.completed_at, userTimezone));
 
   const groupedPlanner = {
-    today: pendingPlanner.filter((p) => p.due_period === "today"),
-    this_week: pendingPlanner.filter((p) => p.due_period === "this_week"),
-    next_week: pendingPlanner.filter((p) => p.due_period === "next_week"),
+    today: [
+      ...pendingPlanner.filter((p) => p.due_period === "today"),
+      ...recentlyCompleted.filter((p) => p.due_period === "today"),
+    ],
+    this_week: [
+      ...pendingPlanner.filter((p) => p.due_period === "this_week"),
+      ...recentlyCompleted.filter((p) => p.due_period === "this_week"),
+    ],
+    next_week: [
+      ...pendingPlanner.filter((p) => p.due_period === "next_week"),
+      ...recentlyCompleted.filter((p) => p.due_period === "next_week"),
+    ],
   };
 
   const groupedGoals = {
@@ -806,7 +898,32 @@ export default function BusinessHubPanel() {
         minHeight: "100vh",
       }}
     >
-      <h1 style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}>Business Hub</h1>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+        <h1 style={{ fontSize: "1.25rem", margin: 0 }}>Business Hub</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", color: "#666" }}>
+          <span title="Your timezone (used for day rollover)">🌍 {userTimezone}</span>
+          <button
+            onClick={() => {
+              const newTz = prompt("Enter timezone (e.g., America/New_York):", userTimezone);
+              if (newTz && newTz.trim()) {
+                setUserTimezone(newTz.trim());
+              }
+            }}
+            style={{
+              background: "transparent",
+              border: "1px solid #ddd",
+              borderRadius: 4,
+              padding: "0.2rem 0.4rem",
+              cursor: "pointer",
+              fontSize: "0.8rem",
+              color: "#666",
+            }}
+            title="Change timezone"
+          >
+            ⚙️
+          </button>
+        </div>
+      </div>
       <div style={{ fontSize: "0.9rem", color: "#555", marginBottom: "0.5rem" }}>
         Status: {status} {error ? `• Error: ${error}` : ""}
       </div>
