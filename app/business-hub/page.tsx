@@ -167,6 +167,10 @@ export default function BusinessHubPanel() {
   const [editingFact, setEditingFact] = useState<{ factTypeId: string; value: string } | null>(null);
   const [savingFact, setSavingFact] = useState(false);
 
+  // State for inline goal editing
+  const [editingGoal, setEditingGoal] = useState<{ id: string; title: string; description: string } | null>(null);
+  const [savingGoal, setSavingGoal] = useState(false);
+
   const [activeTab, setActiveTab] = useState<"facts" | "files">("facts");
 
   const reconnectingRef = useRef(false);
@@ -567,6 +571,49 @@ export default function BusinessHubPanel() {
     }
   };
 
+  // Handler for saving a goal (update)
+  const saveGoal = async (goalId: string, title: string, description: string) => {
+    if (!outsetaToken) {
+      setError("Missing auth token; request auth again.");
+      requestTokenFromParent();
+      return;
+    }
+    
+    setSavingGoal(true);
+    try {
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${outsetaToken}`,
+      };
+      
+      const body = {
+        id: goalId,
+        title: title.trim(),
+        description: description.trim() || null,
+      };
+      
+      const res = await fetch("/api/goals", {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(body),
+      });
+      
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json?.error || "Failed to save goal");
+        return;
+      }
+      
+      // Update local state
+      setGoals((prev) => prev.map((g) => (g.id === goalId ? json.goal : g)));
+      setEditingGoal(null);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSavingGoal(false);
+    }
+  };
+
   const pendingPlanner = planner.filter((p) => !p.completed);
   const completedPlanner = planner.filter((p) => p.completed);
 
@@ -860,27 +907,117 @@ export default function BusinessHubPanel() {
                 {groupedGoals[bucket].length === 0 && (
                   <div style={{ color: "#777", fontSize: "0.9rem" }}>No goals</div>
                 )}
-                {groupedGoals[bucket].map((g) => (
-                  <div
-                    key={g.id}
-                    style={{
-                      padding: "0.6rem",
-                      background: "#fff",
-                      borderRadius: 8,
-                      marginBottom: 4,
-                      boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                    }}
-                  >
-                    <div style={{ fontWeight: 600 }}>{g.title}</div>
-                    {g.description && (
-                      <div style={{ color: "#666", fontSize: "0.9rem", marginTop: 4 }}>{g.description}</div>
-                    )}
-                    <div style={{ color: "#888", fontSize: "0.85rem", marginTop: 4 }}>
-                      Status: {g.status}
-                      {g.achieved_at ? ` • achieved ${new Date(g.achieved_at).toLocaleDateString()}` : ""}
+                {groupedGoals[bucket].map((g) => {
+                  const isEditing = editingGoal?.id === g.id;
+                  
+                  return (
+                    <div
+                      key={g.id}
+                      style={{
+                        padding: "0.6rem",
+                        background: "#fff",
+                        borderRadius: 8,
+                        marginBottom: 4,
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                      }}
+                    >
+                      {isEditing ? (
+                        <div>
+                          <input
+                            type="text"
+                            value={editingGoal.title}
+                            onChange={(e) => setEditingGoal({ ...editingGoal, title: e.target.value })}
+                            style={{
+                              width: "100%",
+                              padding: "0.5rem",
+                              border: "1px solid #ccc",
+                              borderRadius: "4px",
+                              fontFamily: "inherit",
+                              fontSize: "1rem",
+                              fontWeight: 600,
+                              marginBottom: "0.5rem",
+                            }}
+                            placeholder="Goal title"
+                            autoFocus
+                          />
+                          <textarea
+                            value={editingGoal.description}
+                            onChange={(e) => setEditingGoal({ ...editingGoal, description: e.target.value })}
+                            style={{
+                              width: "100%",
+                              minHeight: "60px",
+                              padding: "0.5rem",
+                              border: "1px solid #ccc",
+                              borderRadius: "4px",
+                              fontFamily: "inherit",
+                              fontSize: "0.9rem",
+                            }}
+                            placeholder="Goal description"
+                          />
+                          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+                            <button
+                              onClick={() => saveGoal(g.id, editingGoal.title, editingGoal.description)}
+                              disabled={savingGoal}
+                              style={{
+                                padding: "0.4rem 0.75rem",
+                                background: "#2563eb",
+                                color: "#fff",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: savingGoal ? "not-allowed" : "pointer",
+                                fontSize: "0.85rem",
+                              }}
+                            >
+                              {savingGoal ? "Saving..." : "Save"}
+                            </button>
+                            <button
+                              onClick={() => setEditingGoal(null)}
+                              disabled={savingGoal}
+                              style={{
+                                padding: "0.4rem 0.75rem",
+                                background: "#f3f3f3",
+                                color: "#333",
+                                border: "1px solid #ddd",
+                                borderRadius: "4px",
+                                cursor: savingGoal ? "not-allowed" : "pointer",
+                                fontSize: "0.85rem",
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 600 }}>{g.title}</div>
+                            {g.description && (
+                              <div style={{ color: "#666", fontSize: "0.9rem", marginTop: 4 }}>{g.description}</div>
+                            )}
+                            <div style={{ color: "#888", fontSize: "0.85rem", marginTop: 4 }}>
+                              Status: {g.status}
+                              {g.achieved_at ? ` • achieved ${new Date(g.achieved_at).toLocaleDateString()}` : ""}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setEditingGoal({ id: g.id, title: g.title, description: g.description || "" })}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              cursor: "pointer",
+                              fontSize: "1.1rem",
+                              padding: "0.25rem",
+                              color: "#666",
+                            }}
+                            title="Edit"
+                          >
+                            ✏️
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </>
             )}
           </div>
