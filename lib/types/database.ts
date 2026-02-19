@@ -38,6 +38,7 @@ export interface DbBusiness {
   user_id: string;
   name: string;
   status: BusinessStatus;
+  onboarding_complete: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -51,6 +52,7 @@ export interface BusinessInsert {
 export interface BusinessUpdate {
   name?: string;
   status?: BusinessStatus;
+  onboarding_complete?: boolean;
 }
 
 // ============================================

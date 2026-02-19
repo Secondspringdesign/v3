@@ -17,6 +17,7 @@ function createStubBusiness(userId: string): DbBusiness {
     user_id: userId,
     name: 'Stub Business',
     status: 'active',
+    onboarding_complete: false,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
