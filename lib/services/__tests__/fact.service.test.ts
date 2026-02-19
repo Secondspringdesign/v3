@@ -71,7 +71,11 @@ describe('FactService', () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({ data: mockFact, error: null }),
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: mockFact, error: null }),
+                  }),
+                }),
               }),
             }),
           }),
@@ -83,6 +87,53 @@ describe('FactService', () => {
 
       expect(result).toEqual(mockFact);
     });
+
+    it('should return null when not found', async () => {
+      const mockSupabase = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      };
+      vi.mocked(getSupabaseClient).mockReturnValue(mockSupabase as never);
+
+      const result = await FactService.getByFactId('business-456', 'nonexistent');
+
+      expect(result).toBeNull();
+    });
+
+    it('should handle multiple rows by returning the most recent', async () => {
+      const recentFact = { ...mockFact, updated_at: '2024-01-02T00:00:00Z' };
+      const mockSupabase = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: recentFact, error: null }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      };
+      vi.mocked(getSupabaseClient).mockReturnValue(mockSupabase as never);
+
+      const result = await FactService.getByFactId('business-456', 'business_name');
+
+      expect(result).toEqual(recentFact);
+    });
   });
 
   describe('getByFactTypeId', () => {
@@ -93,7 +144,11 @@ describe('FactService', () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({ data: factWithType, error: null }),
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: factWithType, error: null }),
+                  }),
+                }),
               }),
             }),
           }),
@@ -112,9 +167,10 @@ describe('FactService', () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({
-                  data: null,
-                  error: { code: 'PGRST116', message: 'No rows' },
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                  }),
                 }),
               }),
             }),
@@ -126,6 +182,30 @@ describe('FactService', () => {
       const result = await FactService.getByFactTypeId('business-456', 'nonexistent');
 
       expect(result).toBeNull();
+    });
+
+    it('should handle multiple rows by returning the most recent', async () => {
+      const recentFact = { ...mockFact, fact_type_id: 'type-123', updated_at: '2024-01-02T00:00:00Z' };
+      const mockSupabase = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: recentFact, error: null }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      };
+      vi.mocked(getSupabaseClient).mockReturnValue(mockSupabase as never);
+
+      const result = await FactService.getByFactTypeId('business-456', 'type-123');
+
+      expect(result).toEqual(recentFact);
     });
   });
 
@@ -174,9 +254,10 @@ describe('FactService', () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({
-                  data: null,
-                  error: { code: 'PGRST116', message: 'No rows' },
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                  }),
                 }),
               }),
             }),
@@ -212,7 +293,11 @@ describe('FactService', () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({ data: existingFact, error: null }),
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: existingFact, error: null }),
+                  }),
+                }),
               }),
             }),
           }),
@@ -246,9 +331,10 @@ describe('FactService', () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({
-                  data: null,
-                  error: { code: 'PGRST116', message: 'No rows' },
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                  }),
                 }),
               }),
             }),
@@ -283,7 +369,11 @@ describe('FactService', () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({ data: existingFact, error: null }),
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: existingFact, error: null }),
+                  }),
+                }),
               }),
             }),
           }),
@@ -316,9 +406,10 @@ describe('FactService', () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({
-                  data: null,
-                  error: { code: 'PGRST116', message: 'No rows' },
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                  }),
                 }),
               }),
             }),
