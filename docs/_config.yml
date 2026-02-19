@@ -1,0 +1,75 @@
+title: Second Spring Docs
+description: Engineering documentation, specs, design docs, ADRs, and runbooks
+baseurl: "/v3"
+url: "https://secondspringdesign.github.io"
+
+remote_theme: just-the-docs/just-the-docs@v0.10.0
+
+# Color scheme
+color_scheme: light
+
+# Aux links (top right)
+aux_links:
+  "GitHub":
+    - "https://github.com/Secondspringdesign/v3"
+
+aux_links_new_tab: true
+
+# Heading anchor links
+heading_anchors: true
+
+# Footer
+gh_edit_link: true
+gh_edit_link_text: "Edit this page on GitHub"
+gh_edit_repository: "https://github.com/Secondspringdesign/v3"
+gh_edit_branch: "staging"
+gh_edit_source: docs
+gh_edit_view_mode: "edit"
+
+# Search
+search_enabled: true
+search:
+  heading_level: 2
+  previews: 3
+  preview_words_before: 5
+  preview_words_after: 10
+  tokenizer_separator: /[\s/]+/
+  rel_url: true
+  button: false
+
+# Back to top link
+back_to_top: true
+back_to_top_text: "Back to top"
+
+# Default front matter
+defaults:
+  - scope:
+      path: "templates"
+    values:
+      layout: default
+      nav_exclude: true
+  - scope:
+      path: "examples"
+    values:
+      layout: default
+      nav_exclude: true
+
+# Callouts (Just the Docs built-in)
+callouts:
+  note:
+    title: Note
+    color: blue
+  warning:
+    title: Warning
+    color: red
+  tip:
+    title: Tip
+    color: green
+  important:
+    title: Important
+    color: yellow
+
+# Plugins supported by GitHub Pages
+plugins:
+  - jekyll-seo-tag
+  - jekyll-github-metadata

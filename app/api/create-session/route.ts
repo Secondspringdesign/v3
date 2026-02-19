@@ -24,11 +24,9 @@ const WORKFLOWS: Record<string, string | undefined> = {
     process.env.CHATKIT_WORKFLOW_BUSINESS_TASK2 ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS_TASK2,
   business_task3:
     process.env.CHATKIT_WORKFLOW_BUSINESS_TASK3 ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS_TASK3,
-  business_task4:
-    process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS_TASK4,
+  business_task4: process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_BUSINESS_TASK4,
   product: process.env.CHATKIT_WORKFLOW_PRODUCT ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_PRODUCT,
   marketing: process.env.CHATKIT_WORKFLOW_MARKETING ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_MARKETING,
-  // Money tab (formerly "finance") — use the env var names you have in Vercel (CHATKIT_WORKFLOW_MONEY / NEXT_PUBLIC_CHATKIT_WORKFLOW_MONEY)
   money: process.env.CHATKIT_WORKFLOW_MONEY ?? process.env.NEXT_PUBLIC_CHATKIT_WORKFLOW_MONEY,
 };
 
@@ -60,7 +58,7 @@ export async function POST(request: Request): Promise<Response> {
       return buildJsonResponse({ error: `Invalid or missing workflow for agent: ${agent}` }, 400, {}, sessionCookie);
     }
 
-    // Resolve user id (Outseta or fallback)
+    // Resolve user id (Outseta only)
     const { userId: rawUserId } = await resolveUserId(request);
 
     // Strip prior agent suffixes and append current agent
@@ -74,7 +72,7 @@ export async function POST(request: Request): Promise<Response> {
     // Session cookie for stability
     sessionCookie = serializeSessionCookie(namespacedUserId);
 
-    // Call ChatKit Sessions API (old, working shape)
+    // Call ChatKit Sessions API (original shape)
     const apiUrl = `${DEFAULT_CHATKIT_BASE}/v1/chatkit/sessions`;
     const upstreamResponse = await fetch(apiUrl, {
       method: "POST",
@@ -112,7 +110,12 @@ export async function POST(request: Request): Promise<Response> {
     return buildJsonResponse(payload, 200, {}, sessionCookie);
   } catch (error) {
     console.error("create-session error:", error);
-    return buildJsonResponse({ error: "Unexpected error" }, 500, {}, sessionCookie);
+    return buildJsonResponse(
+      { error: "Missing or invalid authentication token. Please log in again or refresh." },
+      401,
+      {},
+      sessionCookie,
+    );
   }
 }
 
@@ -249,33 +252,25 @@ async function resolveUserId(request: Request) {
   const cookieToken = getCookieValue(request.headers.get("cookie"), OUTSETA_COOKIE_NAME);
   const token = headerToken || cookieToken;
 
-  if (token) {
-    try {
-      const verified = await verifyOutsetaToken(token);
-      if (verified?.verified && verified.payload) {
-        const payload = verified.payload as Record<string, unknown>;
-        const accountUid =
-          (payload["outseta:accountUid"] as string) ||
-          (payload["outseta:accountuid"] as string) ||
-          (payload["account_uid"] as string) ||
-          (payload["accountUid"] as string) ||
-          (payload["accountId"] as string) ||
-          (payload["account_id"] as string) ||
-          (payload["sub"] as string) ||
-          (payload["user_id"] as string) ||
-          (payload["uid"] as string) ||
-          undefined;
-
-        if (accountUid) return { userId: accountUid, sessionCookie: serializeSessionCookie(accountUid) };
-      }
-    } catch (err) {
-      console.warn("Outseta token verification failed:", err);
-    }
+  if (!token) {
+    throw new Error("Missing authentication token");
   }
 
-  // fallback: session cookie or random
-  const existing = getCookieValue(request.headers.get("cookie"), SESSION_COOKIE_NAME);
-  if (existing) return { userId: existing, sessionCookie: null };
-  const generated = crypto.randomUUID?.() || Math.random().toString(36).slice(2);
-  return { userId: generated, sessionCookie: serializeSessionCookie(generated) };
+  try {
+    const verified = await verifyOutsetaToken(token);
+    if (verified?.verified && verified.payload) {
+      const payload = verified.payload as Record<string, unknown>;
+      const userSub =
+        (payload["sub"] as string) ||
+        (payload["user_id"] as string) ||
+        (payload["uid"] as string) ||
+        undefined;
+
+      if (userSub) return { userId: userSub, sessionCookie: serializeSessionCookie(userSub), outsetaSub: userSub };
+    }
+  } catch (err) {
+    console.warn("Outseta token verification failed:", err);
+  }
+
+  throw new Error("Invalid authentication token");
 }

@@ -19,6 +19,7 @@ export type FactAction = {
   type: "save";
   factId: string;
   factText: string;
+  error?: string;
 };
 
 type ChatKitPanelProps = {
@@ -43,18 +44,8 @@ const OUTSETA_COOKIE_MAX_AGE = 60 * 60 * 4; // 4 hours
 const OUTSETA_LS_KEYS = ["outseta_access_token", "outseta_token", "outseta_auth_token"];
 const PARENT_MESSAGE_TYPE = "outseta-token";
 
-const createInitialErrors = (): ErrorState => ({
-  script: null,
-  session: null,
-  integration: null,
-  retryable: false,
-});
-
-type OutsetaClientSurface = {
-  getAccessToken?: () => string | null;
-  getJwtPayload?: () => Promise<Record<string, unknown> | null>;
-  auth?: { accessToken?: string | null } | null;
-};
+// In-memory fallback so token survives even if storage/cookies are blocked in iframe
+let inMemoryOutsetaToken: string | null = null;
 
 // In-memory fallback so token survives even if storage/cookies are blocked in iframe
 let inMemoryOutsetaToken: string | null = null;
@@ -165,6 +156,12 @@ async function waitForOutsetaToken(maxAttempts = 20, delayMs = 500): Promise<str
   if (isDev) console.warn("[ChatKitPanel] waitForOutsetaToken: giving up, no token found");
   return null;
 }
+
+type OutsetaClientSurface = {
+  getAccessToken?: () => string | null;
+  getJwtPayload?: () => Promise<Record<string, unknown> | null>;
+  auth?: { accessToken?: string | null } | null;
+};
 
 export function ChatKitPanel({
   theme,
@@ -455,15 +452,472 @@ export function ChatKitPanel({
 
       if (invocation.name === "record_fact") {
         const id = String(invocation.params.fact_id ?? "");
-        const text = String(invocation.params.fact_text ?? "");
-        if (!id || processedFacts.current.has(id)) return { success: true };
-        processedFacts.current.add(id);
-        void onWidgetAction({
-          type: "save",
-          factId: id,
-          factText: text.replace(/\s+/g, " ").trim(),
-        });
-        return { success: true };
+        const text = String(invocation.params.fact_value ?? "");
+        const sourceWorkflow = invocation.params.source_workflow
+          ? String(invocation.params.source_workflow)
+          : null;
+
+        if (!id) return { success: true };
+
+        const cleanedText = text.replace(/\s+/g, " ").trim();
+
+        // Call API to persist the fact
+        try {
+          const outsetaToken = findOutsetaTokenOnClient();
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (outsetaToken) {
+            headers["Authorization"] = `Bearer ${outsetaToken}`;
+          }
+
+          const response = await fetch("/api/facts", {
+            method: "POST",
+            headers,
+            credentials: "include",
+            body: JSON.stringify({
+              fact_id: id,
+              fact_value: cleanedText,
+              fact_type_id: invocation.params.fact_type_id ? String(invocation.params.fact_type_id) : null,
+              source_workflow: sourceWorkflow,
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const errorMsg = (errorData as { error?: string }).error ?? "Failed to save fact";
+            console.error("[ChatKitPanel] record_fact API error:", errorMsg);
+            void onWidgetAction({
+              type: "save",
+              factId: id,
+              factText: cleanedText,
+              error: errorMsg,
+            });
+            return { success: false, error: errorMsg };
+          }
+
+          void onWidgetAction({
+            type: "save",
+            factId: id,
+            factText: cleanedText,
+          });
+          return { success: true };
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : "Failed to save fact";
+          console.error("[ChatKitPanel] record_fact error:", err);
+          void onWidgetAction({
+            type: "save",
+            factId: id,
+            factText: cleanedText,
+            error: errorMsg,
+          });
+          return { success: false, error: errorMsg };
+        }
+      }
+
+      if (invocation.name === "get_facts") {
+        try {
+          const outsetaToken = findOutsetaTokenOnClient();
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (outsetaToken) {
+            headers["Authorization"] = `Bearer ${outsetaToken}`;
+          }
+
+          const response = await fetch("/api/tools/get-facts", {
+            method: "POST",
+            headers,
+            credentials: "include",
+            body: "{}",
+          });
+
+          const raw = await response.text();
+          let data: { facts?: unknown; summary?: unknown; error?: unknown } = {};
+          if (raw) {
+            try {
+              data = JSON.parse(raw);
+            } catch (err) {
+              console.warn("[ChatKitPanel] get_facts: failed to parse JSON", err);
+            }
+          }
+
+          if (!response.ok) {
+            const msg =
+              typeof data.error === "string"
+                ? data.error
+                : "Failed to fetch facts";
+            console.error("[ChatKitPanel] get_facts API error:", msg);
+            return { success: false, error: msg };
+          }
+
+          return {
+            success: true,
+            facts: Array.isArray(data.facts) ? data.facts : [],
+            summary: typeof data.summary === "string" ? data.summary : "",
+          };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Failed to fetch facts";
+          console.error("[ChatKitPanel] get_facts error:", err);
+          return { success: false, error: msg };
+        }
+      }
+
+      if (invocation.name === "retrieve_memory") {
+        try {
+          const outsetaToken = findOutsetaTokenOnClient();
+          const headers: Record<string, string> = {};
+          if (outsetaToken) {
+            headers["Authorization"] = `Bearer ${outsetaToken}`;
+          }
+
+          const response = await fetch("/api/memory", {
+            method: "GET",
+            headers,
+            credentials: "include",
+          });
+
+          if (!response.ok) {
+            if (isDev) console.warn("[ChatKitPanel] retrieve_memory API error:", response.status);
+            return { success: true, memory_context: "" };
+          }
+
+          const data = (await response.json()) as { memory_context?: string };
+          return { success: true, memory_context: data.memory_context ?? "" };
+        } catch (err) {
+          console.error("[ChatKitPanel] retrieve_memory error:", err);
+          return { success: true, memory_context: "" };
+        }
+      }
+
+      if (invocation.name === "get_planner") {
+        try {
+          const outsetaToken = findOutsetaTokenOnClient();
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (outsetaToken) {
+            headers["Authorization"] = `Bearer ${outsetaToken}`;
+          }
+
+          const response = await fetch("/api/planner", {
+            method: "GET",
+            headers,
+            credentials: "include",
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const errorMsg = (errorData as { error?: string }).error ?? "Failed to fetch planner";
+            console.error("[ChatKitPanel] get_planner API error:", errorMsg);
+            return { success: false, error: errorMsg };
+          }
+
+          const data = await response.json();
+          return { success: true, planner: data.planner ?? [] };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Failed to fetch planner";
+          console.error("[ChatKitPanel] get_planner error:", err);
+          return { success: false, error: msg };
+        }
+      }
+
+      if (invocation.name === "create_planner_item") {
+        try {
+          const outsetaToken = findOutsetaTokenOnClient();
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (outsetaToken) {
+            headers["Authorization"] = `Bearer ${outsetaToken}`;
+          }
+
+          const body: Record<string, unknown> = {};
+          const fields = ["title", "description", "due_date", "due_period", "pillar_id", "completed", "sort_order", "source_workflow"];
+          for (const field of fields) {
+            if (invocation.params[field] !== undefined) {
+              body[field] = invocation.params[field];
+            }
+          }
+
+          const response = await fetch("/api/planner", {
+            method: "POST",
+            headers,
+            credentials: "include",
+            body: JSON.stringify(body),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const errorMsg = (errorData as { error?: string }).error ?? "Failed to create planner item";
+            console.error("[ChatKitPanel] create_planner_item API error:", errorMsg);
+            return { success: false, error: errorMsg };
+          }
+
+          const data = await response.json();
+          return { success: true, planner: data.planner };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Failed to create planner item";
+          console.error("[ChatKitPanel] create_planner_item error:", err);
+          return { success: false, error: msg };
+        }
+      }
+
+      if (invocation.name === "update_planner_item") {
+        try {
+          const outsetaToken = findOutsetaTokenOnClient();
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (outsetaToken) {
+            headers["Authorization"] = `Bearer ${outsetaToken}`;
+          }
+
+          const body: Record<string, unknown> = {};
+          const fields = ["id", "title", "description", "due_date", "due_period", "pillar_id", "completed", "sort_order"];
+          for (const field of fields) {
+            if (invocation.params[field] !== undefined) {
+              body[field] = invocation.params[field];
+            }
+          }
+
+          const response = await fetch("/api/planner", {
+            method: "PATCH",
+            headers,
+            credentials: "include",
+            body: JSON.stringify(body),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const errorMsg = (errorData as { error?: string }).error ?? "Failed to update planner item";
+            console.error("[ChatKitPanel] update_planner_item API error:", errorMsg);
+            return { success: false, error: errorMsg };
+          }
+
+          const data = await response.json();
+          return { success: true, planner: data.planner };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Failed to update planner item";
+          console.error("[ChatKitPanel] update_planner_item error:", err);
+          return { success: false, error: msg };
+        }
+      }
+
+      if (invocation.name === "get_goals") {
+        try {
+          const outsetaToken = findOutsetaTokenOnClient();
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (outsetaToken) {
+            headers["Authorization"] = `Bearer ${outsetaToken}`;
+          }
+
+          const response = await fetch("/api/goals", {
+            method: "GET",
+            headers,
+            credentials: "include",
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const errorMsg = (errorData as { error?: string }).error ?? "Failed to fetch goals";
+            console.error("[ChatKitPanel] get_goals API error:", errorMsg);
+            return { success: false, error: errorMsg };
+          }
+
+          const data = await response.json();
+          return { success: true, goals: data.goals ?? [] };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Failed to fetch goals";
+          console.error("[ChatKitPanel] get_goals error:", err);
+          return { success: false, error: msg };
+        }
+      }
+
+      if (invocation.name === "create_goal") {
+        try {
+          const outsetaToken = findOutsetaTokenOnClient();
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (outsetaToken) {
+            headers["Authorization"] = `Bearer ${outsetaToken}`;
+          }
+
+          const body: Record<string, unknown> = {};
+          const fields = ["title", "description", "time_horizon", "pillar_id", "status", "sort_order", "source_workflow"];
+          for (const field of fields) {
+            if (invocation.params[field] !== undefined) {
+              body[field] = invocation.params[field];
+            }
+          }
+
+          const response = await fetch("/api/goals", {
+            method: "POST",
+            headers,
+            credentials: "include",
+            body: JSON.stringify(body),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const errorMsg = (errorData as { error?: string }).error ?? "Failed to create goal";
+            console.error("[ChatKitPanel] create_goal API error:", errorMsg);
+            return { success: false, error: errorMsg };
+          }
+
+          const data = await response.json();
+          return { success: true, goal: data.goal };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Failed to create goal";
+          console.error("[ChatKitPanel] create_goal error:", err);
+          return { success: false, error: msg };
+        }
+      }
+
+      if (invocation.name === "update_goal") {
+        try {
+          const outsetaToken = findOutsetaTokenOnClient();
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (outsetaToken) {
+            headers["Authorization"] = `Bearer ${outsetaToken}`;
+          }
+
+          const body: Record<string, unknown> = {};
+          const fields = ["id", "title", "description", "time_horizon", "pillar_id", "status", "sort_order"];
+          for (const field of fields) {
+            if (invocation.params[field] !== undefined) {
+              body[field] = invocation.params[field];
+            }
+          }
+
+          const response = await fetch("/api/goals", {
+            method: "PATCH",
+            headers,
+            credentials: "include",
+            body: JSON.stringify(body),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const errorMsg = (errorData as { error?: string }).error ?? "Failed to update goal";
+            console.error("[ChatKitPanel] update_goal API error:", errorMsg);
+            return { success: false, error: errorMsg };
+          }
+
+          const data = await response.json();
+          return { success: true, goal: data.goal };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Failed to update goal";
+          console.error("[ChatKitPanel] update_goal error:", err);
+          return { success: false, error: msg };
+        }
+      }
+
+      if (invocation.name === "get_documents") {
+        try {
+          const outsetaToken = findOutsetaTokenOnClient();
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (outsetaToken) {
+            headers["Authorization"] = `Bearer ${outsetaToken}`;
+          }
+
+          const response = await fetch("/api/documents", {
+            method: "GET",
+            headers,
+            credentials: "include",
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const errorMsg = (errorData as { error?: string }).error ?? "Failed to fetch documents";
+            console.error("[ChatKitPanel] get_documents API error:", errorMsg);
+            return { success: false, error: errorMsg };
+          }
+
+          const data = await response.json();
+          return { success: true, documents: data.documents ?? [] };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Failed to fetch documents";
+          console.error("[ChatKitPanel] get_documents error:", err);
+          return { success: false, error: msg };
+        }
+      }
+
+      if (invocation.name === "save_document") {
+        try {
+          const outsetaToken = findOutsetaTokenOnClient();
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (outsetaToken) {
+            headers["Authorization"] = `Bearer ${outsetaToken}`;
+          }
+
+          const body: Record<string, unknown> = {};
+          const fields = ["document_type", "title", "content"];
+          for (const field of fields) {
+            if (invocation.params[field] !== undefined) {
+              body[field] = invocation.params[field];
+            }
+          }
+
+          // If content is a string (markdown), wrap it in the standard JSONB format
+          if (typeof body.content === "string") {
+            body.content = { markdown: body.content };
+          }
+
+          const response = await fetch("/api/documents", {
+            method: "POST",
+            headers,
+            credentials: "include",
+            body: JSON.stringify(body),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const errorMsg = (errorData as { error?: string }).error ?? "Failed to save document";
+            console.error("[ChatKitPanel] save_document API error:", errorMsg);
+            return { success: false, error: errorMsg };
+          }
+
+          const data = await response.json();
+          return { success: true, document: data.document };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Failed to save document";
+          console.error("[ChatKitPanel] save_document error:", err);
+          return { success: false, error: msg };
+        }
+      }
+
+      if (invocation.name === "update_document") {
+        try {
+          const outsetaToken = findOutsetaTokenOnClient();
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (outsetaToken) {
+            headers["Authorization"] = `Bearer ${outsetaToken}`;
+          }
+
+          const body: Record<string, unknown> = {};
+          const fields = ["id", "document_type", "title", "content"];
+          for (const field of fields) {
+            if (invocation.params[field] !== undefined) {
+              body[field] = invocation.params[field];
+            }
+          }
+
+          // If content is a string (markdown), wrap it in the standard JSONB format
+          if (typeof body.content === "string") {
+            body.content = { markdown: body.content };
+          }
+
+          const response = await fetch("/api/documents", {
+            method: "PATCH",
+            headers,
+            credentials: "include",
+            body: JSON.stringify(body),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const errorMsg = (errorData as { error?: string }).error ?? "Failed to update document";
+            console.error("[ChatKitPanel] update_document API error:", errorMsg);
+            return { success: false, error: errorMsg };
+          }
+
+          const data = await response.json();
+          return { success: true, document: data.document };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Failed to update document";
+          console.error("[ChatKitPanel] update_document error:", err);
+          return { success: false, error: msg };
+        }
       }
 
       return { success: false };
@@ -529,4 +983,13 @@ function extractErrorDetail(
   }
   if (typeof payload.message === "string") return payload.message;
   return fallback;
+}
+
+function createInitialErrors(): ErrorState {
+  return {
+    script: null,
+    session: null,
+    integration: null,
+    retryable: false,
+  };
 }
