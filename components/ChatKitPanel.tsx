@@ -829,6 +829,94 @@ export function ChatKitPanel({
         }
       }
 
+      if (invocation.name === "save_document") {
+        try {
+          const outsetaToken = findOutsetaTokenOnClient();
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (outsetaToken) {
+            headers["Authorization"] = `Bearer ${outsetaToken}`;
+          }
+
+          const body: Record<string, unknown> = {};
+          const fields = ["document_type", "title", "content"];
+          for (const field of fields) {
+            if (invocation.params[field] !== undefined) {
+              body[field] = invocation.params[field];
+            }
+          }
+
+          // If content is a string (markdown), wrap it in the standard JSONB format
+          if (typeof body.content === "string") {
+            body.content = { markdown: body.content };
+          }
+
+          const response = await fetch("/api/documents", {
+            method: "POST",
+            headers,
+            credentials: "include",
+            body: JSON.stringify(body),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const errorMsg = (errorData as { error?: string }).error ?? "Failed to save document";
+            console.error("[ChatKitPanel] save_document API error:", errorMsg);
+            return { success: false, error: errorMsg };
+          }
+
+          const data = await response.json();
+          return { success: true, document: data.document };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Failed to save document";
+          console.error("[ChatKitPanel] save_document error:", err);
+          return { success: false, error: msg };
+        }
+      }
+
+      if (invocation.name === "update_document") {
+        try {
+          const outsetaToken = findOutsetaTokenOnClient();
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (outsetaToken) {
+            headers["Authorization"] = `Bearer ${outsetaToken}`;
+          }
+
+          const body: Record<string, unknown> = {};
+          const fields = ["id", "document_type", "title", "content"];
+          for (const field of fields) {
+            if (invocation.params[field] !== undefined) {
+              body[field] = invocation.params[field];
+            }
+          }
+
+          // If content is a string (markdown), wrap it in the standard JSONB format
+          if (typeof body.content === "string") {
+            body.content = { markdown: body.content };
+          }
+
+          const response = await fetch("/api/documents", {
+            method: "PATCH",
+            headers,
+            credentials: "include",
+            body: JSON.stringify(body),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const errorMsg = (errorData as { error?: string }).error ?? "Failed to update document";
+            console.error("[ChatKitPanel] update_document API error:", errorMsg);
+            return { success: false, error: errorMsg };
+          }
+
+          const data = await response.json();
+          return { success: true, document: data.document };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Failed to update document";
+          console.error("[ChatKitPanel] update_document error:", err);
+          return { success: false, error: msg };
+        }
+      }
+
       return { success: false };
     },
     onResponseEnd: onResponseEnd,
