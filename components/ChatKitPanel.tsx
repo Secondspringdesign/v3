@@ -47,9 +47,6 @@ const PARENT_MESSAGE_TYPE = "outseta-token";
 // In-memory fallback so token survives even if storage/cookies are blocked in iframe
 let inMemoryOutsetaToken: string | null = null;
 
-// In-memory fallback so token survives even if storage/cookies are blocked in iframe
-let inMemoryOutsetaToken: string | null = null;
-
 function setOutsetaCookie(token: string) {
   if (!isBrowser) return;
   document.cookie = `${OUTSETA_COOKIE_NAME}=${encodeURIComponent(
