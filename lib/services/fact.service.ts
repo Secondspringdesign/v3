@@ -224,25 +224,57 @@ export async function upsert(data: FactInsert): Promise<DbFact> {
 
       return fact as DbFact;
     } else {
-      // Insert a new fact
-      const { data: fact, error } = await supabase
-        .from("facts")
-        .insert(payload)
-        .select()
-        .single();
+      // FALLBACK: check by fact_id in case the row exists with fact_type_id = NULL (legacy data)
+      const existingByFactId = await getByFactId(data.business_id, data.fact_id);
+      
+      if (existingByFactId) {
+        // Update existing row AND backfill fact_type_id
+        const { data: fact, error } = await supabase
+          .from("facts")
+          .update({
+            fact_value: payload.fact_value,
+            source_workflow: payload.source_workflow,
+            fact_id: payload.fact_id,
+            fact_type_id: payload.fact_type_id, // backfill the typed slot
+          })
+          .eq("id", existingByFactId.id)
+          .select()
+          .single();
 
-      if (error) {
-        console.error("Failed to insert fact (fact_type_id path):", {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          payload,
-        });
-        throw new Error(`Failed to insert fact: ${error.message}`);
+        if (error) {
+          console.error("Failed to update fact (fact_id fallback path):", {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            payload,
+            existingId: existingByFactId.id,
+          });
+          throw new Error(`Failed to update fact: ${error.message}`);
+        }
+
+        return fact as DbFact;
+      } else {
+        // Truly new fact — insert
+        const { data: fact, error } = await supabase
+          .from("facts")
+          .insert(payload)
+          .select()
+          .single();
+
+        if (error) {
+          console.error("Failed to insert fact (fact_type_id path):", {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            payload,
+          });
+          throw new Error(`Failed to insert fact: ${error.message}`);
+        }
+
+        return fact as DbFact;
       }
-
-      return fact as DbFact;
     }
   }
 
