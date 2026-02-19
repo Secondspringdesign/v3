@@ -144,6 +144,27 @@ function bucketHeading(bucket: "today" | "this_week" | "next_week") {
   return "Next Week";
 }
 
+/**
+ * Check if a timestamp is "today" in the given timezone.
+ * Returns true if the timestamp is within today (00:00 - 23:59) in the user's timezone.
+ */
+function isToday(timestamp: string | null, timezone: string): boolean {
+  if (!timestamp) return false;
+  
+  try {
+    const date = new Date(timestamp);
+    const now = new Date();
+    
+    // Format both dates as YYYY-MM-DD in the user's timezone
+    const dateStr = date.toLocaleDateString("en-CA", { timeZone: timezone }); // en-CA gives YYYY-MM-DD
+    const nowStr = now.toLocaleDateString("en-CA", { timeZone: timezone });
+    
+    return dateStr === nowStr;
+  } catch {
+    return false;
+  }
+}
+
 type InlineDateState = { id: string; value: string };
 
 export default function BusinessHubPanel() {
@@ -166,6 +187,13 @@ export default function BusinessHubPanel() {
   // State for inline fact editing
   const [editingFact, setEditingFact] = useState<{ factTypeId: string; value: string } | null>(null);
   const [savingFact, setSavingFact] = useState(false);
+
+  // State for inline goal editing
+  const [editingGoal, setEditingGoal] = useState<{ id: string; title: string; description: string } | null>(null);
+  const [savingGoal, setSavingGoal] = useState(false);
+
+  // Timezone state (will be auto-detected on mount)
+  const [userTimezone, setUserTimezone] = useState<string>("UTC");
 
   const [activeTab, setActiveTab] = useState<"facts" | "files">("facts");
 
@@ -264,6 +292,64 @@ export default function BusinessHubPanel() {
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
+
+  // Auto-detect timezone on mount
+  useEffect(() => {
+    try {
+      const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      setUserTimezone(detected);
+    } catch (e) {
+      console.error("Failed to detect timezone:", e);
+      setUserTimezone("UTC");
+    }
+  }, []);
+
+  // Save timezone as a fact when it changes (and we have a token)
+  useEffect(() => {
+    if (!outsetaToken || !userTimezone) return;
+    
+    // Check if timezone fact already matches
+    const timezoneFact = facts.find((f) => f.fact_type_id === "user_timezone" || f.fact_id === "user_timezone");
+    if (timezoneFact && timezoneFact.fact_value === userTimezone) return;
+    
+    // Save the timezone fact
+    const saveTimezone = async () => {
+      try {
+        const headers = {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${outsetaToken}`,
+        };
+        
+        const res = await fetch("/api/facts", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            fact_id: "user_timezone",
+            fact_value: userTimezone,
+            fact_type_id: "user_timezone",
+          }),
+        });
+        
+        if (res.ok) {
+          const json = await res.json();
+          setFacts((prev) => {
+            const existing = prev.find((f) => f.fact_type_id === "user_timezone" || f.fact_id === "user_timezone");
+            if (existing) {
+              return prev.map((f) => 
+                (f.fact_type_id === "user_timezone" || f.fact_id === "user_timezone") ? json.fact : f
+              );
+            } else {
+              return [...prev, json.fact];
+            }
+          });
+        }
+      } catch (e) {
+        console.error("Failed to save timezone fact:", e);
+      }
+    };
+    
+    saveTimezone();
+  }, [userTimezone, outsetaToken, facts]);
 
   // Exchange Outseta -> Supabase
   useEffect(() => {
@@ -567,13 +653,66 @@ export default function BusinessHubPanel() {
     }
   };
 
+  // Handler for saving a goal (update)
+  const saveGoal = async (goalId: string, title: string, description: string) => {
+    if (!outsetaToken) {
+      setError("Missing auth token; request auth again.");
+      requestTokenFromParent();
+      return;
+    }
+    
+    setSavingGoal(true);
+    try {
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${outsetaToken}`,
+      };
+      
+      const body = {
+        id: goalId,
+        title: title.trim(),
+        description: description.trim() || null,
+      };
+      
+      const res = await fetch("/api/goals", {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(body),
+      });
+      
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json?.error || "Failed to save goal");
+        return;
+      }
+      
+      // Update local state
+      setGoals((prev) => prev.map((g) => (g.id === goalId ? json.goal : g)));
+      setEditingGoal(null);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSavingGoal(false);
+    }
+  };
+
   const pendingPlanner = planner.filter((p) => !p.completed);
-  const completedPlanner = planner.filter((p) => p.completed);
+  const recentlyCompleted = planner.filter((p) => p.completed && isToday(p.completed_at, userTimezone));
+  const completedPlanner = planner.filter((p) => p.completed && !isToday(p.completed_at, userTimezone));
 
   const groupedPlanner = {
-    today: pendingPlanner.filter((p) => p.due_period === "today"),
-    this_week: pendingPlanner.filter((p) => p.due_period === "this_week"),
-    next_week: pendingPlanner.filter((p) => p.due_period === "next_week"),
+    today: [
+      ...pendingPlanner.filter((p) => p.due_period === "today"),
+      ...recentlyCompleted.filter((p) => p.due_period === "today"),
+    ],
+    this_week: [
+      ...pendingPlanner.filter((p) => p.due_period === "this_week"),
+      ...recentlyCompleted.filter((p) => p.due_period === "this_week"),
+    ],
+    next_week: [
+      ...pendingPlanner.filter((p) => p.due_period === "next_week"),
+      ...recentlyCompleted.filter((p) => p.due_period === "next_week"),
+    ],
   };
 
   const groupedGoals = {
@@ -759,7 +898,32 @@ export default function BusinessHubPanel() {
         minHeight: "100vh",
       }}
     >
-      <h1 style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}>Business Hub</h1>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+        <h1 style={{ fontSize: "1.25rem", margin: 0 }}>Business Hub</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", color: "#666" }}>
+          <span title="Your timezone (used for day rollover)">🌍 {userTimezone}</span>
+          <button
+            onClick={() => {
+              const newTz = prompt("Enter timezone (e.g., America/New_York):", userTimezone);
+              if (newTz && newTz.trim()) {
+                setUserTimezone(newTz.trim());
+              }
+            }}
+            style={{
+              background: "transparent",
+              border: "1px solid #ddd",
+              borderRadius: 4,
+              padding: "0.2rem 0.4rem",
+              cursor: "pointer",
+              fontSize: "0.8rem",
+              color: "#666",
+            }}
+            title="Change timezone"
+          >
+            ⚙️
+          </button>
+        </div>
+      </div>
       <div style={{ fontSize: "0.9rem", color: "#555", marginBottom: "0.5rem" }}>
         Status: {status} {error ? `• Error: ${error}` : ""}
       </div>
@@ -860,27 +1024,117 @@ export default function BusinessHubPanel() {
                 {groupedGoals[bucket].length === 0 && (
                   <div style={{ color: "#777", fontSize: "0.9rem" }}>No goals</div>
                 )}
-                {groupedGoals[bucket].map((g) => (
-                  <div
-                    key={g.id}
-                    style={{
-                      padding: "0.6rem",
-                      background: "#fff",
-                      borderRadius: 8,
-                      marginBottom: 4,
-                      boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                    }}
-                  >
-                    <div style={{ fontWeight: 600 }}>{g.title}</div>
-                    {g.description && (
-                      <div style={{ color: "#666", fontSize: "0.9rem", marginTop: 4 }}>{g.description}</div>
-                    )}
-                    <div style={{ color: "#888", fontSize: "0.85rem", marginTop: 4 }}>
-                      Status: {g.status}
-                      {g.achieved_at ? ` • achieved ${new Date(g.achieved_at).toLocaleDateString()}` : ""}
+                {groupedGoals[bucket].map((g) => {
+                  const isEditing = editingGoal?.id === g.id;
+                  
+                  return (
+                    <div
+                      key={g.id}
+                      style={{
+                        padding: "0.6rem",
+                        background: "#fff",
+                        borderRadius: 8,
+                        marginBottom: 4,
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                      }}
+                    >
+                      {isEditing ? (
+                        <div>
+                          <input
+                            type="text"
+                            value={editingGoal.title}
+                            onChange={(e) => setEditingGoal({ ...editingGoal, title: e.target.value })}
+                            style={{
+                              width: "100%",
+                              padding: "0.5rem",
+                              border: "1px solid #ccc",
+                              borderRadius: "4px",
+                              fontFamily: "inherit",
+                              fontSize: "1rem",
+                              fontWeight: 600,
+                              marginBottom: "0.5rem",
+                            }}
+                            placeholder="Goal title"
+                            autoFocus
+                          />
+                          <textarea
+                            value={editingGoal.description}
+                            onChange={(e) => setEditingGoal({ ...editingGoal, description: e.target.value })}
+                            style={{
+                              width: "100%",
+                              minHeight: "60px",
+                              padding: "0.5rem",
+                              border: "1px solid #ccc",
+                              borderRadius: "4px",
+                              fontFamily: "inherit",
+                              fontSize: "0.9rem",
+                            }}
+                            placeholder="Goal description"
+                          />
+                          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+                            <button
+                              onClick={() => saveGoal(g.id, editingGoal.title, editingGoal.description)}
+                              disabled={savingGoal}
+                              style={{
+                                padding: "0.4rem 0.75rem",
+                                background: "#2563eb",
+                                color: "#fff",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: savingGoal ? "not-allowed" : "pointer",
+                                fontSize: "0.85rem",
+                              }}
+                            >
+                              {savingGoal ? "Saving..." : "Save"}
+                            </button>
+                            <button
+                              onClick={() => setEditingGoal(null)}
+                              disabled={savingGoal}
+                              style={{
+                                padding: "0.4rem 0.75rem",
+                                background: "#f3f3f3",
+                                color: "#333",
+                                border: "1px solid #ddd",
+                                borderRadius: "4px",
+                                cursor: savingGoal ? "not-allowed" : "pointer",
+                                fontSize: "0.85rem",
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 600 }}>{g.title}</div>
+                            {g.description && (
+                              <div style={{ color: "#666", fontSize: "0.9rem", marginTop: 4 }}>{g.description}</div>
+                            )}
+                            <div style={{ color: "#888", fontSize: "0.85rem", marginTop: 4 }}>
+                              Status: {g.status}
+                              {g.achieved_at ? ` • achieved ${new Date(g.achieved_at).toLocaleDateString()}` : ""}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setEditingGoal({ id: g.id, title: g.title, description: g.description || "" })}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              cursor: "pointer",
+                              fontSize: "1.1rem",
+                              padding: "0.25rem",
+                              color: "#666",
+                            }}
+                            title="Edit"
+                          >
+                            ✏️
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </>
             )}
           </div>

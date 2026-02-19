@@ -325,6 +325,60 @@ describe('FactService', () => {
       expect(mockSupabase.from().update).toHaveBeenCalled();
     });
 
+    it('should handle legacy data: update existing fact with null fact_type_id when fact_type_id is provided', async () => {
+      // Scenario: existing row has fact_type_id = NULL (legacy), new upsert provides fact_type_id
+      const legacyFact = { ...mockFact, fact_value: 'Old Corp', fact_type_id: null };
+      const updatedFact = { ...mockFact, fact_value: 'New Corp', fact_type_id: 'type-123' };
+
+      let callCount = 0;
+      const mockSupabase = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    // First call (getByFactTypeId) returns null, second call (getByFactId) returns legacy fact
+                    maybeSingle: vi.fn().mockImplementation(() => {
+                      callCount++;
+                      if (callCount === 1) return Promise.resolve({ data: null, error: null });
+                      return Promise.resolve({ data: legacyFact, error: null });
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: updatedFact, error: null }),
+              }),
+            }),
+          }),
+        }),
+      };
+      vi.mocked(getSupabaseClient).mockReturnValue(mockSupabase as never);
+
+      const result = await FactService.upsert({
+        business_id: 'business-456',
+        fact_id: 'business_name',
+        fact_value: 'New Corp',
+        source_workflow: 'onboarding',
+        fact_type_id: 'type-123',
+      });
+
+      expect(result).toEqual(updatedFact);
+      expect(mockSupabase.from).toHaveBeenCalledWith('facts');
+      expect(mockSupabase.from().update).toHaveBeenCalled();
+      // Verify that fact_type_id was backfilled in the update call
+      expect(mockSupabase.from().update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fact_type_id: 'type-123',
+        })
+      );
+    });
+
     it('should insert new fact when fact_type_id is null and fact does not exist', async () => {
       const mockSupabase = {
         from: vi.fn().mockReturnValue({
