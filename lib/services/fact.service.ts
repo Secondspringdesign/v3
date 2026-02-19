@@ -72,10 +72,19 @@ export async function getByFactId(businessId: string, factId: string): Promise<D
     .select("*")
     .eq("business_id", businessId)
     .eq("fact_id", factId)
-    .single();
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   if (error) {
-    if (error.code === "PGRST116") return null;
+    console.error("Failed to fetch fact by fact_id:", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      businessId,
+      factId,
+    });
     throw new Error(`Failed to fetch fact: ${error.message}`);
   }
   return data as DbFact;
@@ -89,10 +98,19 @@ export async function getByFactTypeId(businessId: string, factTypeId: string): P
     .select("*")
     .eq("business_id", businessId)
     .eq("fact_type_id", factTypeId)
-    .single();
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   if (error) {
-    if (error.code === "PGRST116") return null;
+    console.error("Failed to fetch fact by fact_type_id:", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      businessId,
+      factTypeId,
+    });
     throw new Error(`Failed to fetch fact: ${error.message}`);
   }
   return data as DbFact;
@@ -193,6 +211,14 @@ export async function upsert(data: FactInsert): Promise<DbFact> {
         .single();
 
       if (error) {
+        console.error("Failed to update fact (fact_type_id path):", {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          payload,
+          existingId: existing.id,
+        });
         throw new Error(`Failed to update fact: ${error.message}`);
       }
 
@@ -206,6 +232,13 @@ export async function upsert(data: FactInsert): Promise<DbFact> {
         .single();
 
       if (error) {
+        console.error("Failed to insert fact (fact_type_id path):", {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          payload,
+        });
         throw new Error(`Failed to insert fact: ${error.message}`);
       }
 
@@ -230,6 +263,14 @@ export async function upsert(data: FactInsert): Promise<DbFact> {
       .single();
 
     if (error) {
+      console.error("Failed to update fact (fact_id path):", {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        payload,
+        existingId: existing.id,
+      });
       throw new Error(`Failed to update fact: ${error.message}`);
     }
 
@@ -243,6 +284,13 @@ export async function upsert(data: FactInsert): Promise<DbFact> {
       .single();
 
     if (error) {
+      console.error("Failed to insert fact (fact_id path):", {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        payload,
+      });
       throw new Error(`Failed to insert fact: ${error.message}`);
     }
 

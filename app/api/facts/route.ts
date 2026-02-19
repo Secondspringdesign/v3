@@ -65,8 +65,9 @@ export async function POST(request: Request): Promise<Response> {
     return jsonResponse(response, 201);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("Failed to upsert fact:", message);
-    return errorResponse("Failed to save fact", 500, "DATABASE_ERROR");
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error("Failed to upsert fact:", { message, stack, err });
+    return errorResponse(`Failed to save fact: ${message}`, 500, "DATABASE_ERROR");
   }
 }
 
