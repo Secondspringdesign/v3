@@ -81,6 +81,23 @@ export async function getByFactId(businessId: string, factId: string): Promise<D
   return data as DbFact;
 }
 
+export async function getByFactTypeId(businessId: string, factTypeId: string): Promise<DbFact | null> {
+  const supabase = getSupabaseClient();
+
+  const { data, error } = await supabase
+    .from("facts")
+    .select("*")
+    .eq("business_id", businessId)
+    .eq("fact_type_id", factTypeId)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(`Failed to fetch fact: ${error.message}`);
+  }
+  return data as DbFact;
+}
+
 /**
  * Get all facts for a business, joined with type/category metadata.
  */
@@ -142,9 +159,8 @@ export async function getByBusinessId(businessId: string): Promise<DbFact[]> {
 // ============================================
 
 /**
- * Upsert a fact. If fact_type_id is provided, we rely on the DB unique(business_id, fact_type_id)
- * to overwrite that slot. If fact_type_id is null, we use a select-then-update/insert pattern
- * with fact_id as the logical key (since NULL doesn't participate in unique constraints).
+ * Upsert a fact. Uses select-then-update/insert pattern for both fact_type_id
+ * and fact_id based facts.
  */
 export async function upsert(data: FactInsert): Promise<DbFact> {
   if (STUB_MODE) return createStubFact(data);
@@ -159,22 +175,42 @@ export async function upsert(data: FactInsert): Promise<DbFact> {
     fact_type_id: data.fact_type_id ?? null,
   };
 
-  // When fact_type_id is provided, use the unique constraint for upsert
+  // When fact_type_id is provided, use select-then-update/insert pattern
   if (data.fact_type_id) {
-    const { data: fact, error } = await supabase
-      .from("facts")
-      .upsert(payload, {
-        onConflict: "business_id,fact_type_id",
-        ignoreDuplicates: false,
-      })
-      .select()
-      .single();
+    const existing = await getByFactTypeId(data.business_id, data.fact_type_id);
 
-    if (error) {
-      throw new Error(`Failed to upsert fact: ${error.message}`);
+    if (existing) {
+      // Update the existing fact
+      const { data: fact, error } = await supabase
+        .from("facts")
+        .update({
+          fact_value: payload.fact_value,
+          source_workflow: payload.source_workflow,
+          fact_id: payload.fact_id,
+        })
+        .eq("id", existing.id)
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(`Failed to update fact: ${error.message}`);
+      }
+
+      return fact as DbFact;
+    } else {
+      // Insert a new fact
+      const { data: fact, error } = await supabase
+        .from("facts")
+        .insert(payload)
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(`Failed to insert fact: ${error.message}`);
+      }
+
+      return fact as DbFact;
     }
-
-    return fact as DbFact;
   }
 
   // When fact_type_id is null, use select-then-update/insert pattern
