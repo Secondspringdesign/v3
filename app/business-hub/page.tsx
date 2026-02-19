@@ -107,10 +107,14 @@ function requireEnv() {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function computeDuePeriod(dateStr: string | null): "today" | "this_week" | "next_week" {
+function getTodayInTimezone(tz: string): Date {
+  const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: tz }); // returns YYYY-MM-DD
+  return new Date(dateStr + 'T00:00:00');
+}
+
+function computeDuePeriod(dateStr: string | null, tz: string): "today" | "this_week" | "next_week" {
   if (!dateStr) return "today";
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = getTodayInTimezone(tz);
 
   const target = new Date(dateStr);
   target.setHours(0, 0, 0, 0);
@@ -123,10 +127,9 @@ function computeDuePeriod(dateStr: string | null): "today" | "this_week" | "next
   return "next_week";
 }
 
-function dueLabel(dateStr: string | null): string {
+function dueLabel(dateStr: string | null, tz: string): string {
   if (!dateStr) return "No date";
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = getTodayInTimezone(tz);
   const target = new Date(dateStr);
   target.setHours(0, 0, 0, 0);
   const diff = Math.round((target.getTime() - today.getTime()) / 86400000);
@@ -136,8 +139,8 @@ function dueLabel(dateStr: string | null): string {
   return target.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function bucketHeading(bucket: "today" | "this_week" | "next_week") {
-  const today = new Date();
+function bucketHeading(bucket: "today" | "this_week" | "next_week", tz: string) {
+  const today = getTodayInTimezone(tz);
   const dayName = today.toLocaleDateString(undefined, { weekday: "long" });
   if (bucket === "today") return `Today (${dayName})`;
   if (bucket === "this_week") return "This Week";
@@ -218,6 +221,16 @@ export default function BusinessHubPanel() {
     this_week: true,
     this_month: true,
     this_quarter: true,
+    achieved: false,
+  });
+
+  const [factCategoriesOpen, setFactCategoriesOpen] = useState<Record<string, boolean>>({
+    business: false,
+    offer: false,
+    marketing: false,
+    money: false,
+    operations: false,
+    custom: false,
   });
 
   const toggleSection = (key: string) => {
@@ -230,6 +243,10 @@ export default function BusinessHubPanel() {
 
   const toggleGoalBucket = (key: keyof typeof goalBucketsOpen) => {
     setGoalBucketsOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const toggleFactCategory = (key: keyof typeof factCategoriesOpen) => {
+    setFactCategoriesOpen((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const requestTokenFromParent = () => {
@@ -527,7 +544,7 @@ export default function BusinessHubPanel() {
       requestTokenFromParent();
       return;
     }
-    const due_period = computeDuePeriod(newTaskDueDate || null);
+    const due_period = computeDuePeriod(newTaskDueDate || null, userTimezone);
     const headers = {
       "Content-Type": "application/json",
       Authorization: `Bearer ${supabaseToken}`,
@@ -585,7 +602,7 @@ export default function BusinessHubPanel() {
       "Content-Type": "application/json",
       Authorization: `Bearer ${supabaseToken}`,
     };
-    const due_period = computeDuePeriod(newDate || null);
+    const due_period = computeDuePeriod(newDate || null, userTimezone);
     const res = await fetch("/api/planner", {
       method: "PATCH",
       headers,
@@ -696,6 +713,44 @@ export default function BusinessHubPanel() {
     }
   };
 
+  // Handler for marking a goal as achieved
+  const markGoalAsAchieved = async (goalId: string) => {
+    if (!outsetaToken) {
+      setError("Missing auth token; request auth again.");
+      requestTokenFromParent();
+      return;
+    }
+    
+    try {
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${outsetaToken}`,
+      };
+      
+      const body = {
+        id: goalId,
+        status: "achieved",
+      };
+      
+      const res = await fetch("/api/goals", {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(body),
+      });
+      
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json?.error || "Failed to mark goal as achieved");
+        return;
+      }
+      
+      // Update local state
+      setGoals((prev) => prev.map((g) => (g.id === goalId ? json.goal : g)));
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
   const pendingPlanner = planner.filter((p) => !p.completed);
   const recentlyCompleted = planner.filter((p) => p.completed && isToday(p.completed_at, userTimezone));
   const completedPlanner = planner.filter((p) => p.completed && !isToday(p.completed_at, userTimezone));
@@ -715,10 +770,13 @@ export default function BusinessHubPanel() {
     ],
   };
 
+  const activeGoals = goals.filter((g) => g.status === "active");
+  const achievedGoals = goals.filter((g) => g.status === "achieved");
+
   const groupedGoals = {
-    this_week: goals.filter((g) => g.time_horizon === "this_week"),
-    this_month: goals.filter((g) => g.time_horizon === "this_month"),
-    this_quarter: goals.filter((g) => g.time_horizon === "this_quarter"),
+    this_week: activeGoals.filter((g) => g.time_horizon === "this_week"),
+    this_month: activeGoals.filter((g) => g.time_horizon === "this_month"),
+    this_quarter: activeGoals.filter((g) => g.time_horizon === "this_quarter"),
   };
 
   // Group facts — currently by ID prefix; can switch to category_name when API provides it.
@@ -766,7 +824,7 @@ export default function BusinessHubPanel() {
           onClick={() => togglePlannerBucket(bucketKey)}
         >
           <span style={{ fontSize: "1rem" }}>{open ? "▾" : "▸"}</span>
-          <span style={{ flex: 1 }}>{bucketHeading(bucketKey)}</span>
+          <span style={{ flex: 1 }}>{bucketHeading(bucketKey, userTimezone)}</span>
           {isToday && (
             <button
               onClick={(e) => {
@@ -876,7 +934,7 @@ export default function BusinessHubPanel() {
                         })
                       }
                     >
-                      {dueLabel(item.due_date)}
+                      {dueLabel(item.due_date, userTimezone)}
                     </span>
                   )}
                 </div>
@@ -989,7 +1047,7 @@ export default function BusinessHubPanel() {
                     <div style={{ fontWeight: 600, textDecoration: "line-through" }}>{item.title}</div>
                   </div>
                   <div style={{ fontSize: "0.9rem", color: "#666", minWidth: 110, textAlign: "right" }}>
-                    {dueLabel(item.due_date)}
+                    {dueLabel(item.due_date, userTimezone)}
                   </div>
                 </div>
               ))}
@@ -1106,15 +1164,18 @@ export default function BusinessHubPanel() {
                         </div>
                       ) : (
                         <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                          <input
+                            type="checkbox"
+                            checked={false}
+                            onChange={() => markGoalAsAchieved(g.id)}
+                            style={{ marginTop: "0.25rem", cursor: "pointer" }}
+                            title="Mark as achieved"
+                          />
                           <div style={{ flex: 1 }}>
                             <div style={{ fontWeight: 600 }}>{g.title}</div>
                             {g.description && (
                               <div style={{ color: "#666", fontSize: "0.9rem", marginTop: 4 }}>{g.description}</div>
                             )}
-                            <div style={{ color: "#888", fontSize: "0.85rem", marginTop: 4 }}>
-                              Status: {g.status}
-                              {g.achieved_at ? ` • achieved ${new Date(g.achieved_at).toLocaleDateString()}` : ""}
-                            </div>
                           </div>
                           <button
                             onClick={() => setEditingGoal({ id: g.id, title: g.title, description: g.description || "" })}
@@ -1139,6 +1200,62 @@ export default function BusinessHubPanel() {
             )}
           </div>
         ))}
+
+        {/* Achieved Goals Section */}
+        <div style={{ marginTop: "0.5rem" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              userSelect: "none",
+              padding: "0.35rem 0",
+            }}
+            onClick={() => toggleGoalBucket("achieved")}
+          >
+            <span style={{ fontSize: "1rem" }}>{goalBucketsOpen.achieved ? "▾" : "▸"}</span>
+            <span>Achieved</span>
+          </div>
+          {goalBucketsOpen.achieved && (
+            <div>
+              {achievedGoals.length === 0 && (
+                <div style={{ color: "#777", fontSize: "0.9rem" }}>No achieved goals</div>
+              )}
+              {achievedGoals.map((g) => (
+                <div
+                  key={g.id}
+                  style={{
+                    padding: "0.6rem",
+                    background: "#f9f9f9",
+                    borderRadius: 8,
+                    marginBottom: 4,
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                    opacity: 0.75,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                    <span style={{ fontSize: "1.1rem", marginTop: "0.1rem" }}>✅</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, textDecoration: "line-through", color: "#666" }}>
+                        {g.title}
+                      </div>
+                      {g.description && (
+                        <div style={{ color: "#888", fontSize: "0.9rem", marginTop: 4 }}>{g.description}</div>
+                      )}
+                      {g.achieved_at && (
+                        <div style={{ color: "#999", fontSize: "0.85rem", marginTop: 4 }}>
+                          Achieved: {new Date(g.achieved_at).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </Section>
 
       {/* Tabs for Facts / Files */}
@@ -1183,31 +1300,46 @@ export default function BusinessHubPanel() {
                 if (customFacts.length === 0) return null;
                 
                 return (
-                  <div key={cat} style={{ marginBottom: "1rem" }}>
-                    <div style={{ fontWeight: 700, marginBottom: "0.5rem", textTransform: "capitalize" }}>
-                      {cat}
+                  <div key={cat} style={{ marginBottom: "0.5rem" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        userSelect: "none",
+                        padding: "0.35rem 0",
+                        textTransform: "capitalize",
+                      }}
+                      onClick={() => toggleFactCategory(cat)}
+                    >
+                      <span style={{ fontSize: "1rem" }}>{factCategoriesOpen[cat] ? "▾" : "▸"}</span>
+                      <span>{cat}</span>
                     </div>
-                    <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                      {customFacts.map((f) => (
-                        <li
-                          key={f.id}
-                          style={{
-                            marginBottom: "0.6rem",
-                            padding: "0.65rem",
-                            background: "#fff",
-                            borderRadius: "8px",
-                            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                          }}
-                        >
-                          <div style={{ fontWeight: 600 }}>{f.fact_id}</div>
-                          <div style={{ marginTop: "0.25rem" }}>{f.fact_value}</div>
-                          <div style={{ marginTop: "0.25rem", fontSize: "0.8rem", color: "#666" }}>
-                            {f.source_workflow ? `source: ${f.source_workflow}` : "source: n/a"}
-                            {f.updated_at ? ` • updated: ${new Date(f.updated_at).toLocaleString()}` : ""}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
+                    {factCategoriesOpen[cat] && (
+                      <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                        {customFacts.map((f) => (
+                          <li
+                            key={f.id}
+                            style={{
+                              marginBottom: "0.6rem",
+                              padding: "0.65rem",
+                              background: "#fff",
+                              borderRadius: "8px",
+                              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                            }}
+                          >
+                            <div style={{ fontWeight: 600 }}>{f.fact_id}</div>
+                            <div style={{ marginTop: "0.25rem" }}>{f.fact_value}</div>
+                            <div style={{ marginTop: "0.25rem", fontSize: "0.8rem", color: "#666" }}>
+                              {f.source_workflow ? `source: ${f.source_workflow}` : "source: n/a"}
+                              {f.updated_at ? ` • updated: ${new Date(f.updated_at).toLocaleString()}` : ""}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 );
               }
@@ -1217,121 +1349,136 @@ export default function BusinessHubPanel() {
               if (predefinedSlots.length === 0) return null;
               
               return (
-                <div key={cat} style={{ marginBottom: "1rem" }}>
-                  <div style={{ fontWeight: 700, marginBottom: "0.5rem", textTransform: "capitalize" }}>
-                    {cat}
+                <div key={cat} style={{ marginBottom: "0.5rem" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      userSelect: "none",
+                      padding: "0.35rem 0",
+                      textTransform: "capitalize",
+                    }}
+                    onClick={() => toggleFactCategory(cat)}
+                  >
+                    <span style={{ fontSize: "1rem" }}>{factCategoriesOpen[cat] ? "▾" : "▸"}</span>
+                    <span>{cat}</span>
                   </div>
-                  <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                    {predefinedSlots.map((slot) => {
-                      const existingFact = facts.find((f) => 
-                        f.fact_type_id === slot.fact_type_id || f.fact_id === slot.fact_type_id
-                      );
-                      const isEditing = editingFact?.factTypeId === slot.fact_type_id;
-                      
-                      return (
-                        <li
-                          key={slot.fact_type_id}
-                          style={{
-                            marginBottom: "0.6rem",
-                            padding: "0.65rem",
-                            background: "#fff",
-                            borderRadius: "8px",
-                            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                          }}
-                        >
-                          <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontWeight: 600 }}>{slot.label}</div>
-                              {isEditing ? (
-                                <div style={{ marginTop: "0.5rem" }}>
-                                  <textarea
-                                    value={editingFact.value}
-                                    onChange={(e) => setEditingFact({ factTypeId: slot.fact_type_id, value: e.target.value })}
-                                    style={{
-                                      width: "100%",
-                                      minHeight: "80px",
-                                      padding: "0.5rem",
-                                      border: "1px solid #ccc",
-                                      borderRadius: "4px",
-                                      fontFamily: "inherit",
-                                      fontSize: "0.9rem",
-                                    }}
-                                    autoFocus
-                                  />
-                                  <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
-                                    <button
-                                      onClick={() => saveFact(slot.fact_type_id, editingFact.value, existingFact?.fact_id)}
-                                      disabled={savingFact}
+                  {factCategoriesOpen[cat] && (
+                    <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                      {predefinedSlots.map((slot) => {
+                        const existingFact = facts.find((f) => 
+                          f.fact_type_id === slot.fact_type_id || f.fact_id === slot.fact_type_id
+                        );
+                        const isEditing = editingFact?.factTypeId === slot.fact_type_id;
+                        
+                        return (
+                          <li
+                            key={slot.fact_type_id}
+                            style={{
+                              marginBottom: "0.6rem",
+                              padding: "0.65rem",
+                              background: "#fff",
+                              borderRadius: "8px",
+                              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontWeight: 600 }}>{slot.label}</div>
+                                {isEditing ? (
+                                  <div style={{ marginTop: "0.5rem" }}>
+                                    <textarea
+                                      value={editingFact.value}
+                                      onChange={(e) => setEditingFact({ factTypeId: slot.fact_type_id, value: e.target.value })}
                                       style={{
-                                        padding: "0.4rem 0.75rem",
-                                        background: "#2563eb",
-                                        color: "#fff",
-                                        border: "none",
+                                        width: "100%",
+                                        minHeight: "80px",
+                                        padding: "0.5rem",
+                                        border: "1px solid #ccc",
                                         borderRadius: "4px",
-                                        cursor: savingFact ? "not-allowed" : "pointer",
-                                        fontSize: "0.85rem",
+                                        fontFamily: "inherit",
+                                        fontSize: "0.9rem",
                                       }}
-                                    >
-                                      {savingFact ? "Saving..." : "Save"}
-                                    </button>
-                                    <button
-                                      onClick={() => setEditingFact(null)}
-                                      disabled={savingFact}
-                                      style={{
-                                        padding: "0.4rem 0.75rem",
-                                        background: "#f3f3f3",
-                                        color: "#333",
-                                        border: "1px solid #ddd",
-                                        borderRadius: "4px",
-                                        cursor: savingFact ? "not-allowed" : "pointer",
-                                        fontSize: "0.85rem",
-                                      }}
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <>
-                                  {existingFact ? (
-                                    <>
-                                      <div style={{ marginTop: "0.25rem", whiteSpace: "pre-wrap" }}>
-                                        {existingFact.fact_value}
-                                      </div>
-                                      <div style={{ marginTop: "0.25rem", fontSize: "0.8rem", color: "#666" }}>
-                                        {existingFact.source_workflow ? `source: ${existingFact.source_workflow}` : "source: n/a"}
-                                        {existingFact.updated_at ? ` • updated: ${new Date(existingFact.updated_at).toLocaleString()}` : ""}
-                                      </div>
-                                    </>
-                                  ) : (
-                                    <div style={{ marginTop: "0.25rem", color: "#999", fontStyle: "italic", fontSize: "0.9rem" }}>
-                                      {slot.description}
+                                      autoFocus
+                                    />
+                                    <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+                                      <button
+                                        onClick={() => saveFact(slot.fact_type_id, editingFact.value, existingFact?.fact_id)}
+                                        disabled={savingFact}
+                                        style={{
+                                          padding: "0.4rem 0.75rem",
+                                          background: "#2563eb",
+                                          color: "#fff",
+                                          border: "none",
+                                          borderRadius: "4px",
+                                          cursor: savingFact ? "not-allowed" : "pointer",
+                                          fontSize: "0.85rem",
+                                        }}
+                                      >
+                                        {savingFact ? "Saving..." : "Save"}
+                                      </button>
+                                      <button
+                                        onClick={() => setEditingFact(null)}
+                                        disabled={savingFact}
+                                        style={{
+                                          padding: "0.4rem 0.75rem",
+                                          background: "#f3f3f3",
+                                          color: "#333",
+                                          border: "1px solid #ddd",
+                                          borderRadius: "4px",
+                                          cursor: savingFact ? "not-allowed" : "pointer",
+                                          fontSize: "0.85rem",
+                                        }}
+                                      >
+                                        Cancel
+                                      </button>
                                     </div>
-                                  )}
-                                </>
+                                  </div>
+                                ) : (
+                                  <>
+                                    {existingFact ? (
+                                      <>
+                                        <div style={{ marginTop: "0.25rem", whiteSpace: "pre-wrap" }}>
+                                          {existingFact.fact_value}
+                                        </div>
+                                        <div style={{ marginTop: "0.25rem", fontSize: "0.8rem", color: "#666" }}>
+                                          {existingFact.source_workflow ? `source: ${existingFact.source_workflow}` : "source: n/a"}
+                                          {existingFact.updated_at ? ` • updated: ${new Date(existingFact.updated_at).toLocaleString()}` : ""}
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <div style={{ marginTop: "0.25rem", color: "#999", fontStyle: "italic", fontSize: "0.9rem" }}>
+                                        {slot.description}
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                              {!isEditing && (
+                                <button
+                                  onClick={() => setEditingFact({ factTypeId: slot.fact_type_id, value: existingFact?.fact_value || "" })}
+                                  style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    fontSize: "1.1rem",
+                                    padding: "0.25rem",
+                                    color: "#666",
+                                  }}
+                                  title="Edit"
+                                >
+                                  ✏️
+                                </button>
                               )}
                             </div>
-                            {!isEditing && (
-                              <button
-                                onClick={() => setEditingFact({ factTypeId: slot.fact_type_id, value: existingFact?.fact_value || "" })}
-                                style={{
-                                  background: "transparent",
-                                  border: "none",
-                                  cursor: "pointer",
-                                  fontSize: "1.1rem",
-                                  padding: "0.25rem",
-                                  color: "#666",
-                                }}
-                                title="Edit"
-                              >
-                                ✏️
-                              </button>
-                            )}
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </div>
               );
             })}
