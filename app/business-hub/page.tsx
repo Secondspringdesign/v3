@@ -153,15 +153,15 @@ function deriveDueDateClient(duePeriod: PlannerItem['due_period'], tz: string): 
       return new Date(year, month, date).toISOString().split('T')[0];
     }
     case 'this_week': {
-      // Friday of current week
-      const daysUntilFri = (5 - day + 7) % 7 || 7;
+      // Friday of current week (or today if it's already Friday)
+      const daysUntilFri = (5 - day + 7) % 7;
       const fri = new Date(year, month, date + daysUntilFri);
       return fri.toISOString().split('T')[0];
     }
     case 'next_week': {
-      // Monday of next week
-      const daysUntilMon = (1 - day + 7) % 7 || 7;
-      const mon = new Date(year, month, date + daysUntilMon);
+      // Monday of next week (always 7 days ahead if today is Monday, otherwise days until next Monday)
+      const daysUntilNextMon = day === 1 ? 7 : (1 - day + 7) % 7;
+      const mon = new Date(year, month, date + daysUntilNextMon);
       return mon.toISOString().split('T')[0];
     }
     case 'this_month': {
