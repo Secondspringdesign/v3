@@ -40,6 +40,8 @@ async function getUserBusiness(outsetaUid: string) {
 }
 
 // GET /api/documents -> list documents for active business
+// NOTE: The 'documents' table must be created in Supabase first.
+// See docs/supabase-setup.md for the required schema and setup instructions.
 export async function GET(request: Request): Promise<Response> {
   const auth = await authenticateRequest(request);
   if (!auth.success) return errorResponse(auth.error, auth.status, 'UNAUTHORIZED');

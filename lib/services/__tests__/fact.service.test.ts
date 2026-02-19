@@ -13,10 +13,11 @@ const mockFact: DbFact = {
   id: 'fact-123',
   business_id: 'business-456',
   fact_id: 'business_name',
-  fact_text: 'Acme Corp',
+  fact_value: 'Acme Corp',
   source_workflow: 'onboarding',
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
+  fact_type_id: null,
 };
 
 describe('FactService', () => {
@@ -123,7 +124,7 @@ describe('FactService', () => {
   });
 
   describe('upsert', () => {
-    it('should upsert fact with onConflict', async () => {
+    it('should upsert fact with fact_type_id using onConflict', async () => {
       const mockSupabase = {
         from: vi.fn().mockReturnValue({
           upsert: vi.fn().mockReturnValue({
@@ -138,11 +139,83 @@ describe('FactService', () => {
       const result = await FactService.upsert({
         business_id: 'business-456',
         fact_id: 'business_name',
-        fact_text: 'Acme Corp',
+        fact_value: 'Acme Corp',
         source_workflow: 'onboarding',
+        fact_type_id: 'type-123',
       });
 
       expect(result).toEqual(mockFact);
+      expect(mockSupabase.from).toHaveBeenCalledWith('facts');
+      expect(mockSupabase.from().upsert).toHaveBeenCalled();
+    });
+
+    it('should insert new fact when fact_type_id is null and fact does not exist', async () => {
+      const mockSupabase = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: { code: 'PGRST116', message: 'No rows' },
+                }),
+              }),
+            }),
+          }),
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: mockFact, error: null }),
+            }),
+          }),
+        }),
+      };
+      vi.mocked(getSupabaseClient).mockReturnValue(mockSupabase as never);
+
+      const result = await FactService.upsert({
+        business_id: 'business-456',
+        fact_id: 'new_fact',
+        fact_value: 'New Value',
+        source_workflow: null,
+        fact_type_id: null,
+      });
+
+      expect(result).toEqual(mockFact);
+      expect(mockSupabase.from).toHaveBeenCalledWith('facts');
+    });
+
+    it('should update existing fact when fact_type_id is null and fact exists', async () => {
+      const existingFact = { ...mockFact, fact_value: 'Old Value' };
+      const updatedFact = { ...mockFact, fact_value: 'New Value' };
+
+      const mockSupabase = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: existingFact, error: null }),
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: updatedFact, error: null }),
+              }),
+            }),
+          }),
+        }),
+      };
+      vi.mocked(getSupabaseClient).mockReturnValue(mockSupabase as never);
+
+      const result = await FactService.upsert({
+        business_id: 'business-456',
+        fact_id: 'business_name',
+        fact_value: 'New Value',
+        source_workflow: null,
+        fact_type_id: null,
+      });
+
+      expect(result).toEqual(updatedFact);
       expect(mockSupabase.from).toHaveBeenCalledWith('facts');
     });
 
@@ -165,8 +238,9 @@ describe('FactService', () => {
         FactService.upsert({
           business_id: 'business-456',
           fact_id: 'test',
-          fact_text: 'value',
+          fact_value: 'value',
           source_workflow: null,
+          fact_type_id: 'type-123',
         })
       ).rejects.toThrow('Failed to upsert fact');
     });
