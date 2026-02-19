@@ -137,7 +137,7 @@ export interface DbPillar {
 // PLANNER
 // ============================================
 
-export type DuePeriod = "today" | "this_week" | "next_week";
+export type DuePeriod = "today" | "this_week" | "next_week" | "this_month" | "this_quarter";
 
 export interface DbPlannerItem {
   id: string;

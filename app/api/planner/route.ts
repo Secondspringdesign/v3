@@ -14,6 +14,48 @@ type PlannerBody = {
   sort_order?: number;
 };
 
+/**
+ * Auto-derive due_date from due_period when due_date is not provided.
+ * This makes due_period the source of truth for task scheduling.
+ */
+function deriveDueDate(duePeriod: DuePeriod, existingDueDate?: string | null): string | null {
+  if (existingDueDate) return existingDueDate; // respect explicit dates
+  
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const date = now.getDate();
+  const day = now.getDay(); // 0=Sun, 1=Mon...
+  
+  switch (duePeriod) {
+    case 'today': {
+      return new Date(year, month, date).toISOString().split('T')[0];
+    }
+    case 'this_week': {
+      // Friday of current week
+      const daysUntilFri = (5 - day + 7) % 7 || 7;
+      const fri = new Date(year, month, date + daysUntilFri);
+      return fri.toISOString().split('T')[0];
+    }
+    case 'next_week': {
+      // Monday of next week
+      const daysUntilMon = (1 - day + 7) % 7 || 7;
+      const mon = new Date(year, month, date + daysUntilMon);
+      return mon.toISOString().split('T')[0];
+    }
+    case 'this_month': {
+      const lastDay = new Date(year, month + 1, 0);
+      return lastDay.toISOString().split('T')[0];
+    }
+    case 'this_quarter': {
+      const qEnd = new Date(year, Math.ceil((month + 1) / 3) * 3, 0);
+      return qEnd.toISOString().split('T')[0];
+    }
+    default:
+      return null;
+  }
+}
+
 function requireEnv() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -143,6 +185,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const due_period: DuePeriod = (body.due_period as DuePeriod) ?? 'today';
+  const derivedDueDate = deriveDueDate(due_period, body.due_date);
 
   try {
     const ctx = await getOrCreateUserAndBusiness(
@@ -158,7 +201,7 @@ export async function POST(request: Request): Promise<Response> {
         business_id: ctx.businessId,
         title: body.title,
         description: body.description ?? null,
-        due_date: body.due_date ?? null,
+        due_date: derivedDueDate,
         due_period,
         pillar_id: body.pillar_id ?? null,
         completed: body.completed ?? false,
@@ -196,10 +239,21 @@ export async function PATCH(request: Request): Promise<Response> {
   const updates: Record<string, unknown> = {};
   if (body.title !== undefined) updates.title = body.title;
   if (body.description !== undefined) updates.description = body.description;
-  if (body.due_date !== undefined) updates.due_date = body.due_date;
-  if (body.due_period !== undefined) updates.due_period = body.due_period;
   if (body.pillar_id !== undefined) updates.pillar_id = body.pillar_id;
   if (body.sort_order !== undefined) updates.sort_order = body.sort_order;
+  
+  // Handle due_period and due_date together
+  if (body.due_period !== undefined) {
+    updates.due_period = body.due_period;
+    // Auto-derive due_date from due_period if due_date is not explicitly provided
+    if (body.due_date === undefined) {
+      updates.due_date = deriveDueDate(body.due_period, null);
+    }
+  }
+  if (body.due_date !== undefined) {
+    updates.due_date = body.due_date;
+  }
+  
   if (body.completed !== undefined) {
     updates.completed = body.completed;
     updates.completed_at = body.completed ? new Date().toISOString() : null;

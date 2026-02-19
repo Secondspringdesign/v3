@@ -8,7 +8,7 @@ type PlannerItem = {
   title: string;
   description: string | null;
   due_date: string | null;
-  due_period: "today" | "this_week" | "next_week";
+  due_period: "today" | "this_week" | "next_week" | "this_month" | "this_quarter";
   pillar_id: string | null;
   completed: boolean;
   completed_at: string | null;
@@ -136,7 +136,48 @@ function getTodayInTimezone(tz: string): Date {
   return new Date(dateStr + 'T00:00:00');
 }
 
-function computeDuePeriod(dateStr: string | null, tz: string): "today" | "this_week" | "next_week" {
+/**
+ * Client-side version: Auto-derive due_date from due_period for display purposes.
+ * This ensures tasks always show a date even if due_date is null.
+ */
+function deriveDueDateClient(duePeriod: PlannerItem['due_period'], tz: string): string {
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: tz });
+  const today = new Date(todayStr + 'T00:00:00');
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  const date = today.getDate();
+  const day = today.getDay(); // 0=Sun, 1=Mon...
+  
+  switch (duePeriod) {
+    case 'today': {
+      return new Date(year, month, date).toISOString().split('T')[0];
+    }
+    case 'this_week': {
+      // Friday of current week
+      const daysUntilFri = (5 - day + 7) % 7 || 7;
+      const fri = new Date(year, month, date + daysUntilFri);
+      return fri.toISOString().split('T')[0];
+    }
+    case 'next_week': {
+      // Monday of next week
+      const daysUntilMon = (1 - day + 7) % 7 || 7;
+      const mon = new Date(year, month, date + daysUntilMon);
+      return mon.toISOString().split('T')[0];
+    }
+    case 'this_month': {
+      const lastDay = new Date(year, month + 1, 0);
+      return lastDay.toISOString().split('T')[0];
+    }
+    case 'this_quarter': {
+      const qEnd = new Date(year, Math.ceil((month + 1) / 3) * 3, 0);
+      return qEnd.toISOString().split('T')[0];
+    }
+    default:
+      return todayStr;
+  }
+}
+
+function computeDuePeriod(dateStr: string | null, tz: string): "today" | "this_week" | "next_week" | "this_month" | "this_quarter" {
   if (!dateStr) return "today";
   
   // Get today in the user's timezone as YYYY-MM-DD
@@ -152,11 +193,25 @@ function computeDuePeriod(dateStr: string | null, tz: string): "today" | "this_w
   if (diffDays <= 0) return "today";
   if (diffDays <= 6) return "this_week";
   if (diffDays <= 13) return "next_week";
+  
+  // For longer periods, check month and quarter
+  const targetMonth = target.getMonth();
+  const todayMonth = today.getMonth();
+  const targetYear = target.getFullYear();
+  const todayYear = today.getFullYear();
+  
+  if (targetYear === todayYear && targetMonth === todayMonth) return "this_month";
+  
+  const todayQuarter = Math.floor(todayMonth / 3);
+  const targetQuarter = Math.floor(targetMonth / 3);
+  if (targetYear === todayYear && targetQuarter === todayQuarter) return "this_quarter";
+  
   return "next_week";
 }
 
-function dueLabel(dateStr: string | null, tz: string): string {
-  if (!dateStr) return "No date";
+function dueLabel(item: PlannerItem, tz: string): string {
+  // Use due_date if available, otherwise derive from due_period
+  const dateStr = item.due_date || deriveDueDateClient(item.due_period, tz);
   
   // Get today in the user's timezone as YYYY-MM-DD
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: tz });
@@ -171,7 +226,7 @@ function dueLabel(dateStr: string | null, tz: string): string {
   if (diff === 1) return "Tomorrow";
   if (diff === -1) return "Yesterday";
   
-  // Format the date in the user's timezone
+  // Format the date in the user's timezone (e.g., "Feb 19", "Feb 24")
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-US', { 
     month: 'short', 
@@ -598,7 +653,14 @@ export default function BusinessHubPanel() {
       requestTokenFromParent();
       return;
     }
-    const due_period = computeDuePeriod(newTaskDueDate || null, userTimezone);
+    
+    // Get today's date in user's timezone
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: userTimezone });
+    
+    // If no date is set when adding from "+ Add" button, default to today
+    const effectiveDueDate = newTaskDueDate || todayStr;
+    const due_period = computeDuePeriod(effectiveDueDate, userTimezone);
+    
     const headers = {
       "Content-Type": "application/json",
       Authorization: `Bearer ${supabaseToken}`,
@@ -609,7 +671,7 @@ export default function BusinessHubPanel() {
       body: JSON.stringify({
         title,
         due_period,
-        due_date: newTaskDueDate || null,
+        due_date: effectiveDueDate,
       }),
     });
     const json = await res.json();
@@ -1000,7 +1062,7 @@ export default function BusinessHubPanel() {
                         })
                       }
                     >
-                      {dueLabel(item.due_date, userTimezone)}
+                      {dueLabel(item, userTimezone)}
                     </span>
                   )}
                 </div>
@@ -1113,7 +1175,7 @@ export default function BusinessHubPanel() {
                     <div style={{ fontWeight: 600, textDecoration: "line-through" }}>{item.title}</div>
                   </div>
                   <div style={{ fontSize: "0.9rem", color: "#666", minWidth: 110, textAlign: "right" }}>
-                    {dueLabel(item.due_date, userTimezone)}
+                    {dueLabel(item, userTimezone)}
                   </div>
                 </div>
               ))}
