@@ -236,6 +236,7 @@ export function getMobilePromptsForAgent(agent?: string): StartScreenPrompt[] | 
 
 // ---------- THEME CONFIG ----------
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
   colorScheme: "dark",
   radius: "round",

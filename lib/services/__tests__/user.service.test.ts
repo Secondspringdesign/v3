@@ -101,7 +101,6 @@ describe('UserService', () => {
 
     it('should update email when different', async () => {
       const updatedUser = { ...mockUser, email: 'new@example.com' };
-      const callCount = 0;
 
       const mockSupabase = {
         from: vi.fn().mockReturnValue({

@@ -195,7 +195,6 @@ export async function getOrCreateActive(userId: string): Promise<DbBusiness> {
   } catch (err) {
     // Handle race condition: another request may have created a business
     // Unlike users, there's no unique constraint, but we still check for duplicates
-    const message = err instanceof Error ? err.message : String(err);
 
     // If there was an error, check if a business was created by another request
     const business = await getActiveByUserId(userId);
