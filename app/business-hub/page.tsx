@@ -306,6 +306,10 @@ export default function BusinessHubPanel() {
 
   const reconnectingRef = useRef(false);
   const exchangeAttemptsRef = useRef(0);
+  
+  // Focus queue refs for handling multiple rapid writes
+  const focusQueueRef = useRef<Array<{ type: 'fact' | 'goal' | 'planner' | 'document'; id: string }>>([]);
+  const focusProcessingRef = useRef(false);
 
   const [sections, setSections] = useState<Record<string, SectionState>>({
     planner: { open: true },
@@ -598,6 +602,11 @@ export default function BusinessHubPanel() {
                 break;
               }
             }
+          } else {
+            // Fallback: open all fact categories if item not found in state
+            const allCategoriesOpen: Record<string, boolean> = {};
+            Object.keys(PREDEFINED_FACT_SLOTS).forEach(cat => { allCategoriesOpen[cat] = true; });
+            setFactCategoriesOpen(prev => ({ ...prev, ...allCategoriesOpen }));
           }
         } else if (type === 'goal') {
           setSections(prev => ({ ...prev, goals: { open: true } }));
@@ -605,6 +614,14 @@ export default function BusinessHubPanel() {
           const goal = goals.find(g => g.id === id);
           if (goal) {
             setGoalBucketsOpen(prev => ({ ...prev, [goal.time_horizon]: true }));
+          } else {
+            // Fallback: open all goal buckets if item not found in state
+            setGoalBucketsOpen({
+              this_week: true,
+              this_month: true,
+              this_quarter: true,
+              achieved: false,
+            });
           }
         } else if (type === 'planner') {
           setSections(prev => ({ ...prev, planner: { open: true } }));
@@ -612,6 +629,16 @@ export default function BusinessHubPanel() {
           const item = planner.find(p => p.id === id);
           if (item) {
             setPlannerBucketsOpen(prev => ({ ...prev, [item.due_period]: true }));
+          } else {
+            // Fallback: open all planner buckets if item not found in state
+            setPlannerBucketsOpen({
+              today: true,
+              this_week: true,
+              next_week: true,
+              this_month: true,
+              this_quarter: true,
+              completed: false,
+            });
           }
         } else if (type === 'document') {
           setActiveTab('files');
@@ -633,6 +660,27 @@ export default function BusinessHubPanel() {
       }
     }, 500);
   }, [facts, goals, planner]);
+
+  // Process focus queue sequentially with delay between items
+  const processNextFocus = useCallback(() => {
+    const next = focusQueueRef.current.shift();
+    if (!next) {
+      focusProcessingRef.current = false;
+      return;
+    }
+    focusProcessingRef.current = true;
+    autoFocusItem(next.type, next.id);
+    // Wait for highlight (3s) + small gap before next
+    setTimeout(() => processNextFocus(), 3500);
+  }, [autoFocusItem]);
+
+  // Queue auto-focus requests to handle multiple rapid writes
+  const queueAutoFocus = useCallback((type: 'fact' | 'goal' | 'planner' | 'document', id: string) => {
+    focusQueueRef.current.push({ type, id });
+    if (!focusProcessingRef.current) {
+      processNextFocus();
+    }
+  }, [processNextFocus]);
 
   // Supabase connection + realtime
   useEffect(() => {
@@ -735,7 +783,7 @@ export default function BusinessHubPanel() {
               else if (table === 'documents') itemType = 'document';
               else return;
               
-              autoFocusItem(itemType, payload.new.id as string);
+              queueAutoFocus(itemType, payload.new.id as string);
             }
           })
           .subscribe((st) => {
@@ -785,7 +833,7 @@ export default function BusinessHubPanel() {
       cancelled = true;
       cleanup?.();
     };
-  }, [supabaseToken, autoFocusItem]);
+  }, [supabaseToken, queueAutoFocus]);
 
   const addPlannerTask = async () => {
     const title = newTaskTitle.trim();
