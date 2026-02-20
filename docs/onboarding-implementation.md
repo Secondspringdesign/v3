@@ -2,17 +2,44 @@
 
 ## Overview
 
-This implementation provides a complete foundation for tracking and displaying user onboarding progress in the Second Spring AI Portal.
+This implementation provides an event-driven, emotionally meaningful onboarding experience in the Second Spring AI Portal. The redesigned architecture replaces generic milestones with specific achievements tied to key business facts, and uses realtime updates instead of polling for instant progress feedback.
 
-## Components Created
+## Architecture
 
-### 1. Database Migration
-**File**: `supabase/migrations/20260219_add_onboarding_complete.sql`
+### Event-Driven Updates
 
-- Adds `onboarding_complete` boolean column to `businesses` table
-- Defaults to `false`
-- Automatically updated when all milestones are complete
-- RLS policies already cover this column (no additional policies needed)
+The progress bar receives updates via `postMessage` from the Business Hub when any data changes, eliminating the need for constant polling:
+
+1. **Business Hub** → detects realtime database changes (facts, goals, planner, documents)
+2. **Business Hub** → sends `postMessage({ type: 'hub-data-changed' })` to parent (Framer)
+3. **Framer page** → relays message to progress bar iframe
+4. **Progress Bar** → debounces (300ms) then fetches latest progress
+5. **Safety Net** → 60-second fallback poll if no events received
+
+### Auto-Focus & Highlight
+
+When any item changes via realtime, the Business Hub automatically:
+- Opens the appropriate section (Facts, Goals, Planner, Files)
+- Opens the relevant category/bucket
+- Scrolls the item into view (smooth, centered)
+- Adds a 3-second green pulse animation to highlight the change
+
+This works universally across the entire Business Hub, not just during onboarding.
+
+## Components
+
+### 1. Database Migrations
+
+**Files**: 
+- `supabase/migrations/20260219_add_onboarding_complete.sql` (existing)
+- `supabase/migrations/20260220_add_onboarding_fact_types.sql` (NEW)
+
+**New Fact Types (in `business` category):**
+- `why_this_business` — Emotional motivation for starting the business
+- `constraints_summary` — Reality check (time, money, situation, limitations)
+- `first_experiment` — The ONE small thing to try first
+
+These additions bring the total business fact slots from 7 to 10.
 
 ### 2. API Endpoints
 
@@ -22,28 +49,33 @@ This implementation provides a complete foundation for tracking and displaying u
 **GET Response:**
 ```json
 {
-  "percent": 50,
+  "percent": 70,
   "complete": false,
   "milestones": [
-    { "id": "business_name", "label": "Name your business", "done": true, "weight": 15 },
-    { "id": "business_facts_3", "label": "Add 3+ business facts", "done": true, "weight": 20 },
-    { "id": "total_facts_5", "label": "Fill out 5+ total facts", "done": true, "weight": 15 },
-    { "id": "first_planner_item", "label": "Create your first task", "done": false, "weight": 15 },
-    { "id": "first_goal", "label": "Set your first goal", "done": false, "weight": 15 },
-    { "id": "first_document", "label": "Upload your first file", "done": false, "weight": 10 },
-    { "id": "onboarding_done", "label": "Complete onboarding", "done": false, "weight": 10 }
+    { "id": "named_it", "label": "Named your business", "done": true, "weight": 15 },
+    { "id": "knows_the_problem", "label": "Defined the problem", "done": true, "weight": 20 },
+    { "id": "found_their_person", "label": "Found your person", "done": true, "weight": 20 },
+    { "id": "described_the_offer", "label": "Described your offer", "done": true, "weight": 15 },
+    { "id": "first_step_set", "label": "Set your first step", "done": false, "weight": 15 },
+    { "id": "plan_in_hand", "label": "Plan in hand", "done": false, "weight": 15 }
   ]
 }
 ```
 
-**Milestone Logic:**
-- `business_name` (15%): Has a fact with `fact_type_id` or `fact_id` = 'business_name'
-- `business_facts_3` (20%): At least 3 facts with `fact_type_id` in business category
-- `total_facts_5` (15%): At least 5 total facts
-- `first_planner_item` (15%): At least 1 planner item
-- `first_goal` (15%): At least 1 goal
-- `first_document` (10%): At least 1 document
-- `onboarding_done` (10%): All previous milestones complete
+**Milestone Logic (NEW):**
+- `named_it` (15%): Has `business_name` fact
+- `knows_the_problem` (20%): Has `core_problem` fact
+- `found_their_person` (20%): Has `target_customer` fact
+- `described_the_offer` (15%): Has `offer_summary` fact
+- `first_step_set` (15%): Has at least 1 planner item
+- `plan_in_hand` (15%): Has a `lite_business_plan` document
+
+**Key Changes from Previous Version:**
+- 6 milestones instead of 7 (removed meta "onboarding_done" milestone)
+- Emotionally meaningful labels tied to specific achievements
+- No arbitrary count thresholds (e.g., "5+ facts")
+- Milestone for `lite_business_plan` document instead of generic "first document"
+- Weights still sum to 100%
 
 **POST Request:**
 ```json
@@ -82,7 +114,9 @@ Manually marks onboarding as complete/incomplete.
 - Iframeable design (no navigation, minimal padding)
 - Dark theme matching portal (`bg-[#1a1a2e]`)
 - Green/teal gradient progress bar
-- Real-time updates (polls every 10 seconds)
+- **Event-driven updates** via `postMessage` (no polling)
+- 300ms debounce on data-changed events
+- 60-second safety net fallback poll (only if no events)
 - Token bridge authentication pattern
 - Responsive milestone grid
 - Celebration message at 100% completion
@@ -92,9 +126,39 @@ Manually marks onboarding as complete/incomplete.
 - Progress bar with gradient fill
 - Milestone checkmarks below bar
 - Percentage display
-- Completion counter (e.g., "3 / 7 completed")
+- Completion counter (e.g., "4 / 6 completed")
 
-### 4. Framer Integration
+### 4. Business Hub Auto-Focus
+
+**File**: `app/business-hub/page.tsx`
+
+**New Features:**
+- `autoFocusItem(type, id)` function for scroll/highlight
+- CSS `@keyframes hub-highlight-pulse` animation (green, 3s)
+- All items have `id="hub-item-{type}-{id}"` attributes
+- Realtime subscriptions call `autoFocusItem()` on data changes
+- Realtime subscriptions send `postMessage` to parent
+
+**Auto-Focus Behavior:**
+1. Opens appropriate section (Facts/Goals/Planner/Files)
+2. Opens relevant category/bucket
+3. Scrolls element into view (smooth, centered)
+4. Adds green pulse highlight for 3 seconds
+
+**CSS Animation:**
+```css
+@keyframes hub-highlight-pulse {
+  0%   { background-color: rgba(16, 185, 129, 0.0); }
+  20%  { background-color: rgba(16, 185, 129, 0.15); }
+  100% { background-color: rgba(16, 185, 129, 0.0); }
+}
+.hub-item-highlight {
+  animation: hub-highlight-pulse 3s ease-out;
+  border-left: 3px solid #10b981 !important;
+}
+```
+
+### 5. Framer Integration
 
 #### Redirect Script Documentation
 **File**: `docs/framer-onboarding-redirect.md`

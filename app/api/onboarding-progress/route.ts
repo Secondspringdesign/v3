@@ -16,17 +16,6 @@ type OnboardingProgress = {
   milestones: Milestone[];
 };
 
-// Business fact types that count toward business_facts_3 milestone
-const BUSINESS_FACT_TYPES = [
-  'business_name',
-  'business_stage',
-  'founder_background_summary',
-  'vision_statement',
-  'target_customer',
-  'market_size',
-  'primary_competitors',
-];
-
 function requireEnv() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -82,60 +71,55 @@ async function calculateProgress(businessId: string): Promise<OnboardingProgress
   
   if (plannerErr) throw plannerErr;
 
-  // Count goals
-  const { count: goalsCount, error: goalsErr } = await supabase
-    .from('goals')
-    .select('*', { count: 'exact', head: true })
-    .eq('business_id', businessId);
-  
-  if (goalsErr) throw goalsErr;
-
-  // Count documents
-  const { count: documentsCount, error: documentsErr } = await supabase
+  // Count lite_business_plan documents
+  const { count: planDocCount, error: planDocErr } = await supabase
     .from('documents')
     .select('*', { count: 'exact', head: true })
-    .eq('business_id', businessId);
+    .eq('business_id', businessId)
+    .eq('document_type', 'lite_business_plan');
   
-  if (documentsErr) throw documentsErr;
+  if (planDocErr) throw planDocErr;
 
   // Calculate milestones
   const factsList = facts ?? [];
   
-  // Milestone 1: business_name
+  // Named it - business_name fact exists
   const hasBusinessName = factsList.some(
     f => f.fact_type_id === 'business_name' || f.fact_id === 'business_name'
   );
 
-  // Milestone 2: business_facts_3 (at least 3 business facts)
-  const businessFactsCount = factsList.filter(
-    f => f.fact_type_id && BUSINESS_FACT_TYPES.includes(f.fact_type_id)
-  ).length;
-  const hasBusinessFacts3 = businessFactsCount >= 3;
+  // Knows the problem - core_problem fact exists
+  const hasCoreProblem = factsList.some(
+    f => f.fact_type_id === 'core_problem' || f.fact_id === 'core_problem'
+  );
 
-  // Milestone 3: total_facts_5 (at least 5 total facts)
-  const hasTotalFacts5 = factsList.length >= 5;
+  // Found their person - target_customer fact exists
+  const hasTargetCustomer = factsList.some(
+    f => f.fact_type_id === 'target_customer' || f.fact_id === 'target_customer'
+  );
 
-  // Milestone 4: first_planner_item
+  // Described the offer - offer_summary fact exists
+  const hasOfferSummary = factsList.some(
+    f => f.fact_type_id === 'offer_summary' || f.fact_id === 'offer_summary'
+  );
+
+  // First step set - at least 1 planner item
   const hasFirstPlannerItem = (plannerCount ?? 0) >= 1;
 
-  // Milestone 5: first_goal
-  const hasFirstGoal = (goalsCount ?? 0) >= 1;
+  // Plan in hand - lite_business_plan document exists
+  const hasLiteBusinessPlan = (planDocCount ?? 0) >= 1;
 
-  // Milestone 6: first_document
-  const hasFirstDocument = (documentsCount ?? 0) >= 1;
-
-  // Milestone 7: onboarding_done (all other milestones complete)
-  const onboardingDone = hasBusinessName && hasBusinessFacts3 && hasTotalFacts5 && 
-                          hasFirstPlannerItem && hasFirstGoal && hasFirstDocument;
+  // Overall completion
+  const onboardingDone = hasBusinessName && hasCoreProblem && hasTargetCustomer && 
+                          hasOfferSummary && hasFirstPlannerItem && hasLiteBusinessPlan;
 
   const milestones: Milestone[] = [
-    { id: 'business_name', label: 'Name your business', done: hasBusinessName, weight: 15 },
-    { id: 'business_facts_3', label: 'Add 3+ business facts', done: hasBusinessFacts3, weight: 20 },
-    { id: 'total_facts_5', label: 'Fill out 5+ total facts', done: hasTotalFacts5, weight: 15 },
-    { id: 'first_planner_item', label: 'Create your first task', done: hasFirstPlannerItem, weight: 15 },
-    { id: 'first_goal', label: 'Set your first goal', done: hasFirstGoal, weight: 15 },
-    { id: 'first_document', label: 'Upload your first file', done: hasFirstDocument, weight: 10 },
-    { id: 'onboarding_done', label: 'Complete onboarding', done: onboardingDone, weight: 10 },
+    { id: 'named_it', label: 'Named your business', done: hasBusinessName, weight: 15 },
+    { id: 'knows_the_problem', label: 'Defined the problem', done: hasCoreProblem, weight: 20 },
+    { id: 'found_their_person', label: 'Found your person', done: hasTargetCustomer, weight: 20 },
+    { id: 'described_the_offer', label: 'Described your offer', done: hasOfferSummary, weight: 15 },
+    { id: 'first_step_set', label: 'Set your first step', done: hasFirstPlannerItem, weight: 15 },
+    { id: 'plan_in_hand', label: 'Plan in hand', done: hasLiteBusinessPlan, weight: 15 },
   ];
 
   // Calculate percentage
@@ -161,13 +145,12 @@ export async function GET(request: Request): Promise<Response> {
         percent: 0,
         complete: false,
         milestones: [
-          { id: 'business_name', label: 'Name your business', done: false, weight: 15 },
-          { id: 'business_facts_3', label: 'Add 3+ business facts', done: false, weight: 20 },
-          { id: 'total_facts_5', label: 'Fill out 5+ total facts', done: false, weight: 15 },
-          { id: 'first_planner_item', label: 'Create your first task', done: false, weight: 15 },
-          { id: 'first_goal', label: 'Set your first goal', done: false, weight: 15 },
-          { id: 'first_document', label: 'Upload your first file', done: false, weight: 10 },
-          { id: 'onboarding_done', label: 'Complete onboarding', done: false, weight: 10 },
+          { id: 'named_it', label: 'Named your business', done: false, weight: 15 },
+          { id: 'knows_the_problem', label: 'Defined the problem', done: false, weight: 20 },
+          { id: 'found_their_person', label: 'Found your person', done: false, weight: 20 },
+          { id: 'described_the_offer', label: 'Described your offer', done: false, weight: 15 },
+          { id: 'first_step_set', label: 'Set your first step', done: false, weight: 15 },
+          { id: 'plan_in_hand', label: 'Plan in hand', done: false, weight: 15 },
         ],
       };
       return jsonResponse(emptyProgress);

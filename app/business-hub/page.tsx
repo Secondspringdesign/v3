@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 type PlannerItem = {
@@ -66,6 +66,9 @@ const PREDEFINED_FACT_SLOTS: Record<string, Array<{fact_type_id: string; label: 
     { fact_type_id: "market_size", label: "Market Size", description: "How big the market/opportunity is" },
     { fact_type_id: "primary_competitors", label: "Primary Competitors", description: "Top competitors or alternatives" },
     { fact_type_id: "founder_background_summary", label: "Founder Background", description: "Relevant founder experience and context" },
+    { fact_type_id: "why_this_business", label: "Why This Business", description: "Why do you want to do this? Your motivation." },
+    { fact_type_id: "constraints_summary", label: "Constraints & Reality", description: "What do you have to work with? Time, money, situation." },
+    { fact_type_id: "first_experiment", label: "First Experiment", description: "The ONE thing you'll try first to test this idea." },
   ],
   offer: [
     { fact_type_id: "offer_summary", label: "Offer Summary", description: "Short description of what you sell" },
@@ -574,6 +577,63 @@ export default function BusinessHubPanel() {
     exchangeToken();
   }, [outsetaToken]);
 
+  // Auto-focus item when it changes via realtime
+  const autoFocusItem = useCallback((type: 'fact' | 'goal' | 'planner' | 'document', id: string) => {
+    // Small delay to let sections render/open
+    setTimeout(() => {
+      try {
+        // Open the appropriate section
+        if (type === 'fact') {
+          setActiveTab('facts');
+          setSections(prev => ({ ...prev, facts: { open: true } }));
+          
+          // Find which category this fact belongs to and open it
+          const fact = facts.find(f => f.id === id);
+          if (fact) {
+            const factTypeId = fact.fact_type_id || fact.fact_id;
+            // Determine category from fact_type_id
+            for (const [category, slots] of Object.entries(PREDEFINED_FACT_SLOTS)) {
+              if (slots.some(s => s.fact_type_id === factTypeId)) {
+                setFactCategoriesOpen(prev => ({ ...prev, [category]: true }));
+                break;
+              }
+            }
+          }
+        } else if (type === 'goal') {
+          setSections(prev => ({ ...prev, goals: { open: true } }));
+          // Find which bucket this goal belongs to and open it
+          const goal = goals.find(g => g.id === id);
+          if (goal) {
+            setGoalBucketsOpen(prev => ({ ...prev, [goal.time_horizon]: true }));
+          }
+        } else if (type === 'planner') {
+          setSections(prev => ({ ...prev, planner: { open: true } }));
+          // Find which bucket this planner item belongs to and open it
+          const item = planner.find(p => p.id === id);
+          if (item) {
+            setPlannerBucketsOpen(prev => ({ ...prev, [item.due_period]: true }));
+          }
+        } else if (type === 'document') {
+          setActiveTab('files');
+          setSections(prev => ({ ...prev, files: { open: true } }));
+        }
+        
+        // Wait a bit more for accordions to open
+        setTimeout(() => {
+          const elementId = `hub-item-${type}-${id}`;
+          const element = document.getElementById(elementId);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            element.classList.add('hub-item-highlight');
+            setTimeout(() => element.classList.remove('hub-item-highlight'), 3000);
+          }
+        }, 100);
+      } catch (e) {
+        console.error('[BusinessHub] autoFocusItem error:', e);
+      }
+    }, 50);
+  }, [facts, goals, planner]);
+
   // Supabase connection + realtime
   useEffect(() => {
     if (!supabaseToken) return;
@@ -653,8 +713,30 @@ export default function BusinessHubPanel() {
       const subscribeTable = (table: string, onChange: () => void) => {
         return supabase
           .channel(`${table}-realtime`)
-          .on("postgres_changes", { event: "*", schema: "public", table }, () => {
+          .on("postgres_changes", { event: "*", schema: "public", table }, (payload) => {
             onChange();
+            
+            // Send postMessage to parent (Framer page) for progress bar updates
+            try {
+              window.parent?.postMessage({ 
+                type: 'hub-data-changed', 
+                table: table 
+              }, '*');
+            } catch {
+              // Ignore cross-origin errors
+            }
+            
+            // Auto-focus the changed item
+            if (payload.new && typeof payload.new === 'object' && 'id' in payload.new) {
+              let itemType: 'fact' | 'goal' | 'planner' | 'document';
+              if (table === 'facts') itemType = 'fact';
+              else if (table === 'goals') itemType = 'goal';
+              else if (table === 'planner') itemType = 'planner';
+              else if (table === 'documents') itemType = 'document';
+              else return;
+              
+              autoFocusItem(itemType, payload.new.id as string);
+            }
           })
           .subscribe((st) => {
             if (st === "CLOSED" || st === "TIMED_OUT" || st === "CHANNEL_ERROR") {
@@ -703,7 +785,7 @@ export default function BusinessHubPanel() {
       cancelled = true;
       cleanup?.();
     };
-  }, [supabaseToken]);
+  }, [supabaseToken, autoFocusItem]);
 
   const addPlannerTask = async () => {
     const title = newTaskTitle.trim();
@@ -1077,6 +1159,7 @@ export default function BusinessHubPanel() {
             {items.map((item) => (
               <div
                 key={item.id}
+                id={`hub-item-planner-${item.id}`}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -1135,15 +1218,27 @@ export default function BusinessHubPanel() {
   };
 
   return (
-    <main
-      style={{
-        padding: "1rem",
-        fontFamily: "Inter, sans-serif",
-        color: "#111",
-        background: "#f7f7f7",
-        minHeight: "100vh",
-      }}
-    >
+    <>
+      <style>{`
+        @keyframes hub-highlight-pulse {
+          0%   { background-color: rgba(16, 185, 129, 0.0); }
+          20%  { background-color: rgba(16, 185, 129, 0.15); }
+          100% { background-color: rgba(16, 185, 129, 0.0); }
+        }
+        .hub-item-highlight {
+          animation: hub-highlight-pulse 3s ease-out;
+          border-left: 3px solid #10b981 !important;
+        }
+      `}</style>
+      <main
+        style={{
+          padding: "1rem",
+          fontFamily: "Inter, sans-serif",
+          color: "#111",
+          background: "#f7f7f7",
+          minHeight: "100vh",
+        }}
+      >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
         <h1 style={{ fontSize: "1.25rem", margin: 0 }}>Business Hub</h1>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", color: "#666" }}>
@@ -1276,6 +1371,7 @@ export default function BusinessHubPanel() {
                   return (
                     <div
                       key={g.id}
+                      id={`hub-item-goal-${g.id}`}
                       style={{
                         padding: "0.6rem",
                         background: "#fff",
@@ -1510,6 +1606,7 @@ export default function BusinessHubPanel() {
                         {customFacts.map((f) => (
                           <li
                             key={f.id}
+                            id={`hub-item-fact-${f.id}`}
                             style={{
                               marginBottom: "0.6rem",
                               padding: "0.65rem",
@@ -1565,6 +1662,7 @@ export default function BusinessHubPanel() {
                         return (
                           <li
                             key={slot.fact_type_id}
+                            {...(existingFact && { id: `hub-item-fact-${existingFact.id}` })}
                             style={{
                               marginBottom: "0.6rem",
                               padding: "0.65rem",
@@ -1683,6 +1781,7 @@ export default function BusinessHubPanel() {
               return (
                 <div
                   key={d.id}
+                  id={`hub-item-document-${d.id}`}
                   style={{
                     padding: "0.6rem",
                     background: "#fff",
@@ -1767,6 +1866,7 @@ export default function BusinessHubPanel() {
         )}
       </div>
     </main>
+    </>
   );
 }
 
