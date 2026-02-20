@@ -113,14 +113,6 @@ const TIMEZONES = [
   { value: "Australia/Sydney", label: "Australia Eastern", offset: "UTC+10/+11" },
 ];
 
-function getTimezoneDisplay(tz: string): string {
-  const found = TIMEZONES.find(t => t.value === tz);
-  if (found) {
-    return `${found.label} (${found.offset})`;
-  }
-  return tz;
-}
-
 function requireEnv() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

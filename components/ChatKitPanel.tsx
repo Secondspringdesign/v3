@@ -230,14 +230,14 @@ export function ChatKitPanel({
             let prevSub: string | null = null;
             try {
               prevSub = localStorage.getItem("debug_last_received_sub");
-            } catch (e) {
+            } catch {
               prevSub = null;
             }
 
             if (newSub) {
               try {
                 localStorage.setItem("debug_last_received_sub", newSub);
-              } catch (e) {
+              } catch {
                 // ignore storage errors
               }
             }

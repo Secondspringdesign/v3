@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 /**
  * Unit tests for JWT caching logic in business-hub page
@@ -210,10 +210,13 @@ describe('JWT Caching Logic', () => {
       
       sessionStorage.setItem('sb_jwt', soonToExpireToken);
       const cached = sessionStorage.getItem('sb_jwt');
-      const payload = parseJwtPayload(cached!);
+      expect(cached).toBeTruthy();
+      const payload = parseJwtPayload(cached as string);
       
       // Should be invalidated (< 60 seconds until expiry)
-      expect(payload?.exp! - now).toBeLessThan(60);
+      expect(payload).toBeTruthy();
+      expect(payload!.exp).toBeDefined();
+      expect(payload!.exp! - now).toBeLessThan(60);
     });
 
     it('should use cached token when valid and user matches', () => {
@@ -228,11 +231,14 @@ describe('JWT Caching Logic', () => {
       
       sessionStorage.setItem('sb_jwt', validToken);
       const cached = sessionStorage.getItem('sb_jwt');
-      const cachedPayload = parseJwtPayload(cached!);
+      expect(cached).toBeTruthy();
+      const cachedPayload = parseJwtPayload(cached as string);
       const outsetaPayload = parseJwtPayload(outsetaToken);
       
       // Should be valid
-      expect(cachedPayload?.exp! - now).toBeGreaterThan(60);
+      expect(cachedPayload).toBeTruthy();
+      expect(cachedPayload!.exp).toBeDefined();
+      expect(cachedPayload!.exp! - now).toBeGreaterThan(60);
       expect(cachedPayload?.outseta_sub).toBe(outsetaPayload?.sub);
     });
   });
