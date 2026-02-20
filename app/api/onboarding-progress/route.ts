@@ -16,21 +16,6 @@ type OnboardingProgress = {
   milestones: Milestone[];
 };
 
-// Business fact types that count toward business_facts_3 milestone
-const BUSINESS_FACT_TYPES = [
-  'business_name',
-  'business_stage',
-  'founder_background_summary',
-  'vision_statement',
-  'target_customer',
-  'market_size',
-  'primary_competitors',
-  'core_problem',
-  'why_this_business',
-  'constraints_summary',
-  'first_experiment',
-];
-
 function requireEnv() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;

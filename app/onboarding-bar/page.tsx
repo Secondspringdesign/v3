@@ -117,7 +117,7 @@ export default function OnboardingBarPage() {
         clearTimeout(debounceRef.current);
       }
     };
-  }, [token, progress]);
+  }, [token]);
 
   if (error) {
     return (

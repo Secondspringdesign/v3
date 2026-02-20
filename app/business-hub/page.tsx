@@ -1662,7 +1662,7 @@ export default function BusinessHubPanel() {
                         return (
                           <li
                             key={slot.fact_type_id}
-                            id={existingFact ? `hub-item-fact-${existingFact.id}` : undefined}
+                            {...(existingFact && { id: `hub-item-fact-${existingFact.id}` })}
                             style={{
                               marginBottom: "0.6rem",
                               padding: "0.65rem",
