@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 type Milestone = {
   id: string;
@@ -19,6 +19,7 @@ export default function OnboardingBarPage() {
   const [token, setToken] = useState<string | null>(null);
   const [progress, setProgress] = useState<OnboardingProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const requestTokenFromParent = () => {
     window.parent?.postMessage({ type: "request-token" }, "*");
@@ -81,20 +82,42 @@ export default function OnboardingBarPage() {
     };
   }, []);
 
-  // Fetch progress when token is available
+  // Fetch progress when token is available + event-driven updates
   useEffect(() => {
     if (!token) return;
 
     // Fetch immediately
     fetchProgress(token);
 
-    // Poll every 10 seconds for updates
-    const interval = setInterval(() => {
-      fetchProgress(token);
-    }, 10000);
+    const handleDataChanged = (event: MessageEvent) => {
+      if (event.data?.type === 'hub-data-changed' || event.data?.type === 'data-changed') {
+        // Debounce: don't fetch if we just fetched
+        if (debounceRef.current) {
+          clearTimeout(debounceRef.current);
+        }
+        debounceRef.current = setTimeout(() => {
+          fetchProgress(token);
+        }, 300);
+      }
+    };
 
-    return () => clearInterval(interval);
-  }, [token]);
+    window.addEventListener('message', handleDataChanged);
+
+    // Safety net: one poll per minute as fallback
+    const safetyInterval = setInterval(() => {
+      if (!progress?.complete) {
+        fetchProgress(token);
+      }
+    }, 60000);
+
+    return () => {
+      window.removeEventListener('message', handleDataChanged);
+      clearInterval(safetyInterval);
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [token, progress]);
 
   if (error) {
     return (
