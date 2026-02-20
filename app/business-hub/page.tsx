@@ -615,7 +615,8 @@ export default function BusinessHubPanel() {
           if (goal) {
             setGoalBucketsOpen(prev => ({ ...prev, [goal.time_horizon]: true }));
           } else {
-            // Fallback: open all goal buckets if item not found in state
+            // Fallback: open all active goal buckets if item not found in state
+            // (keep 'achieved' closed as it's for archived goals)
             setGoalBucketsOpen({
               this_week: true,
               this_month: true,
@@ -630,7 +631,8 @@ export default function BusinessHubPanel() {
           if (item) {
             setPlannerBucketsOpen(prev => ({ ...prev, [item.due_period]: true }));
           } else {
-            // Fallback: open all planner buckets if item not found in state
+            // Fallback: open all active planner buckets if item not found in state
+            // (keep 'completed' closed as it's for archived tasks)
             setPlannerBucketsOpen({
               today: true,
               this_week: true,
@@ -662,6 +664,7 @@ export default function BusinessHubPanel() {
   }, [facts, goals, planner]);
 
   // Process focus queue sequentially with delay between items
+  // Uses refs to maintain queue state across re-renders
   const processNextFocus = useCallback(() => {
     const next = focusQueueRef.current.shift();
     if (!next) {
@@ -670,7 +673,8 @@ export default function BusinessHubPanel() {
     }
     focusProcessingRef.current = true;
     autoFocusItem(next.type, next.id);
-    // Wait for highlight (3s) + small gap before next
+    // Wait for highlight (3s) + small gap before next item
+    // Recursive setTimeout works correctly because refs maintain state
     setTimeout(() => processNextFocus(), 3500);
   }, [autoFocusItem]);
 
