@@ -631,7 +631,7 @@ export default function BusinessHubPanel() {
       } catch (e) {
         console.error('[BusinessHub] autoFocusItem error:', e);
       }
-    }, 50);
+    }, 500);
   }, [facts, goals, planner]);
 
   // Supabase connection + realtime
