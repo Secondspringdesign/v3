@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 type PlannerItem = {
@@ -577,6 +577,63 @@ export default function BusinessHubPanel() {
     exchangeToken();
   }, [outsetaToken]);
 
+  // Auto-focus item when it changes via realtime
+  const autoFocusItem = useCallback((type: 'fact' | 'goal' | 'planner' | 'document', id: string) => {
+    // Small delay to let sections render/open
+    setTimeout(() => {
+      try {
+        // Open the appropriate section
+        if (type === 'fact') {
+          setActiveTab('facts');
+          setSections(prev => ({ ...prev, facts: { open: true } }));
+          
+          // Find which category this fact belongs to and open it
+          const fact = facts.find(f => f.id === id);
+          if (fact) {
+            const factTypeId = fact.fact_type_id || fact.fact_id;
+            // Determine category from fact_type_id
+            for (const [category, slots] of Object.entries(PREDEFINED_FACT_SLOTS)) {
+              if (slots.some(s => s.fact_type_id === factTypeId)) {
+                setFactCategoriesOpen(prev => ({ ...prev, [category]: true }));
+                break;
+              }
+            }
+          }
+        } else if (type === 'goal') {
+          setSections(prev => ({ ...prev, goals: { open: true } }));
+          // Find which bucket this goal belongs to and open it
+          const goal = goals.find(g => g.id === id);
+          if (goal) {
+            setGoalBucketsOpen(prev => ({ ...prev, [goal.time_horizon]: true }));
+          }
+        } else if (type === 'planner') {
+          setSections(prev => ({ ...prev, planner: { open: true } }));
+          // Find which bucket this planner item belongs to and open it
+          const item = planner.find(p => p.id === id);
+          if (item) {
+            setPlannerBucketsOpen(prev => ({ ...prev, [item.due_period]: true }));
+          }
+        } else if (type === 'document') {
+          setActiveTab('files');
+          setSections(prev => ({ ...prev, files: { open: true } }));
+        }
+        
+        // Wait a bit more for accordions to open
+        setTimeout(() => {
+          const elementId = `hub-item-${type}-${id}`;
+          const element = document.getElementById(elementId);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            element.classList.add('hub-item-highlight');
+            setTimeout(() => element.classList.remove('hub-item-highlight'), 3000);
+          }
+        }, 100);
+      } catch (e) {
+        console.error('[BusinessHub] autoFocusItem error:', e);
+      }
+    }, 50);
+  }, [facts, goals, planner]);
+
   // Supabase connection + realtime
   useEffect(() => {
     if (!supabaseToken) return;
@@ -665,12 +722,12 @@ export default function BusinessHubPanel() {
                 type: 'hub-data-changed', 
                 table: table 
               }, '*');
-            } catch (e) {
+            } catch {
               // Ignore cross-origin errors
             }
             
             // Auto-focus the changed item
-            if (payload.new && payload.new.id) {
+            if (payload.new && typeof payload.new === 'object' && 'id' in payload.new) {
               let itemType: 'fact' | 'goal' | 'planner' | 'document';
               if (table === 'facts') itemType = 'fact';
               else if (table === 'goals') itemType = 'goal';
@@ -678,7 +735,7 @@ export default function BusinessHubPanel() {
               else if (table === 'documents') itemType = 'document';
               else return;
               
-              autoFocusItem(itemType, payload.new.id);
+              autoFocusItem(itemType, payload.new.id as string);
             }
           })
           .subscribe((st) => {
@@ -728,7 +785,7 @@ export default function BusinessHubPanel() {
       cancelled = true;
       cleanup?.();
     };
-  }, [supabaseToken]);
+  }, [supabaseToken, autoFocusItem]);
 
   const addPlannerTask = async () => {
     const title = newTaskTitle.trim();
@@ -1017,62 +1074,6 @@ export default function BusinessHubPanel() {
       else factsByCategory.custom.push(f);
     }
   }
-
-  // Auto-focus item when it changes via realtime
-  const autoFocusItem = (type: 'fact' | 'goal' | 'planner' | 'document', id: string) => {
-    // Small delay to let sections render/open
-    setTimeout(() => {
-      try {
-        // Open the appropriate section
-        if (type === 'fact') {
-          setFactsTab('predefined');
-          setSections(prev => ({ ...prev, facts: { open: true } }));
-          
-          // Find which category this fact belongs to and open it
-          const fact = facts.find(f => f.id === id);
-          if (fact) {
-            const factTypeId = fact.fact_type_id || fact.fact_id;
-            // Determine category from fact_type_id
-            for (const [category, slots] of Object.entries(PREDEFINED_FACT_SLOTS)) {
-              if (slots.some(s => s.fact_type_id === factTypeId)) {
-                setFactCategoriesOpen(prev => ({ ...prev, [category]: true }));
-                break;
-              }
-            }
-          }
-        } else if (type === 'goal') {
-          setSections(prev => ({ ...prev, goals: { open: true } }));
-          // Find which bucket this goal belongs to and open it
-          const goal = goals.find(g => g.id === id);
-          if (goal) {
-            setGoalBucketsOpen(prev => ({ ...prev, [goal.time_horizon]: true }));
-          }
-        } else if (type === 'planner') {
-          setSections(prev => ({ ...prev, planner: { open: true } }));
-          // Find which bucket this planner item belongs to and open it
-          const item = planner.find(p => p.id === id);
-          if (item) {
-            setPlannerBucketsOpen(prev => ({ ...prev, [item.due_period]: true }));
-          }
-        } else if (type === 'document') {
-          setSections(prev => ({ ...prev, files: { open: true } }));
-        }
-        
-        // Wait a bit more for accordions to open
-        setTimeout(() => {
-          const elementId = `hub-item-${type}-${id}`;
-          const element = document.getElementById(elementId);
-          if (element) {
-            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            element.classList.add('hub-item-highlight');
-            setTimeout(() => element.classList.remove('hub-item-highlight'), 3000);
-          }
-        }, 100);
-      } catch (e) {
-        console.error('[BusinessHub] autoFocusItem error:', e);
-      }
-    }, 50);
-  };
 
   const renderPlannerBucket = (bucketKey: "today" | "this_week" | "next_week") => {
     const items = groupedPlanner[bucketKey];
