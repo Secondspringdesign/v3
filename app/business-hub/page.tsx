@@ -911,8 +911,11 @@ export default function BusinessHubPanel() {
       cancelled = true;
       cleanup?.();
     };
+    // queueAutoFocus is intentionally omitted from deps to prevent infinite reconnection loop.
+    // It has a stable reference: queueAutoFocus -> processNextFocus -> autoFocusItem (empty deps, uses refs).
+    // Including it would cause the effect to re-run on every state change, destroying/recreating the channel.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabaseToken, handleTokenExpired]); // queueAutoFocus omitted - has stable reference via empty deps chain
+  }, [supabaseToken, handleTokenExpired]);
 
   const addPlannerTask = async () => {
     const title = newTaskTitle.trim();
