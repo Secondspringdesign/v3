@@ -307,6 +307,11 @@ export default function BusinessHubPanel() {
   const reconnectingRef = useRef(false);
   const exchangeAttemptsRef = useRef(0);
   
+  // Token expiration state
+  const [tokenExpired, setTokenExpired] = useState(false);
+  const refreshAttemptRef = useRef(0);
+  const maxRefreshAttempts = 3;
+  
   // Focus queue refs for handling multiple rapid writes
   const focusQueueRef = useRef<Array<{ type: 'fact' | 'goal' | 'planner' | 'document'; id: string }>>([]);
   const focusProcessingRef = useRef(false);
@@ -361,6 +366,52 @@ export default function BusinessHubPanel() {
     window.parent?.postMessage({ type: "request-token" }, "*");
   };
 
+  // Handle token expiration - request fresh token from parent
+  const handleTokenExpired = useCallback(() => {
+    if (tokenExpired) return; // Already handling it
+    if (refreshAttemptRef.current >= maxRefreshAttempts) {
+      console.error('[BusinessHub] Max token refresh attempts reached');
+      return;
+    }
+    
+    console.log('[BusinessHub] Token expired, requesting fresh token from parent');
+    setTokenExpired(true);
+    refreshAttemptRef.current += 1;
+    
+    // Clear the stale Supabase token so no more requests go out
+    setSupabaseToken(null);
+    
+    // Request a fresh Outseta token from the parent (Framer)
+    window.parent?.postMessage({ type: 'request-token' }, '*');
+  }, [tokenExpired]);
+
+  // Authenticated fetch wrapper - handles 401s and token expiration
+  const authenticatedFetch = useCallback(async (url: string, options: RequestInit = {}) => {
+    if (tokenExpired) return null; // Don't make requests while refreshing
+    
+    // Determine which token to use based on endpoint
+    const token = url.includes('/api/auth/') ? outsetaToken : supabaseToken;
+    
+    if (!token) return null;
+    
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+    });
+    
+    if (response.status === 401) {
+      handleTokenExpired();
+      return null;
+    }
+    
+    return response;
+  }, [outsetaToken, supabaseToken, tokenExpired, handleTokenExpired]);
+
   // Initial: listen for outseta token; baseline facts fetch without token
   useEffect(() => {
     const urlToken = (() => {
@@ -378,6 +429,9 @@ export default function BusinessHubPanel() {
       if (data.type === "outseta-token" && typeof data.token === "string") {
         setOutsetaToken(data.token);
         setStatus("auth token received");
+        // Reset token expiration state when receiving new token
+        setTokenExpired(false);
+        refreshAttemptRef.current = 0;
       }
     };
 
@@ -440,14 +494,8 @@ export default function BusinessHubPanel() {
     // Save the timezone fact
     const saveTimezone = async () => {
       try {
-        const headers = {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${outsetaToken}`,
-        };
-        
-        const res = await fetch("/api/facts", {
+        const res = await authenticatedFetch("/api/facts", {
           method: "POST",
-          headers,
           body: JSON.stringify({
             fact_id: "user_timezone",
             fact_value: userTimezone,
@@ -455,7 +503,7 @@ export default function BusinessHubPanel() {
           }),
         });
         
-        if (res.ok) {
+        if (res && res.ok) {
           const json = await res.json();
           setFacts((prev) => {
             const existing = prev.find((f) => f.fact_type_id === "user_timezone" || f.fact_id === "user_timezone");
@@ -474,7 +522,7 @@ export default function BusinessHubPanel() {
     };
     
     saveTimezone();
-  }, [userTimezone, outsetaToken, facts]);
+  }, [userTimezone, outsetaToken, facts, authenticatedFetch]);
 
   // Exchange Outseta -> Supabase
   useEffect(() => {
@@ -580,6 +628,17 @@ export default function BusinessHubPanel() {
 
     exchangeToken();
   }, [outsetaToken]);
+
+  // Handle token expiration state changes
+  useEffect(() => {
+    if (tokenExpired) {
+      // Show refresh message when token expires
+      setPanelError("Refreshing your session...");
+    } else if (refreshAttemptRef.current >= maxRefreshAttempts) {
+      // Show session expired message after max retries
+      setPanelError("Your session has expired. Please refresh the page to continue.");
+    }
+  }, [tokenExpired]);
 
   // Auto-focus item when it changes via realtime
   const autoFocusItem = useCallback((type: 'fact' | 'goal' | 'planner' | 'document', id: string) => {
@@ -749,8 +808,9 @@ export default function BusinessHubPanel() {
       supabase.realtime.setAuth(supabaseToken);
       supabase.realtime.connect();
       await fetchWithToken().catch((e) => {
-        if (String(e).includes("unauthorized")) requestTokenFromParent();
-        else {
+        if (String(e).includes("unauthorized")) {
+          handleTokenExpired();
+        } else {
           setError(String(e));
           setPanelError(
             "Business data is temporarily unavailable. Our team is working diligently to resolve the issue as quickly as possible.",
@@ -840,7 +900,7 @@ export default function BusinessHubPanel() {
     if (!title) return;
     if (!supabaseToken) {
       setError("Missing Supabase token; request auth again.");
-      requestTokenFromParent();
+      handleTokenExpired();
       return;
     }
     
@@ -851,19 +911,17 @@ export default function BusinessHubPanel() {
     const effectiveDueDate = newTaskDueDate || todayStr;
     const due_period = computeDuePeriod(effectiveDueDate, userTimezone);
     
-    const headers = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${supabaseToken}`,
-    };
-    const res = await fetch("/api/planner", {
+    const res = await authenticatedFetch("/api/planner", {
       method: "POST",
-      headers,
       body: JSON.stringify({
         title,
         due_period,
         due_date: effectiveDueDate,
       }),
     });
+    
+    if (!res) return; // Token expired or no token
+    
     const json = await res.json();
     if (!res.ok) {
       setError(json?.error || "Failed to create calendar event");
@@ -878,18 +936,17 @@ export default function BusinessHubPanel() {
   const togglePlannerTask = async (item: PlannerItem) => {
     if (!supabaseToken) {
       setError("Missing Supabase token; request auth again.");
-      requestTokenFromParent();
+      handleTokenExpired();
       return;
     }
-    const headers = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${supabaseToken}`,
-    };
-    const res = await fetch("/api/planner", {
+    
+    const res = await authenticatedFetch("/api/planner", {
       method: "PATCH",
-      headers,
       body: JSON.stringify({ id: item.id, completed: !item.completed }),
     });
+    
+    if (!res) return; // Token expired or no token
+    
     const json = await res.json();
     if (!res.ok) {
       setError(json?.error || "Failed to update calendar event");
@@ -901,19 +958,18 @@ export default function BusinessHubPanel() {
   const updateDueDate = async (item: PlannerItem, newDate: string) => {
     if (!supabaseToken) {
       setError("Missing Supabase token; request auth again.");
-      requestTokenFromParent();
+      handleTokenExpired();
       return;
     }
-    const headers = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${supabaseToken}`,
-    };
+    
     const due_period = computeDuePeriod(newDate || null, userTimezone);
-    const res = await fetch("/api/planner", {
+    const res = await authenticatedFetch("/api/planner", {
       method: "PATCH",
-      headers,
       body: JSON.stringify({ id: item.id, due_date: newDate || null, due_period }),
     });
+    
+    if (!res) return; // Token expired or no token
+    
     const json = await res.json();
     if (!res.ok) {
       setError(json?.error || "Failed to update date");
@@ -927,28 +983,27 @@ export default function BusinessHubPanel() {
   const saveFact = async (factTypeId: string, factValue: string, existingFactId?: string) => {
     if (!outsetaToken) {
       setError("Missing auth token; request auth again.");
-      requestTokenFromParent();
+      handleTokenExpired();
       return;
     }
     
     setSavingFact(true);
     try {
-      const headers = {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${outsetaToken}`,
-      };
-      
       const body = {
         fact_id: existingFactId || factTypeId,
         fact_value: factValue.trim(),
         fact_type_id: factTypeId,
       };
       
-      const res = await fetch("/api/facts", {
+      const res = await authenticatedFetch("/api/facts", {
         method: "POST",
-        headers,
         body: JSON.stringify(body),
       });
+      
+      if (!res) {
+        setSavingFact(false);
+        return; // Token expired or no token
+      }
       
       const json = await res.json();
       if (!res.ok) {
@@ -980,28 +1035,27 @@ export default function BusinessHubPanel() {
   const saveGoal = async (goalId: string, title: string, description: string) => {
     if (!outsetaToken) {
       setError("Missing auth token; request auth again.");
-      requestTokenFromParent();
+      handleTokenExpired();
       return;
     }
     
     setSavingGoal(true);
     try {
-      const headers = {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${outsetaToken}`,
-      };
-      
       const body = {
         id: goalId,
         title: title.trim(),
         description: description.trim() || null,
       };
       
-      const res = await fetch("/api/goals", {
+      const res = await authenticatedFetch("/api/goals", {
         method: "PATCH",
-        headers,
         body: JSON.stringify(body),
       });
+      
+      if (!res) {
+        setSavingGoal(false);
+        return; // Token expired or no token
+      }
       
       const json = await res.json();
       if (!res.ok) {
@@ -1023,26 +1077,22 @@ export default function BusinessHubPanel() {
   const markGoalAsAchieved = async (goalId: string) => {
     if (!outsetaToken) {
       setError("Missing auth token; request auth again.");
-      requestTokenFromParent();
+      handleTokenExpired();
       return;
     }
     
     try {
-      const headers = {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${outsetaToken}`,
-      };
-      
       const body = {
         id: goalId,
         status: "achieved",
       };
       
-      const res = await fetch("/api/goals", {
+      const res = await authenticatedFetch("/api/goals", {
         method: "PATCH",
-        headers,
         body: JSON.stringify(body),
       });
+      
+      if (!res) return; // Token expired or no token
       
       const json = await res.json();
       if (!res.ok) {
@@ -1329,8 +1379,11 @@ export default function BusinessHubPanel() {
             boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
           }}
         >
-          Business data is temporarily unavailable. Our team is working diligently to resolve the issue as quickly as
-          possible.
+          {tokenExpired && refreshAttemptRef.current < maxRefreshAttempts
+            ? "Refreshing your session..."
+            : refreshAttemptRef.current >= maxRefreshAttempts
+            ? "Your session has expired. Please refresh the page to continue."
+            : "Business data is temporarily unavailable. Our team is working diligently to resolve the issue as quickly as possible."}
         </div>
       )}
 
