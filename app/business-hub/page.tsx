@@ -315,6 +315,11 @@ export default function BusinessHubPanel() {
   // Focus queue refs for handling multiple rapid writes
   const focusQueueRef = useRef<Array<{ type: 'fact' | 'goal' | 'planner' | 'document'; id: string }>>([]);
   const focusProcessingRef = useRef(false);
+  
+  // Refs to access current state in autoFocusItem without triggering dependency changes
+  const factsRef = useRef(facts);
+  const goalsRef = useRef(goals);
+  const plannerRef = useRef(planner);
 
   const [sections, setSections] = useState<Record<string, SectionState>>({
     planner: { open: true },
@@ -411,6 +416,19 @@ export default function BusinessHubPanel() {
     
     return response;
   }, [outsetaToken, supabaseToken, tokenExpired, handleTokenExpired]);
+
+  // Keep refs in sync with state for autoFocusItem
+  useEffect(() => {
+    factsRef.current = facts;
+  }, [facts]);
+
+  useEffect(() => {
+    goalsRef.current = goals;
+  }, [goals]);
+
+  useEffect(() => {
+    plannerRef.current = planner;
+  }, [planner]);
 
   // Initial: listen for outseta token; baseline facts fetch without token
   useEffect(() => {
@@ -651,7 +669,7 @@ export default function BusinessHubPanel() {
           setSections(prev => ({ ...prev, facts: { open: true } }));
           
           // Find which category this fact belongs to and open it
-          const fact = facts.find(f => f.id === id);
+          const fact = factsRef.current.find(f => f.id === id);
           if (fact) {
             const factTypeId = fact.fact_type_id || fact.fact_id;
             // Determine category from fact_type_id
@@ -670,7 +688,7 @@ export default function BusinessHubPanel() {
         } else if (type === 'goal') {
           setSections(prev => ({ ...prev, goals: { open: true } }));
           // Find which bucket this goal belongs to and open it
-          const goal = goals.find(g => g.id === id);
+          const goal = goalsRef.current.find(g => g.id === id);
           if (goal) {
             setGoalBucketsOpen(prev => ({ ...prev, [goal.time_horizon]: true }));
           } else {
@@ -685,7 +703,7 @@ export default function BusinessHubPanel() {
         } else if (type === 'planner') {
           setSections(prev => ({ ...prev, planner: { open: true } }));
           // Find which bucket this planner item belongs to and open it
-          const item = planner.find(p => p.id === id);
+          const item = plannerRef.current.find(p => p.id === id);
           if (item) {
             setPlannerBucketsOpen(prev => ({ ...prev, [item.due_period]: true }));
           } else {
@@ -718,7 +736,7 @@ export default function BusinessHubPanel() {
         console.error('[BusinessHub] autoFocusItem error:', e);
       }
     }, 500);
-  }, [facts, goals, planner]);
+  }, []); // Empty deps - stable reference, reads from refs
 
   // Process focus queue sequentially with delay between items
   const processNextFocus = useCallback(() => {
@@ -893,7 +911,8 @@ export default function BusinessHubPanel() {
       cancelled = true;
       cleanup?.();
     };
-  }, [supabaseToken, queueAutoFocus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabaseToken, handleTokenExpired]); // queueAutoFocus omitted - has stable reference via empty deps chain
 
   const addPlannerTask = async () => {
     const title = newTaskTitle.trim();
