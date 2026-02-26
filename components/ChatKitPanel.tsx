@@ -174,10 +174,6 @@ export function ChatKitPanel({
     () => (isBrowser && window.customElements?.get("openai-chatkit") ? "ready" : "pending"),
   );
   const [widgetInstanceKey, setWidgetInstanceKey] = useState(0);
-  
-  // Store original fetch at component level to prevent wrapping on re-renders
-  // IMPORTANT: Bind to window to preserve 'this' context - native DOM methods require their correct context
-  const originalFetchRef = useRef<typeof fetch>(isBrowser ? window.fetch.bind(window) : (fetch as typeof window.fetch));
 
   const setErrorState = useCallback((updates: Partial<ErrorState>) => {
     setErrors((current) => ({ ...current, ...updates }));
@@ -189,97 +185,11 @@ export function ChatKitPanel({
     };
   }, []);
 
-  // Intercept transcription requests and route to our /api/transcribe endpoint
-  useEffect(() => {
-    if (!isBrowser) return;
-    
-    // Capture the current fetch at mount time (only once per component lifecycle)
-    // Bind to window to preserve 'this' context - prevents "Illegal invocation" errors
-    if (!originalFetchRef.current) {
-      originalFetchRef.current = window.fetch.bind(window);
-    }
-    
-    // Intercept fetch calls to route transcription to our endpoint
-    window.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
-      
-      // Only intercept transcription requests from ChatKit/OpenAI
-      // This minimizes impact on other fetch calls in the application
-      if (url.includes("/audio/transcriptions") || url.includes("input.transcribe")) {
-        if (isDev) console.log("[ChatKitPanel] Intercepting transcription request, routing to /api/transcribe");
-        
-        try {
-          // Get the Outseta token for authentication
-          const outsetaToken = findOutsetaTokenOnClient();
-          
-          // Extract the audio data from the request body
-          let audioData: { audio_base64?: string; mime_type?: string } | null = null;
-          
-          if (init?.body) {
-            if (init.body instanceof FormData) {
-              // OpenAI API uses FormData, but our API expects JSON with base64
-              const file = init.body.get("file");
-              if (file instanceof Blob) {
-                // Convert Blob to base64 efficiently using Array.from
-                const arrayBuffer = await file.arrayBuffer();
-                const bytes = new Uint8Array(arrayBuffer);
-                const binaryStr = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
-                const audio_base64 = btoa(binaryStr);
-                audioData = {
-                  audio_base64,
-                  mime_type: file.type || "audio/webm",
-                };
-              }
-            } else if (typeof init.body === "string") {
-              // If it's already JSON
-              try {
-                audioData = JSON.parse(init.body) as { audio_base64?: string; mime_type?: string };
-              } catch {
-                // Not JSON, skip
-              }
-            }
-          }
-          
-          if (!audioData?.audio_base64) {
-            console.error("[ChatKitPanel] Could not extract audio data from transcription request");
-            return originalFetchRef.current(input, init);
-          }
-          
-          // Call our /api/transcribe endpoint
-          const headers: Record<string, string> = { "Content-Type": "application/json" };
-          if (outsetaToken) {
-            headers["Authorization"] = `Bearer ${outsetaToken}`;
-          }
-          
-          const response = await originalFetchRef.current("/api/transcribe", {
-            method: "POST",
-            headers,
-            credentials: "include",
-            body: JSON.stringify(audioData),
-          });
-          
-          if (isDev) {
-            console.log("[ChatKitPanel] Transcription response status:", response.status);
-          }
-          
-          return response;
-        } catch (error) {
-          console.error("[ChatKitPanel] Transcription intercept error:", error);
-          // Fall back to original request if interception fails
-          return originalFetchRef.current(input, init);
-        }
-      }
-      
-      // For all other requests, use the original fetch
-      return originalFetchRef.current(input, init);
-    };
-    
-    // Cleanup: restore original fetch on unmount
-    // This restores fetch for the iframe context (Framer embed) to ensure clean teardown
-    return () => {
-      window.fetch = originalFetchRef.current;
-    };
-  }, []);
+  // NOTE: ChatKit's hosted mode (using getClientSecret) handles dictation and transcription
+  // entirely within its iframe at cdn.platform.openai.com. The iframe makes direct calls to
+  // OpenAI's transcription API using the client secret for authentication. Our parent page
+  // cannot intercept cross-origin iframe fetches, so any fetch interceptor on window.fetch
+  // would be ineffective. The /api/transcribe endpoint is kept for future self-hosted mode.
 
   // Listen for parent -> iframe token and URL override
   useEffect(() => {
