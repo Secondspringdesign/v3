@@ -174,6 +174,9 @@ export function ChatKitPanel({
     () => (isBrowser && window.customElements?.get("openai-chatkit") ? "ready" : "pending"),
   );
   const [widgetInstanceKey, setWidgetInstanceKey] = useState(0);
+  
+  // Store original fetch at component level to prevent wrapping on re-renders
+  const originalFetchRef = useRef<typeof fetch>(isBrowser ? window.fetch : (fetch as typeof window.fetch));
 
   const setErrorState = useCallback((updates: Partial<ErrorState>) => {
     setErrors((current) => ({ ...current, ...updates }));
@@ -188,14 +191,18 @@ export function ChatKitPanel({
   // Intercept transcription requests and route to our /api/transcribe endpoint
   useEffect(() => {
     if (!isBrowser) return;
-
-    const originalFetch = window.fetch;
+    
+    // Capture the current fetch at mount time (only once per component lifecycle)
+    if (!originalFetchRef.current) {
+      originalFetchRef.current = window.fetch;
+    }
     
     // Intercept fetch calls to route transcription to our endpoint
     window.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
       
-      // Check if this is a transcription request to OpenAI
+      // Only intercept transcription requests from ChatKit/OpenAI
+      // This minimizes impact on other fetch calls in the application
       if (url.includes("/audio/transcriptions") || url.includes("input.transcribe")) {
         if (isDev) console.log("[ChatKitPanel] Intercepting transcription request, routing to /api/transcribe");
         
@@ -211,13 +218,10 @@ export function ChatKitPanel({
               // OpenAI API uses FormData, but our API expects JSON with base64
               const file = init.body.get("file");
               if (file instanceof Blob) {
-                // Convert Blob to base64
+                // Convert Blob to base64 efficiently using Array.from
                 const arrayBuffer = await file.arrayBuffer();
                 const bytes = new Uint8Array(arrayBuffer);
-                let binaryStr = "";
-                for (let i = 0; i < bytes.length; i++) {
-                  binaryStr += String.fromCharCode(bytes[i]);
-                }
+                const binaryStr = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
                 const audio_base64 = btoa(binaryStr);
                 audioData = {
                   audio_base64,
@@ -236,7 +240,7 @@ export function ChatKitPanel({
           
           if (!audioData?.audio_base64) {
             console.error("[ChatKitPanel] Could not extract audio data from transcription request");
-            return originalFetch(input, init);
+            return originalFetchRef.current(input, init);
           }
           
           // Call our /api/transcribe endpoint
@@ -245,7 +249,7 @@ export function ChatKitPanel({
             headers["Authorization"] = `Bearer ${outsetaToken}`;
           }
           
-          const response = await originalFetch("/api/transcribe", {
+          const response = await originalFetchRef.current("/api/transcribe", {
             method: "POST",
             headers,
             credentials: "include",
@@ -260,17 +264,17 @@ export function ChatKitPanel({
         } catch (error) {
           console.error("[ChatKitPanel] Transcription intercept error:", error);
           // Fall back to original request if interception fails
-          return originalFetch(input, init);
+          return originalFetchRef.current(input, init);
         }
       }
       
       // For all other requests, use the original fetch
-      return originalFetch(input, init);
+      return originalFetchRef.current(input, init);
     };
     
     // Cleanup: restore original fetch on unmount
     return () => {
-      window.fetch = originalFetch;
+      window.fetch = originalFetchRef.current;
     };
   }, []);
 
