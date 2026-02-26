@@ -176,7 +176,8 @@ export function ChatKitPanel({
   const [widgetInstanceKey, setWidgetInstanceKey] = useState(0);
   
   // Store original fetch at component level to prevent wrapping on re-renders
-  const originalFetchRef = useRef<typeof fetch>(isBrowser ? window.fetch : (fetch as typeof window.fetch));
+  // IMPORTANT: Bind to window to preserve 'this' context - native DOM methods require their correct context
+  const originalFetchRef = useRef<typeof fetch>(isBrowser ? window.fetch.bind(window) : (fetch as typeof window.fetch));
 
   const setErrorState = useCallback((updates: Partial<ErrorState>) => {
     setErrors((current) => ({ ...current, ...updates }));
@@ -193,8 +194,9 @@ export function ChatKitPanel({
     if (!isBrowser) return;
     
     // Capture the current fetch at mount time (only once per component lifecycle)
+    // Bind to window to preserve 'this' context - prevents "Illegal invocation" errors
     if (!originalFetchRef.current) {
-      originalFetchRef.current = window.fetch;
+      originalFetchRef.current = window.fetch.bind(window);
     }
     
     // Intercept fetch calls to route transcription to our endpoint
@@ -273,6 +275,7 @@ export function ChatKitPanel({
     };
     
     // Cleanup: restore original fetch on unmount
+    // This restores fetch for the iframe context (Framer embed) to ensure clean teardown
     return () => {
       window.fetch = originalFetchRef.current;
     };
