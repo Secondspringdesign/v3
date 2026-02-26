@@ -441,7 +441,12 @@ export function ChatKitPanel({
     composer: {
       placeholder: PLACEHOLDER_INPUT,
       attachments: { enabled: true },
-      dictation: { enabled: true },
+      // NOTE: Dictation is temporarily disabled because OpenAI's hosted transcription backend
+      // returns 500 errors with missing CORS headers. The fetch interceptor in this file cannot
+      // intercept requests made inside the cross-origin ChatKit iframe. This results in a broken
+      // microphone button. Re-enable when OpenAI fixes the hosted backend (one-line change).
+      // Related issue pattern: https://github.com/openai/chatkit-js/issues/149
+      // dictation: { enabled: true },
     },
     threadItemActions: { feedback: false },
     onClientTool: async (invocation: { name: string; params: Record<string, unknown> }) => {
